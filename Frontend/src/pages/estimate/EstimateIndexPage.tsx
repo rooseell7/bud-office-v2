@@ -5,19 +5,30 @@ import {
   Button,
   Card,
   CardContent,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   FormControl,
+  IconButton,
   InputLabel,
   MenuItem,
   Select,
   Skeleton,
+  Snackbar,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
+import { useAuth } from '../../modules/auth/AuthContext';
 import { getObjects } from '../../api/objects';
 import {
   getEstimatesByProject,
   getRecentEstimates,
   createEstimate,
+  deleteEstimate,
   type EstimateItem,
   type RecentEstimateItem,
 } from '../../api/estimates';
@@ -42,6 +53,15 @@ function formatDate(s: string | undefined): string {
 
 export const EstimateIndexPage: React.FC = () => {
   const navigate = useNavigate();
+  const { can, roles, user } = useAuth();
+  const rolesNormalized = (roles ?? []).map((r) => String(r).toLowerCase());
+  const isAdmin = rolesNormalized.includes('admin') || rolesNormalized.includes('superadmin');
+  const canDeleteKp =
+    isAdmin ||
+    can('estimates:delete') ||
+    can('admin:access') ||
+    can('users:write');
+
   const [projects, setProjects] = useState<{ id: number; name: string }[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(() => {
     const v = localStorage.getItem(STORAGE_KEY);
@@ -55,6 +75,9 @@ export const EstimateIndexPage: React.FC = () => {
   const [loadingRecent, setLoadingRecent] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     getObjects()
@@ -106,6 +129,42 @@ export const EstimateIndexPage: React.FC = () => {
       setCreating(false);
     }
   }, [selectedProjectId, navigate]);
+
+  const handleDeleteClick = useCallback((id: number) => {
+    setDeleteConfirmId(id);
+  }, []);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    const id = deleteConfirmId;
+    if (id == null) return;
+    setDeleting(true);
+    setDeleteConfirmId(null);
+    try {
+      await deleteEstimate(id);
+      setProjectEstimates((prev) => prev.filter((e) => e.id !== id));
+      setRecentEstimates((prev) => prev.filter((e) => e.id !== id));
+      setToast('КП видалено');
+    } catch (e: any) {
+      const status = e?.response?.status;
+      const msg = e?.response?.data?.message;
+      if (status === 403) setToast('Недостатньо прав');
+      else if (status === 404) {
+        setToast('КП не знайдено (фантом)');
+        setProjectEstimates((prev) => prev.filter((e) => e.id !== id));
+        setRecentEstimates((prev) => prev.filter((e) => e.id !== id));
+        if (selectedProjectId != null) {
+          getEstimatesByProject(selectedProjectId).then(setProjectEstimates);
+        }
+        getRecentEstimates(10).then(setRecentEstimates);
+      } else setToast(msg || 'Помилка сервера');
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteConfirmId, selectedProjectId]);
+
+  const handleDeleteCancel = useCallback(() => {
+    setDeleteConfirmId(null);
+  }, []);
 
   return (
     <Box>
@@ -170,19 +229,69 @@ export const EstimateIndexPage: React.FC = () => {
                 Немає КП для цього об'єкту
               </Typography>
             ) : (
-              <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+              <Box sx={{ listStyle: 'none', m: 0, p: 0 }}>
                 {projectEstimates.map((e) => (
                   <Box
-                    component="li"
                     key={e.id}
                     sx={{
-                      py: 0.5,
-                      cursor: 'pointer',
-                      '&:hover': { color: 'primary.main' },
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      py: 0.75,
+                      px: 0,
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      '&:last-child': { borderBottom: 'none' },
+                      '&:hover': { bgcolor: 'action.hover' },
                     }}
-                    onClick={() => navigate(`/estimate/${e.id}`)}
                   >
-                    {e.title} — {formatDate(e.updatedAt)}
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="body2" noWrap sx={{ lineHeight: 1.3 }}>
+                        {e.title || `КП №${e.id}`}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ lineHeight: 1.25, display: 'block' }}
+                      >
+                        {[
+                          e.projectName && `Об'єкт: ${e.projectName}`,
+                          e.createdByName && `Автор: ${e.createdByName}`,
+                          formatDate(e.updatedAt),
+                        ]
+                          .filter(Boolean)
+                          .join(' • ')}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 0.5, ml: 1, flexShrink: 0 }}>
+                      <Tooltip title="Поки недоступно">
+                        <span>
+                          <Button size="small" disabled>
+                            Відкрити
+                          </Button>
+                        </span>
+                      </Tooltip>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        onClick={() => navigate(`/estimate/${e.id}`)}
+                      >
+                        Редагувати
+                      </Button>
+                      {canDeleteKp && (
+                        <Tooltip title="Видалити КП">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDeleteClick(e.id)}
+                            disabled={deleting}
+                            sx={{ color: 'error.main' }}
+                            aria-label="Видалити КП"
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
                   </Box>
                 ))}
               </Box>
@@ -202,21 +311,69 @@ export const EstimateIndexPage: React.FC = () => {
                 Немає КП
               </Typography>
             ) : (
-              <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+              <Box sx={{ listStyle: 'none', m: 0, p: 0 }}>
                 {recentEstimates.map((e) => (
                   <Box
-                    component="li"
                     key={e.id}
                     sx={{
-                      py: 0.5,
-                      cursor: 'pointer',
-                      '&:hover': { color: 'primary.main' },
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      py: 0.75,
+                      px: 0,
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      '&:last-child': { borderBottom: 'none' },
+                      '&:hover': { bgcolor: 'action.hover' },
                     }}
-                    onClick={() => navigate(`/estimate/${e.id}`)}
                   >
-                    {e.title}
-                    {e.projectName && ` (${e.projectName})`} —{' '}
-                    {formatDate(e.updatedAt)}
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="body2" noWrap sx={{ lineHeight: 1.3 }}>
+                        {e.title || `КП №${e.id}`}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ lineHeight: 1.25, display: 'block' }}
+                      >
+                        {[
+                          e.projectName && `Об'єкт: ${e.projectName}`,
+                          e.createdByName && `Автор: ${e.createdByName}`,
+                          formatDate(e.updatedAt),
+                        ]
+                          .filter(Boolean)
+                          .join(' • ')}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 0.5, ml: 1, flexShrink: 0 }}>
+                      <Tooltip title="Поки недоступно">
+                        <span>
+                          <Button size="small" disabled>
+                            Відкрити
+                          </Button>
+                        </span>
+                      </Tooltip>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        onClick={() => navigate(`/estimate/${e.id}`)}
+                      >
+                        Редагувати
+                      </Button>
+                      {canDeleteKp && (
+                        <Tooltip title="Видалити КП">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDeleteClick(e.id)}
+                            disabled={deleting}
+                            sx={{ color: 'error.main' }}
+                            aria-label="Видалити КП"
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
                   </Box>
                 ))}
               </Box>
@@ -224,6 +381,26 @@ export const EstimateIndexPage: React.FC = () => {
           </CardContent>
         </Card>
       </Box>
+
+      <Dialog open={deleteConfirmId != null} onClose={handleDeleteCancel}>
+        <DialogTitle>Видалити КП?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>Цю дію не можна скасувати.</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDeleteCancel}>Скасувати</Button>
+          <Button onClick={handleDeleteConfirm} color="error" variant="contained" disabled={deleting}>
+            Видалити
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={!!toast}
+        autoHideDuration={4000}
+        onClose={() => setToast(null)}
+        message={toast}
+      />
     </Box>
   );
 };

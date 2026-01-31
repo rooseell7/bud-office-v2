@@ -30,23 +30,61 @@ export async function fetchRoles() {
 
 // -------- Users (Admin) --------
 export async function fetchUsers() {
-  const { data } = await api.get('/users');
+  const { data } = await api.get('/admin/users');
   return data;
 }
 
 export async function createUser(payload: {
   email: string;
   password: string;
-  fullName: string;
+  fullName?: string;
   rolesCodes?: string[];
 }) {
-  const { data } = await api.post('/users', payload);
+  const { data } = await api.post('/admin/users', payload);
+  return data;
+}
+
+export async function updateUser(
+  userId: number,
+  payload: {
+    fullName?: string;
+    email?: string;
+    isActive?: boolean;
+    rolesCodes?: string[];
+  },
+) {
+  const { data } = await api.patch(`/admin/users/${userId}`, payload);
   return data;
 }
 
 export async function setUserRoles(userId: number, rolesCodes: string[]) {
-  const { data } = await api.patch(`/users/${userId}/roles`, { rolesCodes });
+  return updateUser(userId, { rolesCodes });
+}
+
+export async function fetchPermissions(): Promise<string[]> {
+  const { data } = await api.get<string[]>('/admin/permissions');
+  return Array.isArray(data) ? data : [];
+}
+
+// -------- Profile (own) --------
+export async function updateMyProfile(payload: {
+  fullName?: string;
+  bio?: string | null;
+}) {
+  const { data } = await api.patch<{
+    id: number;
+    email: string;
+    fullName: string;
+    bio: string | null;
+  }>('/users/me', payload);
   return data;
+}
+
+export async function changeMyPassword(payload: {
+  currentPassword: string;
+  newPassword: string;
+}) {
+  await api.post('/users/me/change-password', payload);
 }
 
 export default api;

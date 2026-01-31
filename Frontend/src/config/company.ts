@@ -12,7 +12,7 @@ export type CompanyInfo = {
  * ВАЖЛИВО: ці дані можна змінити під ваші фактичні реквізити без змін логіки.
  */
 export const COMPANY: CompanyInfo = {
-  name: 'Будуй',
+  name: 'BUD Office',
   subtitle: 'Ремонтно-будівельна компанія',
   lines: [
     'Реквізити: (заповніть у src/config/company.ts)',

@@ -11,7 +11,7 @@ const AdminLayout: React.FC = () => {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
-      {/* Верхній бар у стилі Будуй */}
+      {/* Верхній бар */}
       <header
         style={{
           height: 56,
@@ -24,15 +24,26 @@ const AdminLayout: React.FC = () => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span
+          <Link
+            to="/home"
+            aria-label="BUD Office — на головну"
             style={{
               fontWeight: 800,
               fontSize: 20,
               letterSpacing: 0.5,
+              color: '#fff',
+              textDecoration: 'none',
+              cursor: 'pointer',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.textDecoration = 'underline';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.textDecoration = 'none';
             }}
           >
-            Будуй CRM
-          </span>
+            BUD Office
+          </Link>
           <span
             style={{
               fontSize: 13,
@@ -111,7 +122,7 @@ const AdminLayout: React.FC = () => {
         <main style={{ flex: 1, padding: 24 }}>
           {/* Поки що простий плейсхолдер, далі сюди підв’яжемо сторінки */}
           <h1 style={{ marginTop: 0, marginBottom: 16, fontSize: 22 }}>
-            Адмін-панель Будуй
+            Адмін-панель BUD Office
           </h1>
           <p style={{ maxWidth: 600, fontSize: 14 }}>
             Тут буде управління користувачами, ролями, об’єктами, ставками,

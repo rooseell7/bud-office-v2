@@ -1,6 +1,7 @@
 // FILE: bud_office-backend/src/users/users.service.ts
 
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -15,7 +16,17 @@ export class UsersService {
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     private readonly rolesService: RolesService,
+    private readonly dataSource: DataSource,
   ) {}
+
+  async ensureBioColumn(): Promise<void> {
+    try {
+      await this.dataSource.query(
+        `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "bio" VARCHAR(500)`);
+    } catch {
+      // column may exist or sync handles it
+    }
+  }
 
   private normalizeEmail(email: string): string {
     return (email ?? '').trim().toLowerCase();
@@ -107,11 +118,42 @@ export class UsersService {
 
     const user = this.userRepo.create({
       email,
-      fullName: dto.fullName,
+      fullName: (dto.fullName ?? '').trim() || email.split('@')[0],
       passwordHash,
       roles,
       isActive: true,
     });
+
+    return this.userRepo.save(user);
+  }
+
+  async updateAdmin(
+    id: number,
+    dto: { fullName?: string; email?: string; isActive?: boolean; rolesCodes?: string[] },
+  ) {
+    const user = await this.findById(id);
+
+    if (dto.fullName !== undefined) user.fullName = dto.fullName.trim() || user.fullName;
+    if (dto.email !== undefined) {
+      const email = this.normalizeEmail(dto.email);
+      const existing = await this.findByEmail(email);
+      if (existing && existing.id !== id) {
+        throw new BadRequestException('Користувач з таким email вже існує');
+      }
+      user.email = email;
+    }
+    if (dto.isActive !== undefined) user.isActive = Boolean(dto.isActive);
+
+    if (dto.rolesCodes !== undefined && dto.rolesCodes.length > 0) {
+      const allRoles = await this.rolesService.findAll();
+      const roles = allRoles.filter((r) => dto.rolesCodes!.includes(r.code));
+      if (roles.length !== dto.rolesCodes.length) {
+        const found = roles.map((r) => r.code);
+        const missing = dto.rolesCodes.filter((c) => !found.includes(c));
+        throw new BadRequestException(`Ролі не знайдено: ${missing.join(', ')}`);
+      }
+      user.roles = roles;
+    }
 
     return this.userRepo.save(user);
   }
@@ -121,6 +163,50 @@ export class UsersService {
    * Використання з контролера:
    *   POST /users/:id/roles  body: { roles: ['admin','supply_manager'] }
    */
+  async updateMyProfile(
+    userId: number,
+    dto: { fullName?: string; bio?: string | null },
+  ) {
+    const user = await this.findById(userId);
+    if (dto.fullName !== undefined) {
+      const name = (dto.fullName ?? '').trim();
+      if (name.length < 2) {
+        throw new BadRequestException('Ім\'я має бути щонайменше 2 символи');
+      }
+      user.fullName = name;
+    }
+    if (dto.bio !== undefined) {
+      user.bio = dto.bio == null || dto.bio === '' ? null : String(dto.bio).trim().slice(0, 500);
+    }
+    const saved = await this.userRepo.save(user);
+    return {
+      id: saved.id,
+      email: saved.email,
+      fullName: saved.fullName,
+      bio: saved.bio,
+    };
+  }
+
+  async changePassword(
+    userId: number,
+    dto: { currentPassword: string; newPassword: string },
+  ) {
+    const user = await this.findById(userId);
+    const currentOk = await bcrypt.compare(
+      (dto.currentPassword ?? '').trim(),
+      user.passwordHash,
+    );
+    if (!currentOk) {
+      throw new BadRequestException('Невірний поточний пароль');
+    }
+    const newPass = (dto.newPassword ?? '').trim();
+    if (newPass.length < 8) {
+      throw new BadRequestException('Новий пароль має бути щонайменше 8 символів');
+    }
+    user.passwordHash = await bcrypt.hash(newPass, 10);
+    await this.userRepo.save(user);
+  }
+
   async updateUserRoles(userId: number, roleCodes: string[]) {
     const user = await this.userRepo.findOne({
       where: { id: userId },

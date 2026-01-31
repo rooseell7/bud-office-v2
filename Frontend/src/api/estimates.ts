@@ -1,4 +1,5 @@
 import api from './api';
+import { deleteDocument } from './documents';
 
 export type EstimateItem = {
   id: number;
@@ -6,11 +7,11 @@ export type EstimateItem = {
   title: string;
   status?: string;
   updatedAt?: string;
+  projectName?: string | null;
+  createdByName?: string | null;
 };
 
-export type RecentEstimateItem = EstimateItem & {
-  projectName?: string | null;
-};
+export type RecentEstimateItem = EstimateItem;
 
 export async function getEstimatesByProject(
   projectId: number,
@@ -40,4 +41,12 @@ export async function createEstimate(payload: {
     payload,
   );
   return res.data;
+}
+
+/**
+ * Видалення КП. Використовує DELETE /documents/:id (КП = document type='quote').
+ * Джерело правди — documents API, estimates list той самий entity.
+ */
+export async function deleteEstimate(id: number): Promise<void> {
+  await deleteDocument(id);
 }

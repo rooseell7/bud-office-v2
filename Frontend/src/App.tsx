@@ -46,6 +46,8 @@ import ProjectDetailsPage from './modules/projects/ProjectDetailsPage';
 
 // ✅ Home (після логіну)
 import HomePage from './pages/home/HomePage';
+import { ProfilePage } from './pages/profile/ProfilePage';
+import ForbiddenPage from './pages/ForbiddenPage';
 
 // ✅ Sheet demo (STEP 0–3 smoke test)
 import { SheetDemoPage } from './pages/sheet/SheetDemoPage';
@@ -77,6 +79,8 @@ const App: React.FC = () => {
 
         {/* ✅ Головна */}
         <Route path="home" element={<HomePage />} />
+        {/* ✅ Профіль */}
+        <Route path="profile" element={<ProfilePage />} />
 
         {/* ✅ Sheet Grid demo (canonical src/sheet) */}
         <Route path="sheet" element={<SheetDemoPage />} />
@@ -158,16 +162,19 @@ const App: React.FC = () => {
         />
       </Route>
 
+      {/* 403 */}
+      <Route path="/403" element={<ForbiddenPage />} />
+
       {/* Адмін-панель */}
       <Route
         path="/admin"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute anyPermissions={['users:read', 'roles:read']}>
             <AdminLayout />
           </ProtectedRoute>
         }
       >
-        <Route index element={<AdminDashboardPage />} />
+        <Route index element={<Navigate to="/admin/users" replace />} />
         <Route path="users" element={<AdminUsersPage />} />
         <Route path="roles" element={<AdminRolesPage />} />
       </Route>

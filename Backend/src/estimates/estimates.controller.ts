@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
@@ -43,5 +54,11 @@ export class EstimatesController {
     @Req() req: Request,
   ) {
     return this.service.create(body, getUserId(req));
+  }
+
+  @Permissions('estimates:delete')
+  @Delete(':id')
+  delete(@Param('id', ParseIntPipe) id: number) {
+    return this.service.delete(id);
   }
 }

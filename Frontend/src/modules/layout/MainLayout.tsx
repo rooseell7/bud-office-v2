@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 
 import {
@@ -8,6 +8,7 @@ import {
   Toolbar,
   Typography,
   Button,
+  IconButton,
   Drawer,
   List,
   ListSubheader,
@@ -29,12 +30,13 @@ import EngineeringOutlinedIcon from '@mui/icons-material/EngineeringOutlined';
 import AccountBalanceOutlinedIcon from '@mui/icons-material/AccountBalanceOutlined';
 import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import ConstructionOutlinedIcon from '@mui/icons-material/ConstructionOutlined';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { BRAND } from '../../theme/muiTheme';
 
 const drawerWidth = 260;
 
 const MainLayout: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, can } = useAuth();
 
   const navGroups = [
     {
@@ -43,7 +45,6 @@ const MainLayout: React.FC = () => {
         { to: '/estimate/objects', label: "Об'єкти", icon: <WorkOutlineOutlinedIcon /> },
         { to: '/estimate/acts', label: 'Акти виконаних робіт', icon: <DescriptionOutlinedIcon /> },
         { to: '/estimate', label: 'Комерційні пропозиції', icon: <RequestQuoteOutlinedIcon /> },
-        { to: '/estimate/invoices', label: 'Накладні', icon: <ReceiptLongOutlinedIcon /> },
       ],
     },
     {
@@ -93,16 +94,54 @@ const MainLayout: React.FC = () => {
         }}
       >
         <Toolbar sx={{ gap: 2 }}>
-          <Typography variant="h6" sx={{ fontWeight: 800, color: '#fff', letterSpacing: 0.2 }}>
+          <Typography
+            component={Link}
+            to="/home"
+            variant="h6"
+            aria-label="BUD Office — на головну"
+            sx={{
+              fontWeight: 800,
+              color: '#fff',
+              letterSpacing: 0.2,
+              textDecoration: 'none',
+              cursor: 'pointer',
+              '&:hover': { color: 'rgba(255,255,255,0.95)', textDecoration: 'underline' },
+            }}
+          >
             BUD Office
           </Typography>
 
           <Box sx={{ flex: 1 }} />
 
           {user && (
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.82)' }}>
+            <Typography
+              component={Link}
+              to="/profile"
+              variant="body2"
+              aria-label="Перейти до профілю"
+              sx={{
+                color: 'rgba(255,255,255,0.82)',
+                cursor: 'pointer',
+                textDecoration: 'none',
+                '&:hover': { color: '#fff', textDecoration: 'underline' },
+              }}
+            >
               {user.fullName}
             </Typography>
+          )}
+          {can('users:read') && (
+            <IconButton
+              component={Link}
+              to="/admin/users"
+              size="small"
+              sx={{
+                color: 'rgba(255,255,255,0.9)',
+                '&:hover': { color: '#fff', bgcolor: 'rgba(255,255,255,0.1)' },
+              }}
+              aria-label="Меню адміна"
+            >
+              <SettingsIcon />
+            </IconButton>
           )}
           <Button
             onClick={logout}

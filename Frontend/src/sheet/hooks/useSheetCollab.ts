@@ -93,7 +93,8 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
               if (typeof rev === 'number') setServerVersion(rev);
             });
           }
-          if (ev.op?.type === 'SNAPSHOT_UPDATE' && ev.op?.payload?.nextSnapshot) {
+          // Лише remote ops — не hydrate власний op (вже маємо state, hydrate спричиняв цикл save→OP_APPLIED→hydrate→save)
+          if (ev.op?.type === 'SNAPSHOT_UPDATE' && ev.op?.payload?.nextSnapshot && !isOwn) {
             onRemoteUpdate?.(ev.op.payload.nextSnapshot, ev.version);
           }
           if (DEBUG) {

@@ -23,6 +23,10 @@ export class User {
   @Column()
   fullName: string;
 
+  /** Інфо про себе / біо / нотатка (0..500 символів) */
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  bio: string | null;
+
   @Column({ default: true })
   isActive: boolean;
 

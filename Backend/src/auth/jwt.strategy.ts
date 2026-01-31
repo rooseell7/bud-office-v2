@@ -30,10 +30,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       ? rolesRaw.map((r) => String(r))
       : [];
 
-    // Важливо: зберігаємо sub як id
+    // Важливо: зберігаємо sub як id; fullName для auth/me
     return {
       id: payload?.sub,
       email: payload?.email,
+      fullName: payload?.fullName,
       roles,
       // Якщо є інші поля payload — не втрачаємо (але не дублюємо roles)
       ...Object.fromEntries(

@@ -4,9 +4,10 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
 type JwtPayload = {
-  sub: number;          // userId (у тебе int)
+  sub: number;
   email?: string;
-  roles?: string[];     // головне: масив ролей
+  fullName?: string;
+  roles?: string[];
 };
 
 @Injectable()
@@ -31,6 +32,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     return {
       id: userId,
       email: payload.email,
+      fullName: payload.fullName,
       roles: Array.isArray(payload.roles) ? payload.roles : [],
     };
   }

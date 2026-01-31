@@ -101,10 +101,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     (async () => {
       try {
         if (accessToken) {
-          // Якщо user ще не відновлено — підтягнути /auth/me.
-          if (!user) {
-            await refreshMe();
-          }
+          // Завжди підтягувати свіжі дані з /auth/me (roles, permissions), щоб уникнути застарілого localStorage.
+          await refreshMe();
         }
       } finally {
         if (mounted) setIsAuthLoading(false);
@@ -114,7 +112,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       mounted = false;
     };
-  }, [accessToken, user, refreshMe]);
+  }, [accessToken, refreshMe]);
 
   useEffect(() => {
     const handler = () => {

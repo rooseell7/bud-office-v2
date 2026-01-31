@@ -13,6 +13,8 @@ import { ILike, Repository } from 'typeorm';
 import { Document, type DocumentStatus } from './document.entity';
 import { DocumentEvent } from './document-event.entity';
 import { DocumentVersion } from './document-version.entity';
+import { DocumentSheetOp } from './document-sheet-op.entity';
+import { SheetSnapshot } from './sheet-snapshot.entity';
 import { SheetOpsService } from './sheet-ops.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
@@ -59,6 +61,10 @@ export class DocumentsService {
     private readonly eventRepo: Repository<DocumentEvent>,
     @InjectRepository(DocumentVersion)
     private readonly versionRepo: Repository<DocumentVersion>,
+    @InjectRepository(DocumentSheetOp)
+    private readonly sheetOpsRepo: Repository<DocumentSheetOp>,
+    @InjectRepository(SheetSnapshot)
+    private readonly snapshotRepo: Repository<SheetSnapshot>,
     private readonly sheetOpsService: SheetOpsService,
   ) {}
 
@@ -222,8 +228,16 @@ export class DocumentsService {
 
   async remove(id: number, userId: number | null) {
     const doc = await this.getEntity(id);
+    try {
+      await this.addEvent(id, 'deleted', null, userId);
+    } catch (e) {
+      this.logger.warn('Could not add deleted event (audit)', e as Error);
+    }
+    await this.sheetOpsRepo.delete({ documentId: id });
+    await this.snapshotRepo.delete({ documentId: id });
+    await this.versionRepo.delete({ documentId: id });
+    await this.eventRepo.delete({ documentId: id });
     await this.repo.remove(doc);
-    await this.addEvent(id, 'deleted', null, userId);
     return { ok: true };
   }
 

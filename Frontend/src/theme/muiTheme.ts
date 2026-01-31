@@ -1,7 +1,7 @@
 import { createTheme } from '@mui/material/styles';
 
 /**
- * BUD Office brand palette (derived from Buduy corporate identity).
+ * BUD Office brand palette.
  * Primary: deep green, Accent: lime.
  */
 export const BRAND = {

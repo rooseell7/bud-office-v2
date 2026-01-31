@@ -8,9 +8,9 @@ export class CreateUserDto {
   @IsNotEmpty()
   password: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  fullName: string;
+  fullName?: string;
 
   @IsOptional()
   @IsArray()

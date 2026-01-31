@@ -3,7 +3,6 @@ import { Box, Typography } from '@mui/material';
 
 /**
  * Головна сторінка після логіну.
- * За вимогою: простий центрований напис "Bud office".
  */
 const HomePage: React.FC = () => {
   return (
@@ -11,8 +10,10 @@ const HomePage: React.FC = () => {
       sx={{
         height: 'calc(100vh - 64px - 24px)',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
+        gap: 1,
       }}
     >
       <Typography
@@ -24,7 +25,10 @@ const HomePage: React.FC = () => {
           color: '#0b2923',
         }}
       >
-        Bud office
+        BUD Office
+      </Typography>
+      <Typography variant="body1" color="text.secondary">
+        Головна сторінка
       </Typography>
     </Box>
   );

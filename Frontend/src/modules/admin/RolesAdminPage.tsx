@@ -28,7 +28,7 @@ const RolesAdminPage: React.FC = () => {
     <div className="admin-grid">
       <section className="admin-card admin-card--primary">
         <h2>Ролі</h2>
-        <p>Список доступних ролей у системі Будуй CRM.</p>
+        <p>Список доступних ролей у системі BUD Office.</p>
 
         {loading && <p style={{ fontSize: 13 }}>Завантаження…</p>}
         {error && (

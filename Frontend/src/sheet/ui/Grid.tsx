@@ -27,6 +27,7 @@ import { ColumnFilterDialog } from './ColumnFilterDialog';
 const ROW_HEIGHT_DEFAULT = 28;
 const LETTERS_ROW_HEIGHT = 22;
 const COL_WIDTH_DEFAULT = 140;
+const ROW_HEADER_WIDTH = 48;
 const HEADER_BG = '#f1f5f9';
 const RESIZE_HANDLE_WIDTH = 8;
 
@@ -263,14 +264,14 @@ export const Grid: React.FC<GridProps> = ({
   const getHeaderTitle = (c: number) =>
     state.columns?.[c]?.title ?? config?.columnHeaders?.[c] ?? colToLetter(c);
   const dynamicGridTemplate = useGrid
-    ? ['48px', ...Array.from({ length: dataColCount }, (_, c) => `${getColWidth(c)}px`)].join(' ')
+    ? [`${ROW_HEADER_WIDTH}px`, ...Array.from({ length: dataColCount }, (_, c) => `${getColWidth(c)}px`)].join(' ')
     : '';
   const gridTemplate = dynamicGridTemplate || (config?.gridTemplateColumns ?? '');
   const freezeRows = useGrid ? Math.min(state.freeze?.rows ?? 0, state.rowCount) : 0;
   const freezeCols = useGrid ? Math.min(state.freeze?.cols ?? 0, dataColCount) : 0;
 
   const minTableWidth = useGrid
-    ? 48 + Array.from({ length: dataColCount }, (_, c) => getColWidth(c)).reduce((a, b) => a + b, 0)
+    ? ROW_HEADER_WIDTH + Array.from({ length: dataColCount }, (_, c) => getColWidth(c)).reduce((a, b) => a + b, 0)
     : 40 +
       Array.from({ length: colCount }, (_, c) => (flexCol === c ? 80 : getColWidth(c))).reduce(
         (a, b) => a + b,
@@ -322,7 +323,7 @@ export const Grid: React.FC<GridProps> = ({
 
   const headerTotalHeight = LETTERS_ROW_HEIGHT + defaultRowHeight;
   const cumulativeColLeft = React.useMemo(() => {
-    const out: number[] = [48];
+    const out: number[] = [ROW_HEADER_WIDTH];
     for (let c = 0; c < dataColCount - 1; c++) {
       out.push(out[out.length - 1] + getColWidth(c));
     }
@@ -380,6 +381,9 @@ export const Grid: React.FC<GridProps> = ({
           <Box sx={lettersRowSx}>
             <Box
               sx={{
+                width: ROW_HEADER_WIDTH,
+                minWidth: ROW_HEADER_WIDTH,
+                maxWidth: ROW_HEADER_WIDTH,
                 height: LETTERS_ROW_HEIGHT,
                 display: 'flex',
                 alignItems: 'center',
@@ -418,6 +422,9 @@ export const Grid: React.FC<GridProps> = ({
           <Box sx={{ ...headerRowSx, background: '#fff' }}>
         <Box
           sx={{
+            width: ROW_HEADER_WIDTH,
+            minWidth: ROW_HEADER_WIDTH,
+            maxWidth: ROW_HEADER_WIDTH,
             height: defaultRowHeight,
             display: 'flex',
             alignItems: 'center',
@@ -548,6 +555,10 @@ export const Grid: React.FC<GridProps> = ({
         <Box sx={headerRowSx}>
           <Box
             sx={{
+              width: ROW_HEADER_WIDTH,
+              minWidth: ROW_HEADER_WIDTH,
+              maxWidth: ROW_HEADER_WIDTH,
+              flex: '0 0 auto',
               height: defaultRowHeight,
               display: 'flex',
               alignItems: 'center',
@@ -678,6 +689,10 @@ export const Grid: React.FC<GridProps> = ({
                 : undefined
             }
             sx={{
+              width: ROW_HEADER_WIDTH,
+              minWidth: ROW_HEADER_WIDTH,
+              maxWidth: ROW_HEADER_WIDTH,
+              flex: '0 0 auto',
               position: 'relative',
               height: getRowHeight(r),
               display: 'flex',

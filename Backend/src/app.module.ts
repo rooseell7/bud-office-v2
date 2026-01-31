@@ -37,6 +37,7 @@ import { EstimatesModule } from './estimates/estimates.module';
 import { SheetsModule } from './sheets/sheets.module';
 import { CollabModule } from './collab/collab.module';
 import { AttachmentsModule } from './attachments/attachments.module';
+import { AdminModule } from './admin/admin.module';
 
 function toBool(v: unknown, def = false): boolean {
   if (v === undefined || v === null) return def;
@@ -114,6 +115,7 @@ function toBool(v: unknown, def = false): boolean {
     SheetsModule,
     CollabModule,
     AttachmentsModule,
+    AdminModule,
   ],
 })
 export class AppModule {}

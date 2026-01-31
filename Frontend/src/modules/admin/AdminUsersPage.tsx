@@ -1,17 +1,55 @@
 import React, { useEffect, useState } from 'react';
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography,
+  Checkbox,
+  FormControlLabel,
+} from '@mui/material';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import EditIcon from '@mui/icons-material/Edit';
 import type { User, Role } from '../auth/types';
-import { fetchUsers, fetchRoles, createUser } from '../../api/client';
+import { useAuth } from '../auth/AuthContext';
+import { fetchUsers, fetchRoles, createUser, updateUser } from '../../api/client';
+
+function generatePassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let s = '';
+  for (let i = 0; i < 12; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+type AdminUser = User & { isActive?: boolean };
 
 const AdminUsersPage: React.FC = () => {
-  const [users, setUsers] = useState<User[]>([]);
+  const { user: currentUser, refreshMe } = useAuth();
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editUser, setEditUser] = useState<AdminUser | null>(null);
 
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+
+  const [editFullName, setEditFullName] = useState('');
+  const [editIsActive, setEditIsActive] = useState(true);
+  const [editRoles, setEditRoles] = useState<string[]>([]);
+
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
@@ -35,211 +73,259 @@ const AdminUsersPage: React.FC = () => {
     loadData();
   }, []);
 
-  const toggleRole = (code: string) => {
-    setSelectedRoles((prev) =>
-      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code],
+  const toggleRole = (code: string, setter: (v: string[]) => void, current: string[]) => {
+    setter(
+      current.includes(code) ? current.filter((c) => c !== code) : [...current, code],
     );
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password || !fullName) {
-      setError('Заповни email, ПІБ та пароль.');
+  const openCreate = () => {
+    setEmail('');
+    setFullName('');
+    setPassword('');
+    setSelectedRoles([]);
+    setError(null);
+    setCreateOpen(true);
+  };
+
+  const handleCreate = async () => {
+    if (!email || !password) {
+      setError('Заповни email та пароль.');
       return;
     }
-
     try {
       setLoading(true);
       setError(null);
       await createUser({
         email,
         password,
-        fullName,
+        fullName: fullName || undefined,
         rolesCodes: selectedRoles,
       });
-
-      setEmail('');
-      setFullName('');
-      setPassword('');
-      setSelectedRoles([]);
-
+      setCreateOpen(false);
       await loadData();
-    } catch (e) {
-      console.error(e);
-      setError('Помилка при створенні користувача.');
+    } catch (e: any) {
+      const msg = e?.response?.data?.message ?? e?.message ?? 'Помилка при створенні користувача.';
+      setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
+  const openEdit = (u: AdminUser) => {
+    setEditUser(u);
+    setEditFullName(u.fullName);
+    setEditIsActive(u.isActive !== false);
+    setEditRoles((u.roles ?? []).map((r) => r.code));
+    setError(null);
+  };
+
+  const handleEdit = async () => {
+    if (!editUser) return;
+    try {
+      setLoading(true);
+      setError(null);
+      await updateUser(editUser.id, {
+        fullName: editFullName,
+        isActive: editIsActive,
+        rolesCodes: editRoles,
+      });
+      const isSelf = currentUser?.id === editUser.id;
+      setEditUser(null);
+      await loadData();
+      if (isSelf) {
+        setSaveMsg('Права оновлено. Рекомендується перезайти для застосування змін.');
+      }
+    } catch (e: any) {
+      const msg = e?.response?.data?.message ?? e?.message ?? 'Помилка при збереженні.';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenPassword = () => {
+    setPassword(generatePassword());
+  };
+
   return (
-    <div>
-      <h2 style={{ marginTop: 0, marginBottom: 16 }}>Користувачі та ролі</h2>
+    <Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+        <Typography variant="h5" fontWeight={700}>
+          Користувачі
+        </Typography>
+        <Button variant="contained" onClick={openCreate} startIcon={<PersonAddIcon />}>
+          Створити користувача
+        </Button>
+      </Box>
+
+      {saveMsg && (
+        <Box
+          sx={{
+            mb: 2,
+            p: 1.5,
+            borderRadius: 1,
+            bgcolor: 'success.light',
+            color: 'success.contrastText',
+          }}
+        >
+          {saveMsg}
+        </Box>
+      )}
 
       {error && (
-        <div
-          style={{
-            marginBottom: 12,
-            padding: '8px 12px',
-            backgroundColor: '#fee2e2',
-            border: '1px solid #fecaca',
-            borderRadius: 8,
-            fontSize: 13,
+        <Box
+          sx={{
+            mb: 2,
+            p: 1.5,
+            borderRadius: 1,
+            bgcolor: 'error.light',
+            color: 'error.contrastText',
           }}
         >
           {error}
-        </div>
+        </Box>
       )}
 
-      {/* Форма створення */}
-      <div
-        style={{
-          marginBottom: 24,
-          padding: 16,
-          borderRadius: 12,
-          backgroundColor: '#ffffff',
-          border: '1px solid #e5e7eb',
-          maxWidth: 520,
-        }}
-      >
-        <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 16 }}>
-          Створити користувача
-        </h3>
-        <form onSubmit={handleCreate}>
-          <div style={{ marginBottom: 8 }}>
-            <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              style={{ width: '100%', padding: 8, fontSize: 14 }}
-            />
-          </div>
+      <Box sx={{ overflowX: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+        {loading && users.length === 0 ? (
+          <Box sx={{ p: 3 }}>Завантаження...</Box>
+        ) : (
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Email</TableCell>
+                <TableCell>Імʼя</TableCell>
+                <TableCell>Ролі</TableCell>
+                <TableCell>Статус</TableCell>
+                <TableCell align="right">Дії</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {users.map((u) => (
+                <TableRow key={u.id}>
+                  <TableCell>{u.email}</TableCell>
+                  <TableCell>{u.fullName}</TableCell>
+                  <TableCell>{(u.roles ?? []).map((r) => r.name).join(', ') || '—'}</TableCell>
+                  <TableCell>{u.isActive !== false ? 'Активний' : 'Вимкнений'}</TableCell>
+                  <TableCell align="right">
+                    <Button size="small" startIcon={<EditIcon />} onClick={() => openEdit(u)}>
+                      Редагувати
+                    </Button>
+                    <Button size="small" onClick={() => openEdit(u)} sx={{ ml: 0.5 }}>
+                      Права
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </Box>
 
-          <div style={{ marginBottom: 8 }}>
-            <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
-              ПІБ
-            </label>
-            <input
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              style={{ width: '100%', padding: 8, fontSize: 14 }}
-            />
-          </div>
-
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
-              Пароль
-            </label>
-            <input
-              type="password"
+      {/* Create Dialog */}
+      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Створити користувача</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <TextField
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            fullWidth
+          />
+          <TextField
+            label="Імʼя"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            fullWidth
+          />
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <TextField
+              label="Пароль"
+              type="text"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              style={{ width: '100%', padding: 8, fontSize: 14 }}
+              required
+              fullWidth
             />
-          </div>
-
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 13, marginBottom: 4 }}>Ролі</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <Button variant="outlined" onClick={handleGenPassword} sx={{ whiteSpace: 'nowrap' }}>
+              Згенерувати
+            </Button>
+          </Box>
+          <Box sx={{ mt: 1 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Ролі
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
               {roles.map((role) => (
-                <label
+                <FormControlLabel
                   key={role.id}
-                  style={{
-                    fontSize: 13,
-                    padding: '4px 8px',
-                    borderRadius: 16,
-                    border: '1px solid #e5e7eb',
-                    backgroundColor: selectedRoles.includes(role.code)
-                      ? '#cdd629'
-                      : '#f9fafb',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedRoles.includes(role.code)}
-                    onChange={() => toggleRole(role.code)}
-                    style={{ marginRight: 4 }}
-                  />
-                  {role.name}
-                </label>
+                  control={
+                    <Checkbox
+                      checked={selectedRoles.includes(role.code)}
+                      onChange={() => toggleRole(role.code, setSelectedRoles, selectedRoles)}
+                    />
+                  }
+                  label={role.name}
+                />
               ))}
-            </div>
-          </div>
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateOpen(false)}>Скасувати</Button>
+          <Button variant="contained" onClick={handleCreate} disabled={loading}>
+            Створити
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 999,
-              border: 'none',
-              backgroundColor: '#0b2923',
-              color: '#fff',
-              fontSize: 14,
-              cursor: 'pointer',
-            }}
-          >
-            {loading ? 'Зберігаю...' : 'Створити'}
-          </button>
-        </form>
-      </div>
-
-      {/* Таблиця користувачів */}
-      <div
-        style={{
-          padding: 16,
-          borderRadius: 12,
-          backgroundColor: '#ffffff',
-          border: '1px solid #e5e7eb',
-        }}
-      >
-        <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 16 }}>
-          Список користувачів
-        </h3>
-        {loading && users.length === 0 ? (
-          <div style={{ fontSize: 14 }}>Завантаження...</div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table
-              style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                fontSize: 13,
-              }}
-            >
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', padding: 8 }}>ID</th>
-                  <th style={{ textAlign: 'left', padding: 8 }}>ПІБ</th>
-                  <th style={{ textAlign: 'left', padding: 8 }}>Email</th>
-                  <th style={{ textAlign: 'left', padding: 8 }}>Ролі</th>
-                  <th style={{ textAlign: 'left', padding: 8 }}>Статус</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr key={u.id}>
-                    <td style={{ padding: 8 }}>{u.id}</td>
-                    <td style={{ padding: 8 }}>{u.fullName}</td>
-                    <td style={{ padding: 8 }}>{u.email}</td>
-                    <td style={{ padding: 8 }}>
-                      {u.roles.map((r) => r.name).join(', ')}
-                    </td>
-                    <td style={{ padding: 8 }}>
-                      {u.isActive ? 'Активний' : 'Вимкнений'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
+      {/* Edit Dialog */}
+      <Dialog open={!!editUser} onClose={() => setEditUser(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Редагувати: {editUser?.email}</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <TextField
+            label="Імʼя"
+            value={editFullName}
+            onChange={(e) => setEditFullName(e.target.value)}
+            fullWidth
+          />
+          <FormControlLabel
+            control={
+              <Checkbox checked={editIsActive} onChange={(e) => setEditIsActive(e.target.checked)} />
+            }
+            label="Активний"
+          />
+          <Box sx={{ mt: 1 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Ролі
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+              {roles.map((role) => (
+                <FormControlLabel
+                  key={role.id}
+                  control={
+                    <Checkbox
+                      checked={editRoles.includes(role.code)}
+                      onChange={() => toggleRole(role.code, setEditRoles, editRoles)}
+                    />
+                  }
+                  label={role.name}
+                />
+              ))}
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditUser(null)}>Скасувати</Button>
+          <Button variant="contained" onClick={handleEdit} disabled={loading}>
+            Зберегти
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 };
 

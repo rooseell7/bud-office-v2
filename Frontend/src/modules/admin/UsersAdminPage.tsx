@@ -77,7 +77,7 @@ const UsersAdminPage: React.FC = () => {
     <div className="admin-grid">
       <section className="admin-card admin-card--primary">
         <h2>Користувачі</h2>
-        <p>Список усіх користувачів системи Будуй CRM з їх ролями.</p>
+        <p>Список усіх користувачів системи BUD Office з їх ролями.</p>
 
         {loading && <p style={{ fontSize: 13 }}>Завантаження…</p>}
         {error && (

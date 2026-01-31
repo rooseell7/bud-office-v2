@@ -831,7 +831,7 @@ function printAct() {
     const headerRow = rows.find((r) => r.rowType === 'meta') as any;
     const hdr = (headerRow?.header ?? {}) as Record<string, any>;
 
-    const companyName = hdr.companyName || 'Будуй';
+    const companyName = hdr.companyName || 'BUD Office';
     const companyTagline = hdr.companyTagline || 'Будуємо ваше завтра – сьогодні.';
     const companySite = hdr.companySite || 'buduy.lviv';
     const companyEmail = hdr.companyEmail || '';
@@ -1002,7 +1002,7 @@ function printAct() {
     const dateUA = fmtDateUA(act.actDate);
 
     const headerRows: Array<Array<string | number | boolean | null>> = [
-      [String(hdr.companyName || 'Будуй')],
+      [String(hdr.companyName || 'BUD Office')],
       [String(hdr.companyTagline || 'Будуємо ваше завтра – сьогодні.')],
       [String(hdr.companySite || ''), String(hdr.companyEmail || ''), String(hdr.companyPhone || '')],
       [],
@@ -1163,7 +1163,7 @@ function printAct() {
               fullWidth
               label="Назва компанії"
               size="small"
-              value={getHeader().companyName ?? 'Будуй'}
+              value={getHeader().companyName ?? 'BUD Office'}
               onChange={(e) => setHeaderField('companyName', e.target.value)}
               disabled={!canWrite}
             />

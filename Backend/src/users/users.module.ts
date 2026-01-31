@@ -15,6 +15,7 @@ export class UsersModule implements OnModuleInit {
   constructor(private readonly usersService: UsersService) {}
 
   async onModuleInit() {
+    await this.usersService.ensureBioColumn();
     await this.usersService.ensureAdminExists();
   }
 }

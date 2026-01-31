@@ -4,6 +4,7 @@ import { Box, Button, Card, CardContent, Typography } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { getDocument } from '../../api/documents';
 import { Sheet, useQuoteAdapter } from '../../sheet';
+import { quoteSheetConfig } from '../../sheet/configs/quoteSheetConfig';
 
 export const EstimateEditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -85,6 +86,7 @@ export const EstimateEditorPage: React.FC = () => {
         Назад
       </Button>
       <Sheet
+        config={quoteSheetConfig}
         adapter={adapter ?? undefined}
         documentId={validId}
         initialSnapshot={initialSnapshot}

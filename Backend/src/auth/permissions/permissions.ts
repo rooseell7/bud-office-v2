@@ -63,6 +63,9 @@ export const PERMISSIONS = [
   'documents:write',
   'documents:approve',
 
+  // ===== Estimates (КП) =====
+  'estimates:delete',
+
   // ===== Sheet (table / document sheet) =====
   'sheet:read',
   'sheet:write',

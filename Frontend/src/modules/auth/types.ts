@@ -17,8 +17,9 @@ export type User = {
   id: number;
   email: string;
   fullName: string;
+  bio?: string | null;
   isActive?: boolean;
-  roles: Role[];
+  roles: Role[] | string[];
 };
 
 export type LoginDto = {
