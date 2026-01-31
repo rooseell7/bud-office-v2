@@ -7,9 +7,10 @@ import type { SheetState } from '../state';
 import { cellKey } from '../state';
 import { createApplyValuesCommand } from './applyValues';
 import { createApplyStylesCommand } from './applyStyles';
-import { shiftFormulaRefs } from '../formulas/shiftRefs';
+import { shiftFormulaRefsForPaste } from '../formulas/shiftRefs';
 import { isFormula } from '../formulas/parse';
 import { normalizePastedCell } from '../clipboard/normalizeCellText';
+import { validateCellByColumnType } from '../locale/validateCell';
 
 function composeCommands(first: SheetCommand, second: SheetCommand): SheetCommand {
   return {
@@ -28,8 +29,8 @@ export function createPasteCommand(
   startCol: number,
   matrix: string[][],
 ): SheetCommand {
-  const { rawValues, rowCount, colCount, cellStyles, locale } = state;
-  const valueChanges: { row: number; col: number; prev: string; next: string }[] = [];
+  const { rawValues, rowCount, colCount, cellStyles, locale, columns } = state;
+  const valueChanges: { row: number; col: number; prev: string; next: string; nextError?: import('../types').CellError | null }[] = [];
   const styleChanges: { key: string; row: number; col: number; prev: Record<string, unknown>; next: Record<string, unknown> }[] = [];
 
   for (let ri = 0; ri < matrix.length; ri++) {
@@ -39,14 +40,17 @@ export function createPasteCommand(
     for (let ci = 0; ci < (row?.length ?? 0); ci++) {
       const c = startCol + ci;
       if (c >= colCount) break;
+      if (columns?.[c]?.computed) continue;
       const prev = rawValues[r]?.[c] ?? '';
       const cellText = row?.[ci] ?? '';
       const norm = normalizePastedCell(cellText, locale);
       let next = norm.raw;
       if (next && isFormula(next)) {
-        next = shiftFormulaRefs(next, startRow, startCol);
+        next = shiftFormulaRefsForPaste(next, startRow, startCol);
       }
-      valueChanges.push({ row: r, col: c, prev, next });
+      const colDef = columns?.[c];
+      const { error } = validateCellByColumnType(next, colDef?.type, locale);
+      valueChanges.push({ row: r, col: c, prev, next, nextError: error ?? null });
 
       if (norm.suggestedType && norm.suggestedType !== 'text') {
         const key = cellKey(r, c);

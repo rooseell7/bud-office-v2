@@ -5,10 +5,12 @@
 import type { LocaleSettings } from '../../configs/types';
 import { defaultLocale } from '../../configs/types';
 import { parseLocaleNumber } from './parseNumber';
+import { parseUaMoney, parseUaPercent } from '../locale/uaParse';
+import { formatUaNumber, formatUaMoney, formatUaPercent } from '../locale/uaFormat';
 
 /**
  * Format a value for display using locale and numberFormat.
- * Raw stays as user typed; this is for display only.
+ * Value can be normalized number string or raw with ₴/%.
  */
 export function formatForDisplay(
   value: string,
@@ -18,31 +20,26 @@ export function formatForDisplay(
   const trimmed = (value || '').trim();
   if (!trimmed) return '';
 
-  const n = parseLocaleNumber(trimmed, locale);
-  if (n == null) return trimmed; // text, keep as-is
-
-  const decSep = locale.decimalSeparator;
-  const thousandsSep = locale.thousandsSeparator ?? '';
-
-  function fmtNum(x: number, decimals: number): string {
-    const fixed = x.toFixed(decimals);
-    const [intPart, decPart] = fixed.split('.');
-    const withThousands = thousandsSep
-      ? intPart.replace(/\B(?=(\d{3})+(?!\d))/g, thousandsSep)
-      : intPart;
-    const dec = decPart ? decSep + decPart : '';
-    return withThousands + dec;
+  let n: number | null = parseLocaleNumber(trimmed, locale);
+  if (n == null && numberFormat === 'uah') {
+    const r = parseUaMoney(trimmed, locale);
+    n = r.ok ? r.value : null;
   }
+  if (n == null && numberFormat === 'percent') {
+    const r = parseUaPercent(trimmed, locale);
+    n = r.ok ? r.value : null;
+  }
+  if (n == null) return trimmed;
 
   switch (numberFormat) {
     case 'number':
-      return fmtNum(n, 2);
+      return n % 1 === 0 ? String(Math.round(n)) : formatUaNumber(n, 2, locale);
     case 'uah':
-      return `${fmtNum(n, 2)} ₴`;
+      return formatUaMoney(n, locale);
     case 'percent':
-      return `${fmtNum(n * 100, 1)}%`;
+      return formatUaPercent(n, 2, locale);
     case 'plain':
     default:
-      return n % 1 === 0 ? String(Math.round(n)) : fmtNum(n, 2);
+      return n % 1 === 0 ? String(Math.round(n)) : formatUaNumber(n, 2, locale);
   }
 }

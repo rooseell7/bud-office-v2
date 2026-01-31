@@ -4,6 +4,7 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -12,6 +13,7 @@ import { ILike, Repository } from 'typeorm';
 import { Document, type DocumentStatus } from './document.entity';
 import { DocumentEvent } from './document-event.entity';
 import { DocumentVersion } from './document-version.entity';
+import { SheetOpsService } from './sheet-ops.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { DocumentsQueryDto } from './dto/documents-query.dto';
@@ -48,6 +50,8 @@ function isSessionExpired(expiresAt: Date | null): boolean {
 
 @Injectable()
 export class DocumentsService {
+  private readonly logger = new Logger(DocumentsService.name);
+
   constructor(
     @InjectRepository(Document)
     private readonly repo: Repository<Document>,
@@ -55,6 +59,7 @@ export class DocumentsService {
     private readonly eventRepo: Repository<DocumentEvent>,
     @InjectRepository(DocumentVersion)
     private readonly versionRepo: Repository<DocumentVersion>,
+    private readonly sheetOpsService: SheetOpsService,
   ) {}
 
   private async getEntity(id: number): Promise<Document> {
@@ -174,7 +179,24 @@ export class DocumentsService {
     if (dto.sourceId !== undefined) doc.sourceId = dto.sourceId ?? null;
     if (dto.total !== undefined) doc.total = dto.total ?? null;
     if (dto.currency !== undefined) doc.currency = String(dto.currency ?? 'UAH').trim();
-    if (dto.meta !== undefined) doc.meta = dto.meta ?? null;
+    if (dto.meta !== undefined) {
+      const meta = dto.meta ?? null;
+      const prevSnapshot = (meta as any)?.sheetPrevSnapshot;
+      const nextSnapshot = (meta as any)?.sheetSnapshot;
+      if (prevSnapshot != null && nextSnapshot != null && typeof prevSnapshot === 'object' && typeof nextSnapshot === 'object') {
+        const opStart = Date.now();
+        await this.sheetOpsService.recordOp(
+          doc.id,
+          userId,
+          'SNAPSHOT_UPDATE',
+          { prevSnapshot, nextSnapshot },
+        );
+        this.logger.debug(`sheet op SNAPSHOT_UPDATE doc=${doc.id} latency=${Date.now() - opStart}ms`);
+      }
+      const metaToSave = meta && typeof meta === 'object' ? { ...meta } : null;
+      if (metaToSave && 'sheetPrevSnapshot' in metaToSave) delete (metaToSave as any).sheetPrevSnapshot;
+      doc.meta = metaToSave;
+    }
 
     (doc as any).revision = ((doc as any).revision ?? 0) + 1;
     const saved = await this.repo.save(doc);

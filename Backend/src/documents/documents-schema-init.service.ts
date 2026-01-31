@@ -95,6 +95,45 @@ export class DocumentsSchemaInitService implements OnModuleInit {
       }
 
       try {
+        await qr.query(`
+          CREATE TABLE IF NOT EXISTS "document_sheet_ops" (
+            "id" SERIAL PRIMARY KEY,
+            "documentId" INT NOT NULL,
+            "userId" INT NULL,
+            "type" VARCHAR(64) NOT NULL,
+            "payload" JSONB NOT NULL DEFAULT '{}',
+            "undoGroupId" UUID NULL,
+            "isUndone" BOOLEAN NOT NULL DEFAULT FALSE,
+            "undoneByOpId" INT NULL,
+            "inverseOfOpId" INT NULL,
+            "clientOpId" UUID NULL,
+            "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        await qr.query(`CREATE INDEX IF NOT EXISTS "idx_sheet_ops_doc_user" ON "document_sheet_ops" ("documentId", "userId")`);
+        await qr.query(`CREATE INDEX IF NOT EXISTS "idx_sheet_ops_doc_created" ON "document_sheet_ops" ("documentId", "createdAt" DESC)`);
+      } catch {
+        // table may exist
+      }
+
+      try {
+        await qr.query(`
+          CREATE TABLE IF NOT EXISTS "sheet_snapshots" (
+            "id" SERIAL PRIMARY KEY,
+            "documentId" INT NOT NULL,
+            "version" INT NOT NULL,
+            "lastOpId" INT NULL,
+            "snapshot" JSONB NOT NULL,
+            "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        await qr.query(`CREATE INDEX IF NOT EXISTS "idx_sheet_snapshots_doc" ON "sheet_snapshots" ("documentId")`);
+        await qr.query(`CREATE INDEX IF NOT EXISTS "idx_sheet_snapshots_doc_version" ON "sheet_snapshots" ("documentId", "version" DESC)`);
+      } catch {
+        // table may exist
+      }
+
+      try {
         await qr.query(`CREATE INDEX IF NOT EXISTS "idx_documents_type" ON "documents" ("type");`);
         await qr.query(`CREATE INDEX IF NOT EXISTS "idx_documents_project" ON "documents" ("projectId");`);
         await qr.query(`CREATE INDEX IF NOT EXISTS "idx_documents_type_project" ON "documents" ("type", "projectId");`);

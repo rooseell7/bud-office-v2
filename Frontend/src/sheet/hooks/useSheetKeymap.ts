@@ -15,10 +15,16 @@ export type UseSheetKeymapOptions = {
   state: { isEditing: boolean; activeCell: { row: number; col: number }; rowCount: number; colCount: number };
   dispatch: Dispatch<SheetAction>;
   readonly?: boolean;
+  /** When provided, Ctrl+Z uses server undo instead of local */
+  onServerUndo?: () => Promise<boolean>;
+  /** When provided, Ctrl+Y uses server redo instead of local */
+  onServerRedo?: () => Promise<boolean>;
+  /** Called when server undo/redo fails (e.g. conflict) */
+  onServerUndoError?: (message: string) => void;
 };
 
 export function useSheetKeymap(options: UseSheetKeymapOptions) {
-  const { state, dispatch, readonly } = options;
+  const { state, dispatch, readonly, onServerUndo, onServerRedo, onServerUndoError } = options;
   const { isEditing, activeCell, rowCount, colCount } = state;
 
   const move = useCallback(
@@ -56,16 +62,29 @@ export function useSheetKeymap(options: UseSheetKeymapOptions) {
 
       if (!readonly && (e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault();
-        if (e.shiftKey) {
-          dispatch({ type: REDO });
+        if (onServerUndo && !e.shiftKey) {
+          onServerUndo().then((ok) => {
+            if (!ok) onServerUndoError?.('Неможливо відкотити');
+          }).catch(() => onServerUndoError?.('Помилка відкату'));
+        } else if (onServerRedo && e.shiftKey) {
+          onServerRedo().then((ok) => {
+            if (!ok) onServerUndoError?.('Неможливо повторити');
+          }).catch(() => onServerUndoError?.('Помилка повтору'));
         } else {
-          dispatch({ type: UNDO });
+          if (e.shiftKey) dispatch({ type: REDO });
+          else dispatch({ type: UNDO });
         }
         return;
       }
       if (!readonly && (e.ctrlKey || e.metaKey) && e.key === 'y') {
         e.preventDefault();
-        dispatch({ type: REDO });
+        if (onServerRedo) {
+          onServerRedo().then((ok) => {
+            if (!ok) onServerUndoError?.('Неможливо повторити');
+          }).catch(() => onServerUndoError?.('Помилка повтору'));
+        } else {
+          dispatch({ type: REDO });
+        }
         return;
       }
 

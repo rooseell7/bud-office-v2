@@ -33,7 +33,7 @@ import PrintIcon from '@mui/icons-material/Print';
 
 import { getMaterials, type MaterialDto } from '../../api/materials';
 import { getObjects, type ObjectDto } from '../../api/objects';
-import { createDocument, listDocuments, updateDocument, type DocumentDto } from '../../api/documents';
+import { createDocument, getDocument, listDocuments, updateDocument, type DocumentDto } from '../../api/documents';
 
 
 import {
@@ -65,7 +65,7 @@ import { SHEET_GRID_COLOR, SHEET_OUTLINE_COLOR } from '../shared/sheet/constants
 import {
   Sheet,
   quoteSheetConfig,
-  useDocumentsAdapter,
+  useQuoteAdapter,
   draftKey,
 } from '../../sheet';
 
@@ -111,7 +111,16 @@ export default function QuotesPage() {
   });
 
   const sheetDocId = typeof docId === 'number' ? docId : docId ? Number(docId) : null;
-  const { adapter: docsAdapter, mode, initialSnapshot } = useDocumentsAdapter(sheetDocId, 'quote');
+  const { adapter: docsAdapter, mode, initialSnapshot } = useQuoteAdapter(sheetDocId);
+  const [quoteTotals, setQuoteTotals] = useState<number | null>(null);
+
+  const onSheetSaved = useCallback(() => {
+    if (sheetDocId == null) return;
+    getDocument(sheetDocId)
+      .then((doc) => setQuoteTotals((doc?.meta as any)?.quoteTotals?.total ?? null))
+      .catch(() => {});
+  }, [sheetDocId]);
+
   const localAdapter = useMemo(
     () =>
       sheetDocId == null
@@ -234,12 +243,19 @@ export default function QuotesPage() {
       return;
     }
     try {
+      let meta: Record<string, any> = { title, stages };
+      if (docId) {
+        const current = docs.find((d) => d.id === Number(docId));
+        const prevMeta = (current?.meta ?? {}) as Record<string, any>;
+        meta = { ...prevMeta, title, stages };
+      }
+
       const dto: Partial<DocumentDto> = {
         type: 'quote',
         status: 'draft',
         projectId: pid,
         title,
-        meta: { title, stages },
+        meta,
       };
 
       let saved: DocumentDto;
@@ -255,7 +271,23 @@ export default function QuotesPage() {
     } catch (e) {
       setErr('Не вдалося зберегти КП в базу');
     }
-  }, [docId, projectId, stages, title]);
+  }, [docId, projectId, stages, title, docs]);
+
+  useEffect(() => {
+    if (sheetDocId == null) {
+      setQuoteTotals(null);
+      return;
+    }
+    let mounted = true;
+    getDocument(sheetDocId)
+      .then((doc) => {
+        if (mounted) setQuoteTotals((doc?.meta as any)?.quoteTotals?.total ?? null);
+      })
+      .catch(() => {
+        if (mounted) setQuoteTotals(null);
+      });
+    return () => { mounted = false; };
+  }, [sheetDocId]);
 
   function applyRecalcForStage(stageIdx: number) {
     setStagesT((prev) => {
@@ -843,7 +875,18 @@ function onPrint() {
       [],
     );
 
-    const gridTemplateColumns = '46px 1fr 90px 90px 120px 90px 90px 120px 120px 74px';
+    const gridTemplateColumns = [
+      '48px',
+      'minmax(360px, 1fr)',
+      'minmax(90px, 110px)',
+      'minmax(90px, 120px)',
+      'minmax(120px, 150px)',
+      'minmax(130px, 170px)',
+      'minmax(150px, 190px)',
+      'minmax(160px, 210px)',
+      'minmax(90px, 120px)',
+      'minmax(74px, 90px)', // Дії
+    ].join(' ');
     const stickyLettersH = 26; // px
     const stickyHeaderH = 32; // px (approx)
 
@@ -894,7 +937,7 @@ function onPrint() {
     return (
       // IMPORTANT: sticky headers require that the scroll container is the same element
       // that actually scrolls vertically. We make this wrapper scrollable in both axes.
-      <Box sx={{ overflow: 'auto', maxHeight: '72vh' }} onContextMenuCapture={handleCtxCapture}>
+      <Box sx={{ overflow: 'auto', maxHeight: '72vh', width: '100%' }} onContextMenuCapture={handleCtxCapture}>
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={1}
@@ -983,7 +1026,8 @@ function onPrint() {
         </Stack>
         <Box
           sx={{
-            minWidth: 980,
+            width: '100%',
+            minWidth: 1150,
             border: `1px solid ${OUTLINE}`,
             borderRadius: 1,
             // IMPORTANT: sticky headers/footers stop working in many browsers when any ancestor
@@ -993,6 +1037,7 @@ function onPrint() {
         >
           <Box
             sx={{
+              width: '100%',
               display: 'grid',
               gridTemplateColumns,
               background: '#ffffff',
@@ -1034,6 +1079,7 @@ function onPrint() {
           </Box>
           <Box
             sx={{
+              width: '100%',
               display: 'grid',
               gridTemplateColumns,
               background: '#f6f7f8',
@@ -1087,6 +1133,7 @@ function onPrint() {
               <Box
                 key={rr.id}
                 sx={{
+                  width: '100%',
                   display: 'grid',
                   gridTemplateColumns,
                   borderBottom: `1px solid ${GRID}`,
@@ -1356,9 +1403,10 @@ function onPrint() {
           {/* Підсумковий рядок (видимі / всі) */}
           <Box
             sx={{
+              width: '100%',
               display: 'grid',
               gridTemplateColumns,
-              minWidth: '900px',
+              minWidth: 1150,
               background: '#f8fafc',
               fontWeight: 600,
               borderTop: `1px solid ${GRID}`,
@@ -1470,20 +1518,6 @@ function onPrint() {
 
   return (
     <Box>
-      {(sheetDocId != null ? mode !== 'loading' : true) && (
-        <Box sx={{ mb: 2, p: 1, border: '1px solid #e2e8f0', borderRadius: 1 }}>
-          <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-            Таблиця (canonical Sheet)
-          </Typography>
-          <Sheet
-            config={quoteSheetConfig}
-            adapter={adapter ?? undefined}
-            documentId={sheetDocId}
-            initialSnapshot={sheetDocId != null ? initialSnapshot : null}
-            readonly={sheetDocId != null && mode === 'readonly'}
-          />
-        </Box>
-      )}
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} gap={2} mb={2}>
         <Box>
           <Typography variant="h6">Продажі • КП</Typography>
@@ -1585,147 +1619,29 @@ function onPrint() {
 
       <Card>
         <CardContent>
-          <Stack direction={{ xs: 'column', md: 'row' }} gap={2} mb={2}>
+          <Stack direction={{ xs: 'column', md: 'row' }} gap={2} mb={2} alignItems="center">
             <TextField fullWidth label="Назва КП" value={title} onChange={(e) => setTitle(e.target.value)} size="small" />
-            <Box display="flex" alignItems="center" justifyContent={{ xs: 'flex-start', md: 'flex-end' }} minWidth={260}>
-              <Stack direction="row" gap={1} alignItems="center">
-                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                  Разом по КП: {totalKp.total}
-                </Typography>
-                {totalKp.issues ? <Chip color="warning" size="small" label={`Проблемні: ${totalKp.issues}`} /> : null}
-              </Stack>
-            </Box>
+            {sheetDocId != null && (
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, minWidth: 140 }}>
+                Разом: {quoteTotals != null ? quoteTotals.toFixed(2) : '—'}
+              </Typography>
+            )}
           </Stack>
 
           <Divider sx={{ mb: 2 }} />
 
-          {stages.map((stage, idx) => {
-            const t = stageTotalsList[idx];
-            return (
-              <Accordion key={stage.id} defaultExpanded={idx === 0} sx={{ mb: 1 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  {stageHeader(stage, idx, t.total)}
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Stack direction={{ xs: 'column', md: 'row' }} gap={2} mb={2}>
-                    <CommitTextField
-                      value={stage.name}
-                      onCommit={(v) => setStageField(idx, 'name', v)}
-                      textFieldProps={{ fullWidth: true, label: 'Етап робіт', size: 'small' }}
-                    />
-                    <CommitTextField
-                      value={stage.areaM2}
-                      onCommit={(v) => {
-                        setStageField(idx, 'areaM2', v);
-                        applyRecalcForStage(idx);
-                      }}
-                      textFieldProps={{ label: 'Площа, м²', size: 'small', sx: { width: 160 } }}
-                    />
-                    <CommitTextField
-                      value={stage.lengthLm}
-                      onCommit={(v) => {
-                        setStageField(idx, 'lengthLm', v);
-                        applyRecalcForStage(idx);
-                      }}
-                      textFieldProps={{ label: 'Довжина, м.п.', size: 'small', sx: { width: 160 } }}
-                    />
-                  </Stack>
-
-                  <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                      Роботи
-                    </Typography>
-                    <Button size="small" startIcon={<AddIcon />} onClick={() => addRow(idx, 'work')}>
-                      Додати роботу
-                    </Button>
-                  </Stack>
-                  <RowTable stageIdx={idx} kind="work" rows={stage.works} />
-
-                  <Box mt={1} display="flex" justifyContent="flex-end">
-                    <Typography sx={{ fontWeight: 700 }}>Підсумок робіт: {f2(t.works)}</Typography>
-                  </Box>
-
-                  <Divider sx={{ my: 2 }} />
-
-                  <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                      Матеріали
-                    </Typography>
-                    <Stack direction="row" gap={1}>
-                      <Button size="small" variant="outlined" onClick={() => applyRecalcForStage(idx)}>
-                        Перерахувати матеріали
-                      </Button>
-                      <Button size="small" startIcon={<AddIcon />} onClick={() => addRow(idx, 'material')}>
-                        Додати матеріал
-                      </Button>
-                    </Stack>
-                  </Stack>
-                  <RowTable stageIdx={idx} kind="material" rows={stage.materials} />
-
-                  <Box mt={1} display="flex" justifyContent="flex-end">
-                    <Typography sx={{ fontWeight: 700 }}>Підсумок матеріалів: {f2(t.materials)}</Typography>
-                  </Box>
-
-                  <Divider sx={{ my: 2 }} />
-
-                  <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                      % по етапу
-                    </Typography>
-                    <Button size="small" startIcon={<AddIcon />} onClick={() => addPercent(idx)}>
-                      Додати %
-                    </Button>
-                  </Stack>
-
-                  {stage.percents.length ? (
-                    <Stack gap={1}>
-                      {stage.percents.map((p, pIdx) => (
-                        <Stack key={p.id} direction={{ xs: 'column', md: 'row' }} gap={1} alignItems={{ md: 'center' }}>
-                          <CommitTextField
-                            value={p.name}
-                            onCommit={(v) => setPercentCell(idx, pIdx, 'name', v)}
-                            textFieldProps={{ label: 'Назва %', size: 'small', fullWidth: true }}
-                          />
-                          <CommitTextField
-                            value={p.pct}
-                            onCommit={(v) => setPercentCell(idx, pIdx, 'pct', v)}
-                            textFieldProps={{ label: '%', size: 'small', sx: { width: 160 } }}
-                          />
-                          <Box sx={{ width: 220, textAlign: 'right', fontWeight: 700 }}>
-                            {f2(t.base * (n(p.pct) / 100))}
-                          </Box>
-                          <IconButton size="small" onClick={() => deletePercent(idx, p.id)} title="Видалити %">
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Stack>
-                      ))}
-                    </Stack>
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">
-                      Додай рядок %, якщо потрібно націнку/резерв/додаткові витрати по етапу.
-                    </Typography>
-                  )}
-
-                  <Box mt={2} display="flex" justifyContent="flex-end">
-                    <Stack gap={0.5} sx={{ minWidth: 280 }}>
-                      <Stack direction="row" justifyContent="space-between">
-                        <Typography color="text.secondary">База (роботи+матеріали)</Typography>
-                        <Typography sx={{ fontWeight: 700 }}>{f2(t.base)}</Typography>
-                      </Stack>
-                      <Stack direction="row" justifyContent="space-between">
-                        <Typography color="text.secondary">% по етапу</Typography>
-                        <Typography sx={{ fontWeight: 700 }}>{f2(t.perc)}</Typography>
-                      </Stack>
-                      <Stack direction="row" justifyContent="space-between">
-                        <Typography sx={{ fontWeight: 800 }}>Разом етап</Typography>
-                        <Typography sx={{ fontWeight: 800 }}>{f2(t.total)}</Typography>
-                      </Stack>
-                    </Stack>
-                  </Box>
-                </AccordionDetails>
-              </Accordion>
-            );
-          })}
+          {(sheetDocId != null ? mode !== 'loading' : true) && (
+            <Box sx={{ mb: 2, width: '100%' }}>
+              <Sheet
+                config={quoteSheetConfig}
+                adapter={adapter ?? undefined}
+                documentId={sheetDocId}
+                initialSnapshot={sheetDocId != null ? initialSnapshot : null}
+                readonly={sheetDocId != null && mode === 'readonly'}
+                onSaved={onSheetSaved}
+              />
+            </Box>
+          )}
         </CardContent>
       </Card>
     </Box>

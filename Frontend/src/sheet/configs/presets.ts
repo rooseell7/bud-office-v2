@@ -4,14 +4,10 @@
 
 import type { SheetConfig } from './types';
 import { uaLocale } from './types';
-
 const sheetLocale = uaLocale;
 
-export const quoteSheetConfig: Partial<SheetConfig> = {
-  rowCount: 100,
-  colCount: 26,
-  locale: sheetLocale,
-};
+export { quoteSheetConfig } from './quoteSheetConfig';
+export { quoteSheetColumnHeaders, Q_COL } from './quoteSheetConfig';
 
 export const invoiceSheetConfig: Partial<SheetConfig> = {
   rowCount: 80,

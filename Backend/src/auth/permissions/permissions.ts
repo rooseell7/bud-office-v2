@@ -62,6 +62,12 @@ export const PERMISSIONS = [
   'documents:read',
   'documents:write',
   'documents:approve',
+
+  // ===== Sheet (table / document sheet) =====
+  'sheet:read',
+  'sheet:write',
+  'sheet:approve',
+  'sheet:export',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -124,6 +130,10 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
 
     'documents:read',
     'documents:write',
+    'sheet:read',
+    'sheet:write',
+    'sheet:approve',
+    'sheet:export',
   ],
 
   supply_manager: [
@@ -148,6 +158,9 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
 
     'documents:read',
     'documents:write',
+    'sheet:read',
+    'sheet:write',
+    'sheet:export',
   ],
 
   estimator: [
@@ -164,6 +177,7 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
     'objects:read',
 
     'documents:read',
+    'sheet:read',
   ],
 
   // ===== Sales =====
@@ -186,6 +200,9 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
     'suppliers:approve',
 
     'documents:read',
+    'sheet:read',
+    'sheet:approve',
+    'sheet:export',
   ],
 
   sales_manager_head: [
@@ -201,6 +218,7 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
     'objects:read',
 
     'documents:read',
+    'sheet:read',
   ],
 
   // ===== Delivery =====
@@ -216,6 +234,8 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
     'objects:read',
 
     'documents:read',
+    'sheet:approve',
+    'sheet:read',
   ],
 
   delivery_manager: [
@@ -248,6 +268,10 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
     'documents:read',
     'documents:write',
     'documents:approve',
+    'sheet:read',
+    'sheet:write',
+    'sheet:approve',
+    'sheet:export',
   ],
 
   viewer: [
@@ -265,6 +289,7 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
     'delivery:read',
 
     'documents:read',
+    'sheet:read',
   ],
 };
 

@@ -17,6 +17,7 @@ import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { Permissions } from '../auth/decorators/permissions.decorator';
 
 import { DocumentsService } from './documents.service';
+import { SheetOpsService } from './sheet-ops.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { DocumentsQueryDto } from './dto/documents-query.dto';
@@ -32,7 +33,10 @@ function getUserId(req: Request): number | null {
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('documents')
 export class DocumentsController {
-  constructor(private readonly service: DocumentsService) {}
+  constructor(
+    private readonly service: DocumentsService,
+    private readonly sheetOpsService: SheetOpsService,
+  ) {}
 
   @Permissions('documents:read')
   @Get()
@@ -112,6 +116,18 @@ export class DocumentsController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateDocumentDto, @Req() req: Request) {
     return this.service.update(Number(id), dto, getUserId(req));
+  }
+
+  @Permissions('documents:write')
+  @Post(':id/sheet/undo')
+  async requestSheetUndo(@Param('id') id: string, @Req() req: Request) {
+    return this.sheetOpsService.requestUndo(Number(id), getUserId(req));
+  }
+
+  @Permissions('documents:write')
+  @Post(':id/sheet/redo')
+  async requestSheetRedo(@Param('id') id: string, @Req() req: Request) {
+    return this.sheetOpsService.requestRedo(Number(id), getUserId(req));
   }
 
   /**

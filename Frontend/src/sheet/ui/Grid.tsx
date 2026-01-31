@@ -1,15 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { Box } from '@mui/material';
+import React, { useState, useEffect, useRef } from 'react';
+import { Box, Menu, MenuItem, TextField, Divider, Snackbar } from '@mui/material';
 import { colToLetter } from '../utils';
+import { colToLabel } from '../utils/colLabel';
 import { Cell } from './Cell';
 import { CellEditor } from './CellEditor';
 import { cellKey, type SheetState } from '../engine/state';
 import type { CellCoord } from '../engine/types';
 import type { SheetConfig } from '../configs/types';
+import { clampColWidth, clampRowHeight } from '../engine/resizeConstants';
+import { computeAutoFitWidth } from '../engine/autofit';
+import { computeAutoFitRowHeight } from '../engine/autofitRow';
+import {
+  columnHasData,
+  rowHasData,
+  tableHasFormulas,
+  columnsHaveData,
+  rowsHaveData,
+} from '../engine/deleteGuards';
+import { ConfirmDialog } from './ConfirmDialog';
+import { ColumnFormulaDialog } from './ColumnFormulaDialog';
+import { validateExpr } from '../engine/computed/validateExpr';
+import { useFillHandle } from '../hooks/useFillHandle';
+import { computeRowVisibility } from '../engine/filter/applyFilters';
+import { ColumnFilterDialog } from './ColumnFilterDialog';
 
-const ROW_HEIGHT = 28;
-const COL_WIDTH = 100;
+const ROW_HEIGHT_DEFAULT = 28;
+const LETTERS_ROW_HEIGHT = 22;
+const COL_WIDTH_DEFAULT = 140;
 const HEADER_BG = '#f1f5f9';
+const RESIZE_HANDLE_WIDTH = 8;
 
 export type GridProps = {
   state: SheetState;
@@ -19,6 +38,27 @@ export type GridProps = {
   onCellDoubleClick?: () => void;
   onEditorChange?: (value: string) => void;
   onColumnResize?: (col: number, width: number) => void;
+  onColumnResizeCommit?: (col: number, prevWidth: number, nextWidth: number) => void;
+  onRowResizeCommit?: (row: number, prevHeight: number, nextHeight: number) => void;
+  onInsertRowAbove?: (row: number) => void;
+  onInsertRowBelow?: (row: number) => void;
+  onInsertColumnAt?: (atIndex: number) => void;
+  onDeleteColumn?: (col: number) => void;
+  onDeleteColumnsBatch?: (cols: number[]) => void;
+  onRenameColumn?: (colIndex: number, prevTitle: string, nextTitle: string) => void;
+  onDeleteRow?: (row: number) => void;
+  onDeleteRowsBatch?: (rows: number[]) => void;
+  onSetColumnFormula?: (colIndex: number, prevExpr: string | undefined, nextExpr: string) => void;
+  onApplyFill?: (
+    source: { r1: number; r2: number; c1: number; c2: number },
+    target: { r1: number; r2: number; c1: number; c2: number },
+  ) => void;
+  onSortRows?: (colIndex: number, direction: 'asc' | 'desc') => void;
+  onSetFiltersEnabled?: (enabled: boolean) => void;
+  onSetColumnFilter?: (colId: string, spec: import('../engine/types').FilterSpec | null) => void;
+  onClearAllFilters?: () => void;
+  onSetFreezeRows?: (count: number) => void;
+  onSetFreezeCols?: (count: number) => void;
 };
 
 export const Grid: React.FC<GridProps> = ({
@@ -29,11 +69,90 @@ export const Grid: React.FC<GridProps> = ({
   onCellDoubleClick,
   onEditorChange,
   onColumnResize,
+  onColumnResizeCommit,
+  onRowResizeCommit,
+  onInsertRowAbove,
+  onInsertRowBelow,
+  onInsertColumnAt,
+  onDeleteColumn,
+  onDeleteColumnsBatch,
+  onRenameColumn,
+  onDeleteRow,
+  onDeleteRowsBatch,
+  onSetColumnFormula,
+  onApplyFill,
+  onSortRows,
+  onSetFiltersEnabled,
+  onSetColumnFilter,
+  onClearAllFilters,
+  onSetFreezeRows,
+  onSetFreezeCols,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [resizingCol, setResizingCol] = useState<number | null>(null);
+  const [resizingRow, setResizingRow] = useState<number | null>(null);
+  const [tempColWidth, setTempColWidth] = useState<number | null>(null);
+  const [tempRowHeight, setTempRowHeight] = useState<number | null>(null);
   const [resizeStartX, setResizeStartX] = useState(0);
   const [resizeStartW, setResizeStartW] = useState(0);
+  const [resizeStartY, setResizeStartY] = useState(0);
+  const [resizeStartH, setResizeStartH] = useState(0);
+  const [contextMenu, setContextMenu] = useState<{
+    row: number;
+    col: number;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [confirmState, setConfirmState] = useState<{
+    type: 'column' | 'row';
+    target: number;
+    batchCols?: number[];
+    batchRows?: number[];
+    title: string;
+    message: string;
+    hasData: boolean;
+    hasFormulas: boolean;
+  } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [filterDialog, setFilterDialog] = useState<{
+    colIndex: number;
+    columnTitle: string;
+    columnType?: 'text' | 'number' | 'uah' | 'percent';
+    colId: string;
+    initialSpec: import('../engine/types').FilterSpec | null;
+  } | null>(null);
+  const [formulaDialog, setFormulaDialog] = useState<{
+    colIndex: number;
+    columnTitle: string;
+    initialExpr: string;
+  } | null>(null);
+  const [editingHeaderCol, setEditingHeaderCol] = useState<number | null>(null);
+  const [headerEditValue, setHeaderEditValue] = useState('');
+  const headerInputRef = useRef<HTMLInputElement>(null);
+
+  const s = state.selection;
+  const selR1 = Math.min(s.r1, s.r2);
+  const selR2 = Math.max(s.r1, s.r2);
+  const selC1 = Math.min(s.c1, s.c2);
+  const selC2 = Math.max(s.c1, s.c2);
+  const sourceRange =
+    onApplyFill && !state.isEditing ? { r1: selR1, r2: selR2, c1: selC1, c2: selC2 } : null;
+
+  const rowVisibility = React.useMemo(() => computeRowVisibility(state), [state]);
+
+
+  const { targetRange: fillTargetRange, onFillHandleMouseDown } = useFillHandle(
+    sourceRange,
+    state.rowCount,
+    onApplyFill ?? (() => {}),
+  );
+
+  useEffect(() => {
+    if (editingHeaderCol != null) {
+      headerInputRef.current?.focus();
+      headerInputRef.current?.select();
+    }
+  }, [editingHeaderCol]);
 
   useEffect(() => {
     if (!isDragging) return;
@@ -43,20 +162,52 @@ export const Grid: React.FC<GridProps> = ({
   }, [isDragging]);
 
   useEffect(() => {
-    if (resizingCol == null || !onColumnResize) return;
+    if (resizingCol == null) return;
+    const col = resizingCol;
+    const startX = resizeStartX;
+    const startW = resizeStartW;
     const onMove = (e: MouseEvent) => {
-      const delta = e.clientX - resizeStartX;
-      const w = Math.max(40, Math.min(400, resizeStartW + delta));
-      onColumnResize(resizingCol, w);
+      setTempColWidth(clampColWidth(startW + e.clientX - startX));
     };
-    const onUp = () => setResizingCol(null);
+    const onUp = (e: MouseEvent) => {
+      const nextW = clampColWidth(startW + e.clientX - startX);
+      if (onColumnResizeCommit && nextW !== startW) {
+        onColumnResizeCommit(col, startW, nextW);
+      }
+      setResizingCol(null);
+      setTempColWidth(null);
+    };
     window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    window.addEventListener('mouseup', onUp as EventListener);
     return () => {
       window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('mouseup', onUp as EventListener);
     };
-  }, [resizingCol, resizeStartX, resizeStartW, onColumnResize]);
+  }, [resizingCol, resizeStartX, resizeStartW, onColumnResizeCommit]);
+
+  useEffect(() => {
+    if (resizingRow == null) return;
+    const row = resizingRow;
+    const startY = resizeStartY;
+    const startH = resizeStartH;
+    const onMove = (e: MouseEvent) => {
+      setTempRowHeight(clampRowHeight(startH + e.clientY - startY));
+    };
+    const onUp = (e: MouseEvent) => {
+      const nextH = clampRowHeight(startH + e.clientY - startY);
+      if (onRowResizeCommit && nextH !== startH) {
+        onRowResizeCommit(row, startH, nextH);
+      }
+      setResizingRow(null);
+      setTempRowHeight(null);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp as EventListener);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp as EventListener);
+    };
+  }, [resizingRow, resizeStartY, resizeStartH, onRowResizeCommit]);
 
   const {
     rowCount,
@@ -68,9 +219,16 @@ export const Grid: React.FC<GridProps> = ({
     editorValue,
     cellStyles,
   } = state;
-  const rowHeight = config?.rowHeight ?? ROW_HEIGHT;
-  const defaultColWidth = config?.colWidth ?? COL_WIDTH;
-  const getColWidth = (c: number) => state.columnWidths?.[c] ?? defaultColWidth;
+  const defaultRowHeight = config?.rowHeight ?? ROW_HEIGHT_DEFAULT;
+  const defaultColWidth = config?.colWidth ?? COL_WIDTH_DEFAULT;
+  const getColWidth = (c: number) => {
+    if (resizingCol === c && tempColWidth != null) return tempColWidth;
+    return state.columnWidths?.[c] ?? config?.columnWidthDefaults?.[c] ?? defaultColWidth;
+  };
+  const getRowHeight = (r: number) => {
+    if (resizingRow === r && tempRowHeight != null) return tempRowHeight;
+    return state.rowHeights?.[r] ?? defaultRowHeight;
+  };
 
   const getValue = (r: number, c: number): string => {
     return values[r]?.[c] ?? '';
@@ -96,37 +254,214 @@ export const Grid: React.FC<GridProps> = ({
     return r >= r1 && r <= r2 && c >= c1 && c <= c2;
   };
 
+  const useGrid = Boolean(config?.gridTemplateColumns);
+  const flexCol = config?.flexColumn;
+  /** When using grid, letter/header count must match gridTemplateColumns tracks (1 corner + N data). Use config.columnHeaders to avoid wrap. */
+  const dataColCount = useGrid
+    ? (state.columns?.length ?? config?.columnHeaders?.length ?? colCount)
+    : colCount;
+  const getHeaderTitle = (c: number) =>
+    state.columns?.[c]?.title ?? config?.columnHeaders?.[c] ?? colToLetter(c);
+  const dynamicGridTemplate = useGrid
+    ? ['48px', ...Array.from({ length: dataColCount }, (_, c) => `${getColWidth(c)}px`)].join(' ')
+    : '';
+  const gridTemplate = dynamicGridTemplate || (config?.gridTemplateColumns ?? '');
+  const freezeRows = useGrid ? Math.min(state.freeze?.rows ?? 0, state.rowCount) : 0;
+  const freezeCols = useGrid ? Math.min(state.freeze?.cols ?? 0, dataColCount) : 0;
+
+  const minTableWidth = useGrid
+    ? 48 + Array.from({ length: dataColCount }, (_, c) => getColWidth(c)).reduce((a, b) => a + b, 0)
+    : 40 +
+      Array.from({ length: colCount }, (_, c) => (flexCol === c ? 80 : getColWidth(c))).reduce(
+        (a, b) => a + b,
+        0,
+      );
+
+  const headerRowSx = useGrid
+    ? {
+        width: '100%',
+        minWidth: minTableWidth,
+        display: 'grid' as const,
+        gridTemplateColumns: gridTemplate,
+        borderBottom: 1,
+        borderColor: 'divider',
+        background: '#fff',
+      }
+    : {
+        width: '100%',
+        minWidth: minTableWidth,
+        display: 'flex' as const,
+        borderBottom: 1,
+        borderColor: 'divider',
+      };
+
+  const dataRowSx = useGrid
+    ? {
+        width: '100%',
+        minWidth: minTableWidth,
+        display: 'grid' as const,
+        gridTemplateColumns: gridTemplate,
+      }
+    : {
+        width: '100%',
+        minWidth: minTableWidth,
+        display: 'flex' as const,
+      };
+
+  const lettersRowSx = useGrid
+    ? {
+        width: '100%',
+        minWidth: minTableWidth,
+        display: 'grid' as const,
+        gridTemplateColumns: gridTemplate,
+        borderBottom: 1,
+        borderColor: 'divider',
+        background: HEADER_BG,
+      }
+    : null;
+
+  const headerTotalHeight = LETTERS_ROW_HEIGHT + defaultRowHeight;
+  const cumulativeColLeft = React.useMemo(() => {
+    const out: number[] = [48];
+    for (let c = 0; c < dataColCount - 1; c++) {
+      out.push(out[out.length - 1] + getColWidth(c));
+    }
+    return out;
+  }, [dataColCount, resizingCol, tempColWidth, state.columnWidths, config]);
+
+  const cumulativeRowTop = React.useMemo(() => {
+    const out: number[] = [headerTotalHeight];
+    for (let r = 0; r < rowCount - 1; r++) {
+      out.push(out[out.length - 1] + getRowHeight(r));
+    }
+    return out;
+  }, [rowCount, resizingRow, tempRowHeight, state.rowHeights, config]);
+
+  const letterCellSx = {
+    minWidth: 0,
+    height: LETTERS_ROW_HEIGHT,
+    display: 'flex' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    fontSize: 11,
+    fontWeight: 700,
+    color: 'text.secondary',
+    bgcolor: HEADER_BG,
+    borderRight: 1,
+    borderColor: 'divider',
+    whiteSpace: 'nowrap' as const,
+    wordBreak: 'normal' as const,
+    overflowWrap: 'normal' as const,
+    writingMode: 'horizontal-tb' as const,
+    textOrientation: 'mixed' as const,
+  };
+
   return (
     <Box
       sx={{
-        display: 'inline-block',
+        width: '100%',
+        minWidth: minTableWidth,
         border: '1px solid #e2e8f0',
         overflow: 'auto',
-        maxHeight: 400,
-        maxWidth: 600,
+        maxHeight: '72vh',
       }}
     >
-      {/* Column headers */}
-      <Box sx={{ display: 'flex', borderBottom: 1, borderColor: 'divider' }}>
+      {/* Sticky container: letters row + column headers */}
+      {useGrid && lettersRowSx ? (
         <Box
           sx={{
-            width: 40,
-            minWidth: 40,
-            height: rowHeight,
+            position: 'sticky',
+            top: 0,
+            zIndex: 5,
+            background: HEADER_BG,
+          }}
+        >
+          {/* Letters row (A, B, C, ...) */}
+          <Box sx={lettersRowSx}>
+            <Box
+              sx={{
+                height: LETTERS_ROW_HEIGHT,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                bgcolor: HEADER_BG,
+                borderRight: 1,
+                borderColor: 'divider',
+                ...(freezeCols > 0 && {
+                  position: 'sticky' as const,
+                  left: 0,
+                  zIndex: 6,
+                  boxShadow: '2px 0 4px -2px rgba(0,0,0,0.1)',
+                }),
+              }}
+            />
+            {Array.from({ length: dataColCount }, (_, c) => (
+              <Box
+                key={c}
+                sx={{
+                  ...letterCellSx,
+                  ...(freezeCols > 0 && c < freezeCols && {
+                    position: 'sticky' as const,
+                    left: cumulativeColLeft[c],
+                    zIndex: 6,
+                    boxShadow: c === freezeCols - 1 ? '2px 0 4px -2px rgba(0,0,0,0.1)' : undefined,
+                    borderRight: c === freezeCols - 1 ? '1px solid' : undefined,
+                    borderColor: c === freezeCols - 1 ? 'divider' : undefined,
+                  }),
+                }}
+              >
+                {colToLabel(c)}
+              </Box>
+            ))}
+          </Box>
+          {/* Column headers */}
+          <Box sx={{ ...headerRowSx, background: '#fff' }}>
+        <Box
+          sx={{
+            height: defaultRowHeight,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             bgcolor: HEADER_BG,
             borderRight: 1,
             borderColor: 'divider',
+            position: 'relative',
+            ...(freezeCols > 0 && {
+              position: 'sticky' as const,
+              left: 0,
+              zIndex: 6,
+              boxShadow: '2px 0 4px -2px rgba(0,0,0,0.1)',
+            }),
           }}
-        />
-        {Array.from({ length: colCount }, (_, c) => {
+        >
+          {state.filtersEnabled && (
+            <Box
+              component="span"
+              sx={{ fontSize: 14, color: 'primary.main' }}
+              title="Фільтр увімкнено"
+            >
+              🔍
+            </Box>
+          )}
+        </Box>
+        {Array.from({ length: dataColCount }, (_, c) => {
           const cw = getColWidth(c);
+          const isFlex = !useGrid && config?.flexColumn === c;
           return (
             <Box
               key={c}
+              onDoubleClick={
+                onRenameColumn
+                  ? (e) => {
+                      if ((e.target as HTMLElement).closest('[data-resize-handle]')) return;
+                      setEditingHeaderCol(c);
+                      setHeaderEditValue(getHeaderTitle(c));
+                    }
+                  : undefined
+              }
               sx={{
-                width: cw,
-                minWidth: cw,
-                height: rowHeight,
+                ...(useGrid ? { minWidth: 0 } : isFlex ? { flex: 1, minWidth: 80 } : { width: cw, minWidth: cw }),
+                height: defaultRowHeight,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -137,23 +472,69 @@ export const Grid: React.FC<GridProps> = ({
                 borderRight: 1,
                 borderColor: 'divider',
                 position: 'relative',
+                ...(freezeCols > 0 && c < freezeCols && {
+                  position: 'sticky' as const,
+                  left: cumulativeColLeft[c],
+                  zIndex: 6,
+                  boxShadow: c === freezeCols - 1 ? '2px 0 4px -2px rgba(0,0,0,0.1)' : undefined,
+                  borderRight: c === freezeCols - 1 ? '1px solid' : 1,
+                  borderColor: 'divider',
+                }),
               }}
             >
-              {colToLetter(c)}
-              {onColumnResize && (
+              {editingHeaderCol === c ? (
+                <TextField
+                  inputRef={headerInputRef}
+                  value={headerEditValue}
+                  onChange={(e) => setHeaderEditValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const prev = getHeaderTitle(c);
+                      const next = headerEditValue.trim() || prev;
+                      if (next !== prev) onRenameColumn?.(c, prev, next);
+                      setEditingHeaderCol(null);
+                    } else if (e.key === 'Escape') {
+                      setHeaderEditValue(getHeaderTitle(c));
+                      setEditingHeaderCol(null);
+                    }
+                  }}
+                  onBlur={() => {
+                    const prev = getHeaderTitle(c);
+                    const next = headerEditValue.trim() || prev;
+                    if (next !== prev) onRenameColumn?.(c, prev, next);
+                    setEditingHeaderCol(null);
+                  }}
+                  size="small"
+                  variant="standard"
+                  sx={{ '& .MuiInput-input': { fontSize: 12, fontWeight: 600, textAlign: 'center', py: 0 } }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                getHeaderTitle(c)
+              )}
+              {onColumnResizeCommit && (
                 <Box
+                  data-resize-handle
                   onMouseDown={(e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     setResizingCol(c);
                     setResizeStartX(e.clientX);
-                    setResizeStartW(cw);
+                    setResizeStartW(getColWidth(c));
+                  }}
+                  onDoubleClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const prev = getColWidth(c);
+                    const next = computeAutoFitWidth(state, c, config);
+                    if (next !== prev) onColumnResizeCommit(c, prev, next);
                   }}
                   sx={{
                     position: 'absolute',
                     right: 0,
                     top: 0,
                     bottom: 0,
-                    width: 6,
+                    width: RESIZE_HANDLE_WIDTH,
                     cursor: 'col-resize',
                   }}
                 />
@@ -161,16 +542,144 @@ export const Grid: React.FC<GridProps> = ({
             </Box>
           );
         })}
-      </Box>
-
-      {/* Rows */}
-      {Array.from({ length: rowCount }, (_, r) => (
-        <Box key={r} sx={{ display: 'flex' }}>
+          </Box>
+        </Box>
+      ) : (
+        <Box sx={headerRowSx}>
           <Box
             sx={{
-              width: 40,
-              minWidth: 40,
-              height: rowHeight,
+              height: defaultRowHeight,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              bgcolor: HEADER_BG,
+              borderRight: 1,
+              borderColor: 'divider',
+            }}
+          />
+          {Array.from({ length: dataColCount }, (_, c) => {
+            const cw = getColWidth(c);
+            const isFlex = config?.flexColumn === c;
+            return (
+              <Box
+                key={c}
+                onDoubleClick={
+                  onRenameColumn
+                    ? (e) => {
+                        if ((e.target as HTMLElement).closest('[data-resize-handle]')) return;
+                        setEditingHeaderCol(c);
+                        setHeaderEditValue(getHeaderTitle(c));
+                      }
+                    : undefined
+                }
+                sx={{
+                  ...(isFlex ? { flex: 1, minWidth: 80 } : { width: cw, minWidth: cw }),
+                  height: defaultRowHeight,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: 'text.secondary',
+                  bgcolor: HEADER_BG,
+                  borderRight: 1,
+                  borderColor: 'divider',
+                  position: 'relative',
+                }}
+              >
+                {editingHeaderCol === c ? (
+                  <TextField
+                    inputRef={headerInputRef}
+                    value={headerEditValue}
+                    onChange={(e) => setHeaderEditValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const prev = getHeaderTitle(c);
+                        const next = headerEditValue.trim() || prev;
+                        if (next !== prev) onRenameColumn?.(c, prev, next);
+                        setEditingHeaderCol(null);
+                      } else if (e.key === 'Escape') {
+                        setHeaderEditValue(getHeaderTitle(c));
+                        setEditingHeaderCol(null);
+                      }
+                    }}
+                    onBlur={() => {
+                      const prev = getHeaderTitle(c);
+                      const next = headerEditValue.trim() || prev;
+                      if (next !== prev) onRenameColumn?.(c, prev, next);
+                      setEditingHeaderCol(null);
+                    }}
+                    size="small"
+                    variant="standard"
+                    sx={{ '& .MuiInput-input': { fontSize: 12, fontWeight: 600, textAlign: 'center', py: 0 } }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  getHeaderTitle(c)
+                )}
+                {onColumnResizeCommit && (
+                  <Box
+                    data-resize-handle
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setResizingCol(c);
+                      setResizeStartX(e.clientX);
+                      setResizeStartW(getColWidth(c));
+                    }}
+                    onDoubleClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const prev = getColWidth(c);
+                      const next = computeAutoFitWidth(state, c, config);
+                      if (next !== prev) onColumnResizeCommit(c, prev, next);
+                    }}
+                    sx={{
+                      position: 'absolute',
+                      right: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: RESIZE_HANDLE_WIDTH,
+                      cursor: 'col-resize',
+                    }}
+                  />
+                )}
+              </Box>
+            );
+          })}
+        </Box>
+      )}
+
+      {/* Rows */}
+      {Array.from({ length: rowCount }, (_, r) =>
+        !rowVisibility[r] ? null : (
+        <Box
+          key={r}
+          sx={{
+            ...dataRowSx,
+            ...(freezeRows > 0 && r < freezeRows && {
+              position: 'sticky' as const,
+              top: cumulativeRowTop[r],
+              zIndex: 4,
+              boxShadow: r === freezeRows - 1 ? '0 2px 4px -2px rgba(0,0,0,0.1)' : undefined,
+              borderBottom: r === freezeRows - 1 ? '1px solid' : undefined,
+              borderColor: r === freezeRows - 1 ? 'divider' : undefined,
+            }),
+          }}
+          data-row={r}
+        >
+          <Box
+            onContextMenu={
+              (onInsertRowAbove || onInsertRowBelow || onDeleteRow || onInsertColumnAt || onDeleteColumn || onRenameColumn || onSetFreezeRows)
+                ? (e) => {
+                    e.preventDefault();
+                    setContextMenu({ row: r, col: activeCell.col, x: e.clientX, y: e.clientY });
+                  }
+                : undefined
+            }
+            sx={{
+              position: 'relative',
+              height: getRowHeight(r),
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -180,42 +689,580 @@ export const Grid: React.FC<GridProps> = ({
               borderRight: 1,
               borderBottom: 1,
               borderColor: 'divider',
+              ...(freezeCols > 0 && {
+                position: 'sticky' as const,
+                left: 0,
+                zIndex: 5,
+                boxShadow: '2px 0 4px -2px rgba(0,0,0,0.1)',
+              }),
             }}
           >
             {r + 1}
+            {onRowResizeCommit && (
+              <Box
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setResizingRow(r);
+                  setResizeStartY(e.clientY);
+                  setResizeStartH(getRowHeight(r));
+                }}
+                onDoubleClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const prev = getRowHeight(r);
+                  const next = computeAutoFitRowHeight(state, r, config, getColWidth);
+                  if (next !== prev) onRowResizeCommit(r, prev, next);
+                }}
+                sx={{
+                  position: 'absolute',
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: RESIZE_HANDLE_WIDTH,
+                  cursor: 'row-resize',
+                }}
+              />
+            )}
           </Box>
-          {Array.from({ length: colCount }, (_, c) => {
+          {Array.from({ length: dataColCount }, (_, c) => {
             const coord = { row: r, col: c };
             const isActive = activeCell.row === r && activeCell.col === c;
             const inSel = isInSelection(r, c);
+            const isBottomRightOfSelection = r === selR2 && c === selC2 && inSel;
+            const isInFillTarget =
+              fillTargetRange != null &&
+              r >= fillTargetRange.r1 &&
+              r <= fillTargetRange.r2 &&
+              c >= fillTargetRange.c1 &&
+              c <= fillTargetRange.c2;
             const isEditingThis =
               isEditing &&
               editCell?.row === r &&
               editCell?.col === c;
             const style = cellStyles[cellKey(r, c)];
             const cw = getColWidth(c);
-            return (
+            const isFlexCol = !useGrid && config?.flexColumn === c;
+            const cellEl = (
               <Cell
                 key={c}
                 coord={coord}
                 value={getValue(r, c)}
+                rawValue={state.rawValues[r]?.[c] ?? ''}
                 isActive={isActive}
                 isInSelection={inSel}
+                isInFillTarget={isInFillTarget}
                 locale={state.locale}
                 cellStyle={style}
-                rowHeight={rowHeight}
-                colWidth={cw}
+                columnType={state.columns?.[c]?.type}
+                cellError={state.cellErrors?.[cellKey(r, c)]}
+                rowHeight={getRowHeight(r)}
+                colWidth={isFlexCol ? undefined : cw}
+                flex={isFlexCol}
+                gridCell={useGrid}
+                wrap={!!(state.columns?.[c]?.wrap ?? config?.columnWrap?.[c])}
                 onSelect={() => handleCellMouseDown(coord)}
                 onMouseEnter={() => handleCellMouseEnter(coord)}
                 onDoubleClick={onCellDoubleClick}
+                onContextMenu={
+                  (onInsertRowAbove || onInsertRowBelow || onDeleteRow || onInsertColumnAt || onDeleteColumn || onRenameColumn || onSetFreezeRows)
+                    ? (e) => {
+                        e.preventDefault();
+                        setContextMenu({ row: r, col: c, x: e.clientX, y: e.clientY });
+                      }
+                    : undefined
+                }
                 isEditingThis={isEditingThis}
                 editorValue={editorValue}
                 onEditorChange={onEditorChange ?? (() => {})}
               />
             );
+            const cellWrapperSx =
+              freezeCols > 0 && c < freezeCols
+                ? {
+                    position: 'sticky' as const,
+                    left: cumulativeColLeft[c],
+                    zIndex: 4,
+                    minWidth: 0,
+                    boxShadow: c === freezeCols - 1 ? '2px 0 4px -2px rgba(0,0,0,0.1)' : undefined,
+                    borderRight: c === freezeCols - 1 ? '1px solid' : undefined,
+                    borderColor: c === freezeCols - 1 ? 'divider' : undefined,
+                  }
+                : { position: 'relative' as const, minWidth: 0 };
+            return isBottomRightOfSelection && sourceRange ? (
+              <Box key={c} sx={cellWrapperSx}>
+                {cellEl}
+                <Box
+                  data-fill-handle
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onFillHandleMouseDown();
+                  }}
+                  sx={{
+                    position: 'absolute',
+                    bottom: 2,
+                    right: 2,
+                    width: 6,
+                    height: 6,
+                    backgroundColor: '#1976d2',
+                    border: '1px solid #fff',
+                    cursor: 'crosshair',
+                    zIndex: 10,
+                  }}
+                />
+              </Box>
+            ) : (
+              <Box key={c} sx={cellWrapperSx}>
+                {cellEl}
+              </Box>
+            );
           })}
         </Box>
-      ))}
+      ))
+      }
+      <Menu
+        open={contextMenu != null}
+        onClose={() => setContextMenu(null)}
+        anchorReference="anchorPosition"
+        anchorPosition={
+          contextMenu != null ? { top: contextMenu.y, left: contextMenu.x } : undefined
+        }
+      >
+        {onInsertColumnAt && [
+          <MenuItem
+            key="insert-left"
+            onClick={() => {
+              if (contextMenu != null) {
+                onInsertColumnAt(contextMenu.col);
+                setContextMenu(null);
+              }
+            }}
+          >
+            Додати колонку зліва
+          </MenuItem>,
+          <MenuItem
+            key="insert-right"
+            onClick={() => {
+              if (contextMenu != null) {
+                onInsertColumnAt(contextMenu.col + 1);
+                setContextMenu(null);
+              }
+            }}
+          >
+            Додати колонку справа
+          </MenuItem>,
+        ]}
+        {onDeleteColumn && (
+          <MenuItem
+            onClick={() => {
+              if (contextMenu == null) return;
+              const col = contextMenu.col;
+              const isProtected = (config?.protectedColumnIds ?? []).includes(
+                state.columns?.[col]?.id ?? '',
+              );
+              if (isProtected || (config?.minColumns ?? 1) >= colCount) {
+                if (isProtected) setToast('Колонку не можна видалити');
+                setContextMenu(null);
+                return;
+              }
+              setContextMenu(null);
+              const needConfirm = config?.confirmDangerousOperations !== false;
+              if (needConfirm) {
+                setConfirmState({
+                  type: 'column',
+                  target: col,
+                  title: 'Видалити колонку?',
+                  message: `Видалити колонку "${getHeaderTitle(col)}"?`,
+                  hasData: columnHasData(state, col),
+                  hasFormulas: tableHasFormulas(state),
+                });
+              } else {
+                onDeleteColumn(col);
+              }
+            }}
+            disabled={
+              contextMenu == null ||
+              (config?.minColumns ?? 1) >= colCount ||
+              (config?.protectedColumnIds ?? []).includes(state.columns?.[contextMenu.col]?.id ?? '')
+            }
+            title={
+              (config?.protectedColumnIds ?? []).includes(state.columns?.[contextMenu?.col ?? 0]?.id ?? '')
+                ? 'Колонку не можна видалити'
+                : undefined
+            }
+          >
+            Видалити колонку
+          </MenuItem>
+        )}
+        {onDeleteColumnsBatch && contextMenu != null && (() => {
+          const sc1 = state.selection.c1;
+          const sc2 = state.selection.c2;
+          const cMin = Math.min(sc1, sc2);
+          const cMax = Math.max(sc1, sc2);
+          const selectedCols = cMax > cMin
+            ? Array.from({ length: cMax - cMin + 1 }, (_, i) => cMin + i)
+            : [];
+          const protectedIds = new Set(config?.protectedColumnIds ?? []);
+          const hasProtected = selectedCols.some(
+            (c) => protectedIds.has(state.columns?.[c]?.id ?? ''),
+          );
+          const canBulk = selectedCols.length > 1 &&
+            state.colCount - selectedCols.length >= (config?.minColumns ?? 1);
+          if (selectedCols.length <= 1) return null;
+          return (
+            <MenuItem
+              disabled={hasProtected}
+              title={hasProtected ? 'Серед вибраних є захищені колонки' : undefined}
+              onClick={() => {
+                if (contextMenu == null || hasProtected) return;
+                const cols = selectedCols.filter(
+                  (c) => !protectedIds.has(state.columns?.[c]?.id ?? ''),
+                );
+                if (cols.length === 0) return;
+                setContextMenu(null);
+                const needConfirm = config?.confirmDangerousOperations !== false;
+                if (needConfirm) {
+                  setConfirmState({
+                    type: 'column',
+                    target: -1,
+                    batchCols: cols,
+                    title: 'Видалити вибрані колонки?',
+                    message: `Видалити ${cols.length} колонок?`,
+                    hasData: columnsHaveData(state, cols),
+                    hasFormulas: tableHasFormulas(state),
+                  });
+                } else {
+                  setContextMenu(null);
+                  onDeleteColumnsBatch(cols);
+                }
+              }}
+            >
+              Видалити вибрані колонки ({selectedCols.length})
+            </MenuItem>
+          );
+        })()}
+        {onRenameColumn && contextMenu != null && (
+          <MenuItem
+            onClick={() => {
+              if (contextMenu != null) {
+                setEditingHeaderCol(contextMenu.col);
+                setHeaderEditValue(getHeaderTitle(contextMenu.col));
+                setContextMenu(null);
+              }
+            }}
+          >
+            Перейменувати колонку
+          </MenuItem>
+        )}
+        {onSetColumnFormula && contextMenu != null && (() => {
+          const col = contextMenu.col;
+          const colDef = state.columns?.[col];
+          const t = colDef?.type ?? 'text';
+          const canFormula = t === 'number' || t === 'uah' || t === 'percent';
+          if (!canFormula) return null;
+          return (
+            <MenuItem
+              onClick={() => {
+                if (contextMenu == null) return;
+                setFormulaDialog({
+                  colIndex: col,
+                  columnTitle: getHeaderTitle(col),
+                  initialExpr: colDef?.computed?.expr ?? '',
+                });
+                setContextMenu(null);
+              }}
+            >
+              Задати формулу колонки…
+            </MenuItem>
+          );
+        })()}
+        {onSortRows && contextMenu != null && !state.isEditing && [
+          <Divider key="sort-div" />,
+          <MenuItem
+            key="sort-asc"
+            onClick={() => {
+              if (contextMenu != null) {
+                onSortRows(contextMenu.col, 'asc');
+                setContextMenu(null);
+              }
+            }}
+          >
+            Сортувати A→Z
+          </MenuItem>,
+          <MenuItem
+            key="sort-desc"
+            onClick={() => {
+              if (contextMenu != null) {
+                onSortRows(contextMenu.col, 'desc');
+                setContextMenu(null);
+              }
+            }}
+          >
+            Сортувати Z→A
+          </MenuItem>,
+        ]}
+        {onSetFiltersEnabled && onSetColumnFilter && contextMenu != null && !state.isEditing && [
+          <Divider key="filter-div" />,
+          <MenuItem
+            key="filter-toggle"
+            onClick={() => {
+              onSetFiltersEnabled(!state.filtersEnabled);
+              setContextMenu(null);
+            }}
+          >
+            {state.filtersEnabled ? 'Вимкнути фільтр' : 'Увімкнути фільтр'}
+          </MenuItem>,
+          <MenuItem
+            key="filter-config"
+            onClick={() => {
+              if (contextMenu != null) {
+                const col = contextMenu.col;
+                const colDef = state.columns?.[col];
+                const colId = colDef?.id ?? `col_${col}`;
+                setFilterDialog({
+                  colIndex: col,
+                  columnTitle: getHeaderTitle(col),
+                  columnType: colDef?.type,
+                  colId,
+                  initialSpec: state.filters?.[colId] ?? null,
+                });
+                setContextMenu(null);
+              }
+            }}
+          >
+            Налаштувати фільтр колонки…
+          </MenuItem>,
+          <MenuItem
+            key="filter-clear-col"
+            onClick={() => {
+              if (contextMenu != null) {
+                const colDef = state.columns?.[contextMenu.col];
+                const colId = colDef?.id ?? `col_${contextMenu.col}`;
+                onSetColumnFilter(colId, null);
+                setContextMenu(null);
+              }
+            }}
+          >
+            Очистити фільтр колонки
+          </MenuItem>,
+          ...(onClearAllFilters
+            ? [
+                <MenuItem
+                  key="filter-clear-all"
+                  onClick={() => {
+                    onClearAllFilters();
+                    setContextMenu(null);
+                  }}
+                >
+                  Очистити всі фільтри
+                </MenuItem>,
+              ]
+            : []),
+        ]}
+        {onSetFreezeRows && onSetFreezeCols && contextMenu != null && !state.isEditing && [
+          <Divider key="freeze-div" />,
+          <MenuItem
+            key="freeze-cols"
+            onClick={() => {
+              if (contextMenu != null) {
+                onSetFreezeCols(contextMenu.col + 1);
+                setContextMenu(null);
+              }
+            }}
+          >
+            Заморозити до цієї колонки
+          </MenuItem>,
+          <MenuItem
+            key="unfreeze-cols"
+            disabled={(state.freeze?.cols ?? 0) === 0}
+            onClick={() => {
+              onSetFreezeCols(0);
+              setContextMenu(null);
+            }}
+          >
+            Скасувати заморозку колонок
+          </MenuItem>,
+          <MenuItem
+            key="freeze-rows"
+            onClick={() => {
+              if (contextMenu != null) {
+                onSetFreezeRows(contextMenu.row + 1);
+                setContextMenu(null);
+              }
+            }}
+          >
+            Заморозити до цього рядка
+          </MenuItem>,
+          <MenuItem
+            key="unfreeze-rows"
+            disabled={(state.freeze?.rows ?? 0) === 0}
+            onClick={() => {
+              onSetFreezeRows(0);
+              setContextMenu(null);
+            }}
+          >
+            Скасувати заморозку рядків
+          </MenuItem>,
+        ]}
+        {(onInsertColumnAt || onDeleteColumn || onRenameColumn || onSetColumnFormula || onSortRows || onSetFreezeRows) &&
+          (onInsertRowAbove || onInsertRowBelow || onDeleteRow) && <Divider />}
+        {onInsertRowAbove && (
+          <MenuItem
+            onClick={() => {
+              if (contextMenu != null) {
+                onInsertRowAbove(contextMenu.row);
+                setContextMenu(null);
+              }
+            }}
+          >
+            Додати рядок зверху
+          </MenuItem>
+        )}
+        {onInsertRowBelow && (
+          <MenuItem
+            onClick={() => {
+              if (contextMenu != null) {
+                onInsertRowBelow(contextMenu.row);
+                setContextMenu(null);
+              }
+            }}
+          >
+            Додати рядок знизу
+          </MenuItem>
+        )}
+        {onDeleteRow && (
+          <MenuItem
+            onClick={() => {
+              if (contextMenu == null) return;
+              const row = contextMenu.row;
+              const minRows = config?.minRows ?? 1;
+              if (rowCount <= minRows) {
+                setContextMenu(null);
+                return;
+              }
+              setContextMenu(null);
+              const needConfirm = config?.confirmDangerousOperations !== false;
+              if (needConfirm) {
+                setConfirmState({
+                  type: 'row',
+                  target: row,
+                  title: 'Видалити рядок?',
+                  message: `Видалити рядок ${row + 1}?`,
+                  hasData: rowHasData(state, row),
+                  hasFormulas: tableHasFormulas(state),
+                });
+              } else {
+                onDeleteRow(row);
+              }
+            }}
+            disabled={rowCount <= (config?.minRows ?? 1)}
+          >
+            Видалити рядок
+          </MenuItem>
+        )}
+        {onDeleteRowsBatch && contextMenu != null && (() => {
+          const sr1 = state.selection.r1;
+          const sr2 = state.selection.r2;
+          const rMin = Math.min(sr1, sr2);
+          const rMax = Math.max(sr1, sr2);
+          const selectedRows = rMax > rMin
+            ? Array.from({ length: rMax - rMin + 1 }, (_, i) => rMin + i)
+            : [];
+          const minRows = config?.minRows ?? 1;
+          const canBulk = selectedRows.length > 1 &&
+            rowCount - selectedRows.length >= minRows;
+          if (!canBulk) return null;
+          return (
+            <MenuItem
+              onClick={() => {
+                if (contextMenu == null) return;
+                setContextMenu(null);
+                const needConfirm = config?.confirmDangerousOperations !== false;
+                if (needConfirm) {
+                  setConfirmState({
+                    type: 'row',
+                    target: -1,
+                    batchRows: selectedRows,
+                    title: 'Видалити вибрані рядки?',
+                    message: `Видалити ${selectedRows.length} рядків?`,
+                    hasData: rowsHaveData(state, selectedRows),
+                    hasFormulas: tableHasFormulas(state),
+                  });
+                } else {
+                  onDeleteRowsBatch(selectedRows);
+                }
+              }}
+            >
+              Видалити вибрані рядки ({selectedRows.length})
+            </MenuItem>
+          );
+        })()}
+      </Menu>
+      <ConfirmDialog
+        open={confirmState != null}
+        title={confirmState?.title ?? ''}
+        message={confirmState?.message ?? ''}
+        hasData={confirmState?.hasData}
+        hasFormulas={confirmState?.hasFormulas}
+        onConfirm={() => {
+          if (confirmState != null) {
+            if (confirmState.type === 'column') {
+              if (confirmState.batchCols?.length) {
+                onDeleteColumnsBatch?.(confirmState.batchCols);
+              } else {
+                onDeleteColumn?.(confirmState.target);
+              }
+            } else {
+              if (confirmState.batchRows?.length) {
+                onDeleteRowsBatch?.(confirmState.batchRows);
+              } else {
+                onDeleteRow?.(confirmState.target);
+              }
+            }
+            setConfirmState(null);
+          }
+        }}
+        onCancel={() => setConfirmState(null)}
+      />
+      <Snackbar
+        open={toast != null}
+        autoHideDuration={3000}
+        onClose={() => setToast(null)}
+        message={toast}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
+      {formulaDialog != null && (
+        <ColumnFormulaDialog
+          open
+          columnTitle={formulaDialog.columnTitle}
+          initialExpr={formulaDialog.initialExpr}
+          validate={(expr) => {
+            const r = validateExpr(expr, state.columns ?? []);
+            return r.ok ? null : r.message;
+          }}
+          onSave={(nextExpr) => {
+            const col = formulaDialog.colIndex;
+            const prevExpr = state.columns?.[col]?.computed?.expr;
+            onSetColumnFormula?.(col, prevExpr, nextExpr);
+            setFormulaDialog(null);
+          }}
+          onCancel={() => setFormulaDialog(null)}
+        />
+      )}
+      {filterDialog != null && (
+        <ColumnFilterDialog
+          open
+          columnTitle={filterDialog.columnTitle}
+          columnType={filterDialog.columnType}
+          initialSpec={filterDialog.initialSpec}
+          onSave={(spec) => {
+            onSetColumnFilter?.(filterDialog.colId, spec);
+            setFilterDialog(null);
+          }}
+          onCancel={() => setFilterDialog(null)}
+        />
+      )}
     </Box>
   );
 };

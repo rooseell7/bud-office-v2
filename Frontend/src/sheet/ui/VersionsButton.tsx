@@ -5,6 +5,8 @@ import {
   listDocumentVersions,
   createDocumentVersion,
   restoreDocumentVersion,
+  restoreSheetVersion,
+  getSheetVersionSnapshot,
   type DocumentVersionDto,
 } from '../../api/documents';
 import { serialize } from '../engine/serialize';
@@ -13,7 +15,8 @@ import type { SheetState } from '../engine/state';
 export type VersionsButtonProps = {
   documentId: number | null;
   state: SheetState;
-  onRestore: () => void;
+  onRestore: (snapshot?: Record<string, any>) => void;
+  onPreview?: (snapshot: Record<string, any>) => void;
   disabled?: boolean;
 };
 
@@ -26,6 +29,7 @@ export const VersionsButton: React.FC<VersionsButtonProps> = ({
   documentId,
   state,
   onRestore,
+  onPreview,
   disabled = false,
 }) => {
   const [open, setOpen] = useState(false);
@@ -54,10 +58,30 @@ export const VersionsButton: React.FC<VersionsButtonProps> = ({
     setVersions(r.items ?? []);
   };
 
+  const handlePreview = async (versionId: number) => {
+    if (!documentId || !onPreview) return;
+    try {
+      const snapshot = await getSheetVersionSnapshot(documentId, versionId);
+      onPreview(snapshot);
+    } catch {
+      // ignore
+    }
+  };
+
   const handleRestore = async (versionId: number) => {
     if (!documentId) return;
-    await restoreDocumentVersion(documentId, versionId);
-    onRestore();
+    try {
+      const res = await restoreSheetVersion(documentId, versionId);
+      if (res.ok && res.snapshot) {
+        onRestore(res.snapshot);
+      } else {
+        await restoreDocumentVersion(documentId, versionId);
+        onRestore();
+      }
+    } catch {
+      await restoreDocumentVersion(documentId, versionId);
+      onRestore();
+    }
     setOpen(false);
   };
 
@@ -80,9 +104,16 @@ export const VersionsButton: React.FC<VersionsButtonProps> = ({
                 <ListItem
                   key={v.id}
                   secondaryAction={
-                    <Button size="small" onClick={() => handleRestore(v.id)}>
-                      Відновити
-                    </Button>
+                    <span style={{ display: 'flex', gap: 4 }}>
+                      {onPreview && (
+                        <Button size="small" onClick={() => handlePreview(v.id)}>
+                          Переглянути
+                        </Button>
+                      )}
+                      <Button size="small" onClick={() => handleRestore(v.id)}>
+                        Відновити
+                      </Button>
+                    </span>
                   }
                 >
                   <ListItemText

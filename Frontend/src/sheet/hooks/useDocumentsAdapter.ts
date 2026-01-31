@@ -91,13 +91,14 @@ export function useDocumentsAdapter(documentId: number | null, docType = 'sheet'
   const adapter = {
     getDraftKey: () => (documentId ? draftKey(docType, documentId) : null),
 
-    loadSnapshot: async (): Promise<SheetSnapshot | null> => {
+    loadSnapshot: async () => {
       if (!documentId) return null;
       const doc = await getDocument(documentId);
       const snap = doc?.meta?.sheetSnapshot;
       if (!snap || typeof snap !== 'object') return null;
-      revisionRef.current = (doc?.meta as any)?.sheetRevision ?? 0;
-      return snap as SheetSnapshot;
+      const rev = (doc?.meta as any)?.sheetRevision ?? 0;
+      revisionRef.current = rev;
+      return { snapshot: snap as SheetSnapshot, revision: rev };
     },
 
     saveSnapshot: async (

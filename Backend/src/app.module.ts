@@ -33,6 +33,8 @@ import { WarehouseModule } from './warehouse/warehouse.module';
 import { WarehousesModule } from './warehouses/warehouses.module';
 import { DeliveryModule } from './delivery/delivery.module';
 import { DocumentsModule } from './documents/documents.module';
+import { SheetsModule } from './sheets/sheets.module';
+import { CollabModule } from './collab/collab.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 
 function toBool(v: unknown, def = false): boolean {
@@ -107,6 +109,8 @@ function toBool(v: unknown, def = false): boolean {
     WarehouseModule,
     DeliveryModule,
     DocumentsModule,
+    SheetsModule,
+    CollabModule,
     AttachmentsModule,
   ],
 })

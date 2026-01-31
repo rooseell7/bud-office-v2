@@ -7,6 +7,29 @@ Currently, two official plugins are available:
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
 - [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
+## ENV for Sheet Collab
+
+Sheet Collab uses Socket.IO for real-time sync. Configure URLs via env:
+
+| Env | Purpose |
+|-----|---------|
+| `VITE_API_URL` | REST API base (e.g. `http://localhost:3000/api` or `/api`) |
+| `VITE_WS_URL` | Socket.IO base (e.g. `http://localhost:3000` or `/`) |
+
+**Local dev:** Copy `.env.local.example` to `.env.local`:
+```
+VITE_API_URL=http://localhost:3000/api
+VITE_WS_URL=http://localhost:3000
+```
+
+**Nginx prod:** Use relative URLs to avoid CORS. Copy `.env.nginx.example`:
+```
+VITE_API_URL=/api
+VITE_WS_URL=/
+```
+
+In nginx mode, prefer relative URLs. WS must never connect to `localhost:5173` (Vite dev server). After editing env, restart dev server/build.
+
 ## React Compiler
 
 The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).

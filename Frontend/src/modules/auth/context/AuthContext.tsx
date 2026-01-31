@@ -18,6 +18,8 @@ import { buildPermissionHelpers } from '../permissions';
 
 type AuthContextType = {
   user: User | null;
+  /** JWT for API + WS (same source as apiClient) */
+  accessToken: string | null;
   isAuthenticated: boolean;
   isAuthLoading: boolean;
 
@@ -114,6 +116,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [accessToken, user, refreshMe]);
 
+  useEffect(() => {
+    const handler = () => {
+      setUser(null);
+      setAccessToken(null);
+    };
+    window.addEventListener('auth:logout', handler);
+    return () => window.removeEventListener('auth:logout', handler);
+  }, []);
+
   const login = useCallback(async (dto: { email: string; password: string }) => {
     const res = await apiClient.post<{ accessToken: string }>('/auth/login', dto);
     const token = res.data?.accessToken;
@@ -133,6 +144,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const value: AuthContextType = useMemo(
     () => ({
       user,
+      accessToken,
       isAuthenticated,
       isAuthLoading,
       roles,
@@ -143,7 +155,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       can,
       canAny,
     }),
-    [user, isAuthenticated, isAuthLoading, roles, list, login, logout, refreshMe, can, canAny],
+    [user, accessToken, isAuthenticated, isAuthLoading, roles, list, login, logout, refreshMe, can, canAny],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

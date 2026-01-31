@@ -1,17 +1,12 @@
 // FILE: buduy-crm-frontend/src/shared/api/apiClient.ts
 
 import axios from 'axios';
+import { apiBaseUrl } from '../config/env';
 
-function normalizeBaseUrl(url: string): string {
-  return url.replace(/\/+$/, '');
-}
-
-export const API_BASE_URL =
-  normalizeBaseUrl(import.meta.env.VITE_API_URL ?? '') ||
-  'http://localhost:3000/api';
+export const API_BASE_URL = apiBaseUrl;
 
 export const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: apiBaseUrl,
   withCredentials: false,
   timeout: 20000,
 });

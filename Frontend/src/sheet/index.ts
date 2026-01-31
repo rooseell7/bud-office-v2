@@ -2,7 +2,7 @@
  * Canonical sheet module. Table logic: src/sheet/** only.
  */
 
-export { Sheet } from './ui/Sheet';
+export { Sheet, type SheetMode } from './ui/Sheet';
 export { Grid } from './ui/Grid';
 export { Cell } from './ui/Cell';
 
@@ -18,7 +18,12 @@ export {
 export type { SheetAdapter } from './adapters/types';
 
 export { useSheetController } from './hooks/useSheetController';
+export { useQuoteAdapter } from './hooks/useQuoteAdapter';
 export { colToLetter } from './utils';
+export { colToLabel } from './utils/colLabel';
 export { draftKey, loadDraft, saveDraft, clearDraft } from './adapters/localDraftAdapter';
 export { createDocumentsAdapter } from './adapters/documentsAdapter';
 export { useDocumentsAdapter } from './hooks/useDocumentsAdapter';
+export { useSheetCollab } from './hooks/useSheetCollab';
+export { CollabClient } from './collab/collabClient';
+export { computeQuoteTotals, getInitialQuoteSnapshot } from './adapters/quoteAdapter';

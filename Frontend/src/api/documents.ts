@@ -121,3 +121,104 @@ export async function getDocument(id: number): Promise<DocumentDto> {
 export async function deleteDocument(id: number): Promise<void> {
   await api.delete(`/documents/${id}`);
 }
+
+export type SheetUndoResult =
+  | { ok: true; snapshot: Record<string, any>; version?: number }
+  | { ok: false; reason: 'NO_OP' | 'UNDO_CONFLICT' | 'NOT_ALLOWED'; details?: string };
+
+export type SheetRedoResult =
+  | { ok: true; snapshot: Record<string, any>; version?: number }
+  | { ok: false; reason: 'NO_OP' | 'CONFLICT' | 'NOT_ALLOWED'; details?: string };
+
+export async function requestSheetUndo(documentId: number): Promise<SheetUndoResult> {
+  const res = await api.post<SheetUndoResult>(`/documents/${documentId}/sheet/undo`);
+  return res.data;
+}
+
+export async function requestSheetRedo(documentId: number): Promise<SheetRedoResult> {
+  const res = await api.post<SheetRedoResult>(`/documents/${documentId}/sheet/redo`);
+  return res.data;
+}
+
+// Sheets API (BLOCK 14)
+export type SheetHistoryItem = {
+  kind: 'version' | 'op';
+  id: number;
+  documentId: number;
+  type?: string;
+  action?: string;
+  createdAt: string;
+  createdById?: number | null;
+  note?: string | null;
+  hasSnapshot?: boolean;
+};
+
+export async function getSheetHistory(
+  documentId: number,
+  limit?: number,
+): Promise<SheetHistoryItem[]> {
+  const res = await api.get<SheetHistoryItem[]>(`/sheets/${documentId}/history`, {
+    params: limit != null ? { limit } : undefined,
+  });
+  return Array.isArray(res.data) ? res.data : [];
+}
+
+export async function getSheetVersionSnapshot(
+  documentId: number,
+  versionId: number,
+): Promise<Record<string, any>> {
+  const res = await api.get<Record<string, any>>(`/sheets/${documentId}/version/${versionId}`);
+  return res.data;
+}
+
+export async function getSheetPreviewSnapshot(
+  documentId: number,
+  kind: 'version' | 'op',
+  id: number,
+): Promise<Record<string, any>> {
+  const res = await api.get<Record<string, any>>(`/sheets/${documentId}/preview/${kind}/${id}`);
+  return res.data;
+}
+
+export async function restoreSheetVersion(
+  documentId: number,
+  versionId: number,
+): Promise<{ ok: boolean; snapshot: Record<string, any> }> {
+  const res = await api.post<{ ok: boolean; snapshot: Record<string, any> }>(
+    `/sheets/${documentId}/restore`,
+    { versionId },
+  );
+  return res.data;
+}
+
+export async function exportSheetXlsx(documentId: number): Promise<Blob> {
+  const res = await api.get<Blob>(`/sheets/${documentId}/export/xlsx`, {
+    responseType: 'blob',
+  });
+  return res.data;
+}
+
+export async function exportSheetPdf(documentId: number): Promise<Blob> {
+  const res = await api.get<Blob>(`/sheets/${documentId}/export/pdf`, {
+    responseType: 'blob',
+  });
+  return res.data;
+}
+
+export type SheetTemplate = { id: string; name: string };
+
+export async function getSheetTemplates(): Promise<SheetTemplate[]> {
+  const res = await api.get<SheetTemplate[]>('/sheets/templates');
+  return Array.isArray(res.data) ? res.data : [];
+}
+
+export async function createSheetFromTemplate(payload: {
+  templateId: string;
+  entityType?: string;
+  entityId?: number;
+  title?: string;
+  projectId?: number;
+}): Promise<{ id: number; document: any }> {
+  const res = await api.post<{ id: number; document: any }>('/sheets', payload);
+  return res.data;
+}
