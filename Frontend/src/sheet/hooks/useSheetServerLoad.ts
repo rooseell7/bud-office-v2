@@ -25,7 +25,7 @@ export function useSheetServerLoad(options: UseSheetServerLoadOptions) {
         result && typeof result === 'object' && 'revision' in result
           ? (result as { revision?: number }).revision
           : undefined;
-      if (snapshot && (snapshot.values?.length || Object.keys(snapshot.styles ?? {}).length)) {
+      if (snapshot && typeof snapshot === 'object') {
         onLoaded(snapshot, revision);
       }
     });

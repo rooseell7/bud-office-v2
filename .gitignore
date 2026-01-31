@@ -20,6 +20,9 @@ pnpm-debug.log*
 # Uploads (user files)
 Backend/uploads/
 
+# Nginx (local install, binaries)
+nginx/
+
 # Editor
 .vscode/*
 !.vscode/extensions.json

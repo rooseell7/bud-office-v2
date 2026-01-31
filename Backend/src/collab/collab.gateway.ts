@@ -151,6 +151,11 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
     payload: Extract<CollabPayload, { type: 'APPLY_OP' }>,
     userId: number | null,
   ) {
+    const docState = await this.collabService.getDocState(payload.docId);
+    const currentVersion = docState?.version ?? -1;
+    this.logger.log(
+      `[collab] applyOp received { docId=${payload.docId} baseVersion=${payload.baseVersion} currentVersion=${currentVersion} clientOpId=${payload.clientOpId?.slice(0, 8)} userId=${userId} }`,
+    );
     try {
       const result = await this.collabService.applyOp(
         payload.docId,
@@ -160,8 +165,19 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
         userId,
       );
       if (result.ok) {
-        this.logger.debug(`OP_APPLIED doc=${payload.docId} v=${result.version} type=${payload.op.type}`);
-        this.server.to(`sheet:${payload.docId}`).emit('collab', {
+        this.logger.log(`[collab] applyOp accepted { newVersion=${result.version} }`);
+        const room = `sheet:${payload.docId}`;
+        let count = 0;
+        try {
+          const roomSockets = await this.server.in(room).fetchSockets();
+          count = roomSockets?.length ?? 0;
+        } catch {
+          /* ignore */
+        }
+        this.logger.debug(
+          `OP_APPLIED doc=${payload.docId} v=${result.version} type=${payload.op.type} broadcast room=${room} socketsCount=${count}`,
+        );
+        this.server.to(room).emit('collab', {
           type: 'OP_APPLIED',
           docId: payload.docId,
           version: result.version,
@@ -170,7 +186,12 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
           clientOpId: payload.clientOpId,
         });
       } else {
-        this.logger.warn(`OP_REJECTED doc=${payload.docId} reason=${result.reason}`);
+        this.logger.log(
+          `[collab] applyOp rejected { reason=${result.reason} expected=${payload.baseVersion} got=${currentVersion} details=${result.details ?? '-'} }`,
+        );
+        this.logger.warn(
+          `OP_REJECTED doc=${payload.docId} reason=${result.reason} details=${result.details} baseVersion=${payload.baseVersion} socketId=${client.id} userId=${userId}`,
+        );
         client.emit('collab', {
           type: 'OP_REJECTED',
           docId: payload.docId,

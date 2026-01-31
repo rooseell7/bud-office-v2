@@ -1,12 +1,14 @@
 /**
  * Collab WebSocket client. Connects to sheet room, sends APPLY_OP, receives OP_APPLIED.
  * Uses wsBaseUrl from canonical env resolver (never localhost:5173).
+ * Logs connect/disconnect/upgrade only (verbose via localStorage.DEBUG_COLLAB=1).
  */
 
 import { io, Socket } from 'socket.io-client';
 import { wsBaseUrl, apiBaseUrl } from './env';
 
 const DEV = import.meta.env?.DEV ?? false;
+const DEBUG = typeof localStorage !== 'undefined' && localStorage.getItem('DEBUG_COLLAB') === '1';
 
 export type CollabEvent =
   | { type: 'DOC_STATE'; docId: number; snapshot: any; version: number; locks: any; presence: any[] }
@@ -24,7 +26,7 @@ export type CollabClientOptions = {
 export class CollabClient {
   private socket: Socket | null = null;
   private options: CollabClientOptions;
-  private pendingOps = new Map<string, { resolve: () => void; reject: (e: any) => void }>();
+  private pendingOps = new Map<string, { resolve: (v: number) => void; reject: (e: any) => void }>();
 
   constructor(options: CollabClientOptions) {
     this.options = options;
@@ -33,18 +35,25 @@ export class CollabClient {
   connect(): void {
     if (this.socket?.connected) return;
     const url = this.options.url ?? wsBaseUrl;
-    if (DEV) {
-      console.log('[collab] wsBaseUrl=', url, 'apiBaseUrl=', apiBaseUrl);
-    }
     this.socket = io(url, {
       auth: { token: this.options.token },
+      path: '/socket.io',
       transports: ['websocket', 'polling'],
     });
     this.socket.on('connect', () => {
-      if (DEV) console.log('[collab] connect');
+      const transport = (this.socket as any)?.io?.engine?.transport?.name ?? 'unknown';
+      console.debug('[collab] connected', { transport });
     });
+    const engine = this.socket.io?.engine;
+    if (engine) {
+      engine.on('upgrade', (t: { name?: string }) => {
+        console.debug('[collab] upgraded', { transport: t?.name ?? 'websocket' });
+      });
+    }
     this.socket.on('disconnect', (reason) => {
-      if (DEV) console.log('[collab] disconnect reason=', reason);
+      if (DEV || DEBUG) {
+        console.log('[collab] disconnect reason=', reason);
+      }
       if (reason === 'io server disconnect' || /unauthorized|invalid|token/i.test(reason)) {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('user');
@@ -52,13 +61,13 @@ export class CollabClient {
       }
     });
     this.socket.on('auth_error', () => {
-      if (DEV) console.log('[collab] auth_error from server');
+      if (DEV || DEBUG) console.log('[collab] auth_error from server');
       localStorage.removeItem('accessToken');
       localStorage.removeItem('user');
       window.dispatchEvent(new CustomEvent('auth:logout', { detail: { reason: 'ws_unauthorized' } }));
     });
     this.socket.on('connect_error', (err: Error) => {
-      if (DEV) console.log('[collab] connect_error:', err?.message);
+      if (DEV || DEBUG) console.log('[collab] connect_error:', err?.message);
       if (/401|unauthorized|invalid|token|auth/i.test(err?.message ?? '')) {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('user');
@@ -67,8 +76,12 @@ export class CollabClient {
     });
     this.socket.on('collab', (ev: CollabEvent) => {
       if (ev.type === 'OP_APPLIED' && ev.clientOpId) {
-        this.pendingOps.get(`${ev.docId}:${ev.clientOpId}`)?.resolve();
-        this.pendingOps.delete(`${ev.docId}:${ev.clientOpId}`);
+        const key = `${ev.docId}:${ev.clientOpId}`;
+        const pending = this.pendingOps.get(key);
+        if (pending) {
+          pending.resolve(ev.version ?? 0);
+          this.pendingOps.delete(key);
+        }
       }
       if (ev.type === 'OP_REJECTED') {
         if (ev.clientOpId) {
@@ -114,10 +127,13 @@ export class CollabClient {
     baseVersion: number,
     clientOpId: string,
     op: { type: string; payload: Record<string, any> },
-  ): Promise<void> {
+  ): Promise<number> {
     return new Promise((resolve, reject) => {
       const key = `${docId}:${clientOpId}`;
-      this.pendingOps.set(key, { resolve, reject });
+      this.pendingOps.set(key, {
+        resolve: (version: number) => resolve(version),
+        reject,
+      });
       this.socket?.emit('collab', {
         type: 'APPLY_OP',
         docId,
@@ -130,5 +146,9 @@ export class CollabClient {
 
   get connected(): boolean {
     return !!this.socket?.connected;
+  }
+
+  get socketId(): string | undefined {
+    return this.socket?.id;
   }
 }

@@ -177,7 +177,9 @@ export class CollabService {
     const meta = (doc as any).meta ?? {};
     const currentVersion = meta.sheetRevision ?? 0;
     if (baseVersion !== currentVersion) {
-      this.logger.warn(`applyOp VERSION_MISMATCH doc=${docId} base=${baseVersion} current=${currentVersion}`);
+      this.logger.warn(
+        `applyOp VERSION_MISMATCH doc=${docId} baseVersion=${baseVersion} currentVersion=${currentVersion} clientOpId=${clientOpId?.slice(0, 8)} userId=${userId}`,
+      );
       return { ok: false, reason: 'VERSION_MISMATCH', details: `expected ${baseVersion}, got ${currentVersion}` };
     }
 
@@ -198,6 +200,7 @@ export class CollabService {
       sheetRevision: currentVersion + 1,
     };
     await this.docRepo.save(doc);
+    this.logger.log(`[collab] persisted snapshot { docId=${docId} newVersion=${currentVersion + 1} }`);
 
     const savedOp = await this.opsRepo.save(
       this.opsRepo.create({

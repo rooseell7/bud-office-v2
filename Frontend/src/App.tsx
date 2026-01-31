@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 import LoginPage from './modules/auth/LoginPage';
@@ -49,6 +49,13 @@ import HomePage from './pages/home/HomePage';
 
 // ✅ Sheet demo (STEP 0–3 smoke test)
 import { SheetDemoPage } from './pages/sheet/SheetDemoPage';
+// ✅ КП index + editor
+import { EstimateIndexPage } from './pages/estimate/EstimateIndexPage';
+
+// Lazy: sheet module великий — відкладаємо завантаження до переходу на сторінку
+const EstimateEditorPage = lazy(() =>
+  import('./pages/estimate/EstimateEditorPage').then((m) => ({ default: m.EstimateEditorPage })),
+);
 
 const App: React.FC = () => {
   return (
@@ -93,13 +100,21 @@ const App: React.FC = () => {
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="projects/:id" element={<ProjectDetailsPage />} />
 
-        {/* ✅ Відділ кошторису (alias routes) */}
-        <Route path="estimate" element={<Navigate to="/estimate/objects" replace />} />
+        {/* ✅ Відділ кошторису */}
+        <Route path="estimate" element={<EstimateIndexPage />} />
         <Route path="estimate/objects" element={<ProjectsPage />} />
         <Route path="estimate/objects/:id" element={<ProjectDetailsPage />} />
         <Route path="estimate/acts" element={<ActsPage />} />
         <Route path="estimate/quotes" element={<QuotesPage />} />
         <Route path="estimate/invoices" element={<InvoicesPage />} />
+        <Route
+          path="estimate/:id"
+          element={
+            <Suspense fallback={<div style={{ padding: 24 }}>Завантаження…</div>}>
+              <EstimateEditorPage />
+            </Suspense>
+          }
+        />
 
         {/* ✅ Відділ постачання (alias routes) */}
         <Route path="supply" element={<Navigate to="/supply/invoices" replace />} />

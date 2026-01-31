@@ -126,8 +126,9 @@ export const Sheet: React.FC<SheetProps> = ({
 
   const setLastSavedSnapshotRef = React.useRef<((s: SheetSnapshot | null) => void) | null>(null);
   const setRevisionRef = React.useRef<((v: number) => void) | null>(null);
+  const lastAppliedVersionRef = React.useRef(0);
 
-  const handleResync = useCallback(async () => {
+  const handleResync = useCallback(async (): Promise<number | void> => {
     if (!adapter?.loadSnapshot) return;
     const result = await adapter.loadSnapshot();
     if (!result) return;
@@ -139,18 +140,67 @@ export const Sheet: React.FC<SheetProps> = ({
       result && typeof result === 'object' && 'revision' in result
         ? (result as { revision?: number }).revision
         : undefined;
+    if (revision != null) lastAppliedVersionRef.current = Math.max(lastAppliedVersionRef.current, revision);
     hydrate(snapshot);
     setLastSavedSnapshotRef.current?.(snapshot);
     if (revision != null) setRevisionRef.current?.(revision);
+    return revision ?? undefined;
   }, [adapter, hydrate]);
 
-  const { connected: collabConnected, serverVersion, applyOp } = useSheetCollab({
+  const queuedRemoteSnapshotRef = React.useRef<{ snap: SheetSnapshot; ver: number } | null>(null);
+  const isEditingRef = React.useRef(state.isEditing);
+  const hasPendingOpsRef = React.useRef(false);
+  isEditingRef.current = state.isEditing;
+
+  const handleRemoteUpdate = React.useCallback(
+    (snapshot: SheetSnapshot, version?: number) => {
+      const v = version ?? 0;
+      if (v > 0 && v <= lastAppliedVersionRef.current) return;
+      if (isEditingRef.current || hasPendingOpsRef.current) {
+        queuedRemoteSnapshotRef.current = { snap: snapshot, ver: v };
+        return;
+      }
+      queuedRemoteSnapshotRef.current = null;
+      lastAppliedVersionRef.current = Math.max(lastAppliedVersionRef.current, v);
+      hydrate(snapshot);
+    },
+    [hydrate],
+  );
+
+  const prevEditingRef = React.useRef(state.isEditing);
+
+  const { connected: collabConnected, serverVersion, hasPendingOps, applyOp } = useSheetCollab({
     documentId: documentId ?? null,
     token: accessToken ?? null,
-    onRemoteUpdate: hydrate,
+    onRemoteUpdate: handleRemoteUpdate,
     onResync: handleResync,
-    onDocState: (v) => setRevisionRef.current?.(v),
+    onDocState: (v) => {
+      setRevisionRef.current?.(v);
+      lastAppliedVersionRef.current = Math.max(lastAppliedVersionRef.current, v);
+    },
+    hasPendingOpsRef,
   });
+
+  React.useEffect(() => {
+    const wasEditing = prevEditingRef.current;
+    const wasPending = hasPendingOpsRef.current;
+    prevEditingRef.current = state.isEditing;
+    if (!state.isEditing && !hasPendingOps && queuedRemoteSnapshotRef.current) {
+      if (wasEditing) {
+        queuedRemoteSnapshotRef.current = null;
+        return;
+      }
+      if (wasPending) {
+        queuedRemoteSnapshotRef.current = null;
+        return;
+      }
+      const { snap, ver } = queuedRemoteSnapshotRef.current;
+      queuedRemoteSnapshotRef.current = null;
+      if (ver <= lastAppliedVersionRef.current) return;
+      lastAppliedVersionRef.current = Math.max(lastAppliedVersionRef.current, ver);
+      hydrate(snap);
+    }
+  }, [state.isEditing, hasPendingOps, hydrate]);
 
   const applyOpViaCollab = useCallback(
     async (
@@ -158,12 +208,12 @@ export const Sheet: React.FC<SheetProps> = ({
       prevSnapshot: SheetSnapshot | null,
       baseVersion: number,
     ): Promise<{ revision: number }> => {
-      const ok = await applyOp(
+      const result = await applyOp(
         { type: 'SNAPSHOT_UPDATE', payload: { prevSnapshot, nextSnapshot: snapshot } },
         baseVersion,
       );
-      if (!ok) throw new Error('CONFLICT');
-      return { revision: baseVersion + 1 };
+      if (!result.ok) throw new Error('CONFLICT');
+      return { revision: result.version };
     },
     [applyOp],
   );
@@ -184,6 +234,7 @@ export const Sheet: React.FC<SheetProps> = ({
   const handleLoaded = useCallback(
     (snap: SheetSnapshot | null, revision?: number) => {
       if (snap) {
+        if (revision != null) lastAppliedVersionRef.current = Math.max(lastAppliedVersionRef.current, revision);
         hydrate(snap);
         setLastSavedSnapshot?.(snap);
         if (revision != null) setRevisionRef.current?.(revision);

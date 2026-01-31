@@ -42,7 +42,7 @@ const MainLayout: React.FC = () => {
       items: [
         { to: '/estimate/objects', label: "Об'єкти", icon: <WorkOutlineOutlinedIcon /> },
         { to: '/estimate/acts', label: 'Акти виконаних робіт', icon: <DescriptionOutlinedIcon /> },
-        { to: '/estimate/quotes', label: 'Комерційні пропозиції', icon: <RequestQuoteOutlinedIcon /> },
+        { to: '/estimate', label: 'Комерційні пропозиції', icon: <RequestQuoteOutlinedIcon /> },
         { to: '/estimate/invoices', label: 'Накладні', icon: <ReceiptLongOutlinedIcon /> },
       ],
     },

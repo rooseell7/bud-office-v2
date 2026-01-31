@@ -1,14 +1,17 @@
 /**
  * Collab WebSocket integration. JOIN_DOC on mount, apply ops via WS when connected.
- * Token from AuthContext (same source as apiClient). Reconnect on token change.
+ * localVersion = serverVersion ONLY from server (DOC_STATE, OP_APPLIED, loadSnapshot).
+ * Never self-increment. Token from AuthContext.
+ *
+ * CollabClient/wsBaseUrl завантажуються динамічно — уникнення циклічної залежності при init.
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { CollabClient, type CollabEvent } from '../collab/collabClient';
-import { wsBaseUrl } from '../collab/env';
 import type { SheetSnapshot } from '../engine/types';
+import type { CollabClient, CollabEvent } from '../collab/collabClient';
 
 const DEV = import.meta.env?.DEV ?? false;
+const DEBUG = typeof localStorage !== 'undefined' && localStorage.getItem('DEBUG_COLLAB') === '1';
 
 function generateClientOpId(): string {
   return typeof crypto !== 'undefined' && crypto.randomUUID
@@ -18,18 +21,19 @@ function generateClientOpId(): string {
 
 export type UseSheetCollabOptions = {
   documentId: number | null;
-  /** JWT from AuthContext.accessToken (same source as apiClient) */
   token: string | null;
-  onRemoteUpdate?: (snapshot: SheetSnapshot) => void;
-  /** Resync: load server snapshot and replace local state */
-  onResync?: () => void;
-  /** When DOC_STATE received (initial join) */
+  onRemoteUpdate?: (snapshot: SheetSnapshot, version?: number) => void;
+  /** Resync: load server snapshot, hydrate, returns new revision. We set serverVersion from it. */
+  onResync?: () => Promise<number | void>;
   onDocState?: (version: number) => void;
+  /** Синхронне оновлення ref при зміні pending (для guard hydrate під час commit). */
+  hasPendingOpsRef?: React.MutableRefObject<boolean>;
 };
 
 export function useSheetCollab(options: UseSheetCollabOptions) {
-  const { documentId, token, onRemoteUpdate, onResync, onDocState } = options;
+  const { documentId, token, onRemoteUpdate, onResync, onDocState, hasPendingOpsRef } = options;
   const [serverVersion, setServerVersion] = useState(0);
+  const [hasPendingOps, setHasPendingOps] = useState(false);
   const [locks, setLocks] = useState<{ cellLocks: Record<string, number>; docLock: number | null }>({
     cellLocks: {},
     docLock: null,
@@ -38,42 +42,79 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
   const clientRef = useRef<CollabClient | null>(null);
   const pendingCountRef = useRef(0);
   const sentOpIdsRef = useRef<Set<string>>(new Set());
+  const onResyncRef = useRef(onResync);
+  onResyncRef.current = onResync;
+  const lastDocStateVersionRef = useRef(0);
+  const lastDocStateSocketIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!documentId || !token) return;
 
-    const client = new CollabClient({
-      url: wsBaseUrl,
-      token,
-      onEvent: (ev: CollabEvent) => {
+    let cancelled = false;
+
+    void (async () => {
+      const { CollabClient: CollabClientClass } = await import('../collab/collabClient');
+      const { wsBaseUrl } = await import('../collab/env');
+      if (cancelled) return;
+
+      const client = new CollabClientClass({
+        url: wsBaseUrl,
+        token,
+        onEvent: (ev: CollabEvent) => {
         if (ev.type === 'DOC_STATE') {
-          if (DEV) console.log('[collab] DOC_STATE docId=', ev.docId, 'serverVersion=', ev.version);
-          setServerVersion(ev.version);
+          const socketId = client.socketId ?? null;
+          const v = ev.version ?? 0;
+          if (v === lastDocStateVersionRef.current && socketId === lastDocStateSocketIdRef.current) {
+            if (DEBUG) console.debug('[collab] DOC_STATE duplicate version/socket, skip heavy');
+            return;
+          }
+          lastDocStateVersionRef.current = v;
+          lastDocStateSocketIdRef.current = socketId;
+          setServerVersion(v);
           setLocks(ev.locks ?? { cellLocks: {}, docLock: null });
           setConnected(true);
-          onDocState?.(ev.version);
+          onDocState?.(v);
+          if (DEV || DEBUG) {
+            console.log('[collab] DOC_STATE docId=', ev.docId, 'serverVersion=', v);
+          }
         }
         if (ev.type === 'OP_APPLIED') {
-          setServerVersion(ev.version);
-          if (ev.clientOpId && sentOpIdsRef.current.has(ev.clientOpId)) {
+          const isOwn = ev.clientOpId ? sentOpIdsRef.current.has(ev.clientOpId) : false;
+          setServerVersion(ev.version ?? 0);
+          if (ev.clientOpId && isOwn) {
             sentOpIdsRef.current.delete(ev.clientOpId);
             pendingCountRef.current = Math.max(0, pendingCountRef.current - 1);
-          } else if (ev.clientOpId && pendingCountRef.current > 0 && onResync) {
-            if (DEV) console.log('[Collab] remote OP_APPLIED with local pending -> resync');
-            onResync();
+            const nextPending = pendingCountRef.current > 0;
+            hasPendingOpsRef && (hasPendingOpsRef.current = nextPending);
+            setHasPendingOps(nextPending);
+          } else if (ev.clientOpId && !isOwn && pendingCountRef.current > 0 && onResyncRef.current) {
+            if (DEV || DEBUG) console.log('[collab] remote OP_APPLIED with local pending -> resync');
+            onResyncRef.current().then((rev) => {
+              if (typeof rev === 'number') setServerVersion(rev);
+            });
           }
           if (ev.op?.type === 'SNAPSHOT_UPDATE' && ev.op?.payload?.nextSnapshot) {
-            onRemoteUpdate?.(ev.op.payload.nextSnapshot);
+            onRemoteUpdate?.(ev.op.payload.nextSnapshot, ev.version);
+          }
+          if (DEBUG) {
+            console.log('[collab] OP_APPLIED docId=', ev.docId, 'serverVersion=', ev.version, 'clientOpId=', ev.clientOpId?.slice(0, 8), 'isOwn=', isOwn);
           }
         }
         if (ev.type === 'OP_REJECTED') {
-          if (DEV) console.log('[collab] OP_REJECTED reason=', ev.reason, 'details=', ev.details);
-          if (ev.reason === 'VERSION_MISMATCH') {
-            onResync?.();
-          }
           if (ev.clientOpId) {
             sentOpIdsRef.current.delete(ev.clientOpId);
             pendingCountRef.current = Math.max(0, pendingCountRef.current - 1);
+            const nextPending = pendingCountRef.current > 0;
+            hasPendingOpsRef && (hasPendingOpsRef.current = nextPending);
+            setHasPendingOps(nextPending);
+          }
+          if (ev.reason === 'VERSION_MISMATCH') {
+            if (DEV || DEBUG) console.log('[collab] OP_REJECTED VERSION_MISMATCH -> resync', ev.details);
+            onResyncRef.current?.().then((rev) => {
+              if (typeof rev === 'number') setServerVersion(rev);
+            });
+          } else if (DEV || DEBUG) {
+            console.log('[collab] OP_REJECTED reason=', ev.reason, 'details=', ev.details);
           }
         }
         if (ev.type === 'LOCKS_UPDATED') {
@@ -81,43 +122,67 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
         }
       },
     });
-    clientRef.current = client;
-    client.connect();
-    client.joinDoc(documentId, 'edit');
-    setConnected(client.connected);
 
-    if (DEV) console.log('[Collab] join doc', documentId, 'token changed, reconnected');
+      clientRef.current = client;
+      client.connect();
+      client.joinDoc(documentId, 'edit');
+      setConnected(client.connected);
+
+      if (DEBUG) console.log('[collab] join doc', documentId);
+    })();
 
     return () => {
-      client.leaveDoc(documentId);
-      client.disconnect();
-      clientRef.current = null;
-      setConnected(false);
-      if (DEV) console.log('[Collab] leave doc', documentId);
+      cancelled = true;
+      const c = clientRef.current;
+      if (c) {
+        c.leaveDoc(documentId);
+        c.disconnect();
+        clientRef.current = null;
+        setConnected(false);
+        if (DEBUG) console.log('[collab] leave doc', documentId);
+      }
     };
-  }, [documentId, token, onRemoteUpdate, onResync]);
+  }, [documentId, token, onRemoteUpdate]);
 
   const applyOp = useCallback(
-    async (op: { type: string; payload: Record<string, any> }, currentVersion: number): Promise<boolean> => {
+    async (
+      op: { type: string; payload: Record<string, any> },
+      baseVersion: number,
+    ): Promise<{ ok: true; version: number } | { ok: false }> => {
       const client = clientRef.current;
-      if (!client?.connected) return false;
+      if (!client?.connected) return { ok: false };
       const clientOpId = generateClientOpId();
       sentOpIdsRef.current.add(clientOpId);
       pendingCountRef.current += 1;
+      hasPendingOpsRef && (hasPendingOpsRef.current = true);
+      setHasPendingOps(true);
+      if (DEV || DEBUG || (typeof localStorage !== 'undefined' && localStorage.getItem('DEBUG_EDIT') === '1')) {
+        console.log('[collab] sendOp -> ws', { docId: documentId, baseVersion, clientOpId: clientOpId.slice(0, 8), opType: op.type });
+      }
       try {
-        await client.applyOp(documentId!, currentVersion, clientOpId, op);
-        if (DEV) console.log('[Collab] OP_APPLIED', op.type, 'v', currentVersion + 1);
-        return true;
+        const version = await client.applyOp(documentId!, baseVersion, clientOpId, op);
+        if (DEBUG) {
+          console.log('[collab] sendOp baseVersion=', baseVersion, 'clientOpId=', clientOpId.slice(0, 8), 'opSummary=', op.type, '-> serverVersion=', version);
+        }
+        return { ok: true, version };
       } catch (e) {
-        if (DEV) console.log('[Collab] OP_REJECTED', (e as Error)?.message);
-        return false;
-      } finally {
-        sentOpIdsRef.current.delete(clientOpId);
-        pendingCountRef.current = Math.max(0, pendingCountRef.current - 1);
+        if (DEV || DEBUG) console.log('[collab] sendOp rejected', (e as Error)?.message);
+        return { ok: false };
       }
     },
     [documentId],
   );
 
-  return { connected, serverVersion, locks, applyOp };
+  if (DEV || DEBUG) {
+    (window as any).__collabDebug = () => ({
+      docId: documentId,
+      socketId: clientRef.current?.socketId ?? null,
+      collabConnected: connected,
+      localVersion: serverVersion,
+      serverVersion,
+      pendingOps: pendingCountRef.current,
+    });
+  }
+
+  return { connected, serverVersion, hasPendingOps, locks, applyOp };
 }

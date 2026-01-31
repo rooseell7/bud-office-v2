@@ -232,6 +232,9 @@ export function sheetReducer(state: SheetState, action: SheetAction): SheetState
       const value = state.editorValue;
       const r = Math.max(0, Math.min(row, state.rowCount - 1));
       const c = Math.max(0, Math.min(col, state.colCount - 1));
+      const cell = { row: r, col: c };
+      const _dbg = (typeof import.meta !== 'undefined' && (import.meta as any)?.env?.DEV) || (typeof localStorage !== 'undefined' && localStorage.getItem('DEBUG_EDIT') === '1');
+      if (_dbg) console.log('[edit] commit start', { cell, value });
       const prev = state.rawValues[r]?.[c] ?? '';
       const colDef = state.columns?.[c];
       const { error } = validateCellByColumnType(value, colDef?.type, state.locale);
@@ -244,6 +247,10 @@ export function sheetReducer(state: SheetState, action: SheetAction): SheetState
         editorValue: '',
       };
       let next: SheetState = executeCommand(base, command);
+      if (_dbg) {
+        console.log('[edit] local applied', { cell, value });
+        console.log('[edit] commit end', { isCommitting: false });
+      }
       const dir = action.payload?.direction;
       if (dir) {
         const { activeCell } = next;
@@ -474,6 +481,11 @@ export function sheetReducer(state: SheetState, action: SheetAction): SheetState
     }
     case HYDRATE: {
       const snap = action.payload;
+      const _dbgH = (typeof import.meta !== 'undefined' && (import.meta as any)?.env?.DEV) || (typeof localStorage !== 'undefined' && localStorage.getItem('DEBUG_EDIT') === '1');
+      if (_dbgH) {
+        const snapshotVersion = (snap as any)?.version ?? (snap as any)?.revision;
+        console.log('[hydrate] APPLY', { isEditing: state.isEditing, snapshotVersion, snapKeys: Object.keys(snap || {}) });
+      }
       const rowCount = snap.rowCount ?? state.rowCount;
       const colCount = snap.colCount ?? state.colCount;
       const srcRaw = snap.rawValues ?? snap.values ?? [];

@@ -116,6 +116,11 @@ export class DocumentsService {
 
   async findOne(id: number) {
     const doc = await this.getEntity(id);
+    const meta = (doc as any).meta;
+    if (meta?.sheetSnapshot) {
+      const revision = meta.sheetRevision ?? 0;
+      this.logger.log(`[load] snapshot { docId=${id} revision=${revision} }`);
+    }
     return toApi(doc);
   }
 
