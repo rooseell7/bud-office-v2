@@ -129,14 +129,22 @@ export const Sheet: React.FC<SheetProps> = ({
 
   const handleResync = useCallback(async () => {
     if (!adapter?.loadSnapshot) return;
-    const snap = await adapter.loadSnapshot();
-    if (snap) {
-      hydrate(snap);
-      setLastSavedSnapshotRef.current?.(snap);
-    }
+    const result = await adapter.loadSnapshot();
+    if (!result) return;
+    const snapshot =
+      result && typeof result === 'object' && 'snapshot' in result
+        ? (result as { snapshot: SheetSnapshot }).snapshot
+        : (result as SheetSnapshot);
+    const revision =
+      result && typeof result === 'object' && 'revision' in result
+        ? (result as { revision?: number }).revision
+        : undefined;
+    hydrate(snapshot);
+    setLastSavedSnapshotRef.current?.(snapshot);
+    if (revision != null) setRevisionRef.current?.(revision);
   }, [adapter, hydrate]);
 
-  const { connected: collabConnected, applyOp } = useSheetCollab({
+  const { connected: collabConnected, serverVersion, applyOp } = useSheetCollab({
     documentId: documentId ?? null,
     token: accessToken ?? null,
     onRemoteUpdate: hydrate,
@@ -167,6 +175,7 @@ export const Sheet: React.FC<SheetProps> = ({
     onSaved,
     collabConnected,
     applyOpViaCollab: collabConnected ? applyOpViaCollab : undefined,
+    externalRevision: serverVersion,
   });
   const { status: saveStatus, errorMessage, setLastSavedSnapshot, setRevision } = saveResult;
   setLastSavedSnapshotRef.current = setLastSavedSnapshot;

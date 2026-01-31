@@ -47,6 +47,7 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
       token,
       onEvent: (ev: CollabEvent) => {
         if (ev.type === 'DOC_STATE') {
+          if (DEV) console.log('[collab] DOC_STATE docId=', ev.docId, 'serverVersion=', ev.version);
           setServerVersion(ev.version);
           setLocks(ev.locks ?? { cellLocks: {}, docLock: null });
           setConnected(true);
@@ -66,8 +67,8 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
           }
         }
         if (ev.type === 'OP_REJECTED') {
+          if (DEV) console.log('[collab] OP_REJECTED reason=', ev.reason, 'details=', ev.details);
           if (ev.reason === 'VERSION_MISMATCH') {
-            if (DEV) console.log('[Collab] OP_REJECTED VERSION_MISMATCH -> resync');
             onResync?.();
           }
           if (ev.clientOpId) {

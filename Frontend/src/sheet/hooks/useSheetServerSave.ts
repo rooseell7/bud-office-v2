@@ -35,6 +35,8 @@ export type UseSheetServerSaveOptions = {
     prevSnapshot: import('../engine/types').SheetSnapshot | null,
     baseVersion: number,
   ) => Promise<{ revision: number }>;
+  /** External source of truth for baseVersion (from collab DOC_STATE or REST load) */
+  externalRevision?: number;
 };
 
 export function useSheetServerSave(options: UseSheetServerSaveOptions) {
@@ -45,6 +47,7 @@ export function useSheetServerSave(options: UseSheetServerSaveOptions) {
     onSaved,
     collabConnected = false,
     applyOpViaCollab,
+    externalRevision,
   } = options;
   const [status, setStatus] = useState<SaveStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -54,6 +57,12 @@ export function useSheetServerSave(options: UseSheetServerSaveOptions) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  useEffect(() => {
+    if (typeof externalRevision === 'number' && externalRevision >= 0) {
+      revisionRef.current = externalRevision;
+    }
+  }, [externalRevision]);
 
   useEffect(() => {
     if (!adapter?.saveSnapshot && !applyOpViaCollab) {
@@ -78,6 +87,11 @@ export function useSheetServerSave(options: UseSheetServerSaveOptions) {
       const snapshot = serialize(currentState);
       const prevSnapshot = lastSavedSnapshotRef.current;
       const baseVersion = revisionRef.current;
+
+      if (DEV) {
+        const snapSize = JSON.stringify(snapshot).length;
+        console.log('[Sheet] performSave useWs=', useWs, 'baseVersion=', baseVersion, 'snapshotSize=', snapSize);
+      }
 
       setStatus('saving');
       setErrorMessage('');
@@ -107,6 +121,7 @@ export function useSheetServerSave(options: UseSheetServerSaveOptions) {
         setTimeout(() => setStatus((s) => (s === 'saved' ? 'idle' : s)), 2000);
       } catch (e: any) {
         const msg = e?.message ?? String(e);
+        if (DEV) console.log('[Sheet] save error:', msg);
         if (msg === 'CONFLICT') {
           setStatus('conflict');
           setErrorMessage('Конфлікт версій');
@@ -141,6 +156,7 @@ export function useSheetServerSave(options: UseSheetServerSaveOptions) {
     status,
     collabConnected,
     applyOpViaCollab,
+    externalRevision,
   ]);
 
   return {
