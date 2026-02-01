@@ -11,11 +11,13 @@ import { formatUaNumber, formatUaMoney, formatUaPercent } from '../locale/uaForm
 /**
  * Format a value for display using locale and numberFormat.
  * Value can be normalized number string or raw with ₴/%.
+ * @param decimalPlaces optional override (0-6) for number/uah/percent
  */
 export function formatForDisplay(
   value: string,
   numberFormat: 'plain' | 'number' | 'uah' | 'percent',
   locale: LocaleSettings = defaultLocale,
+  decimalPlaces?: number,
 ): string {
   const trimmed = (value || '').trim();
   if (!trimmed) return '';
@@ -31,15 +33,16 @@ export function formatForDisplay(
   }
   if (n == null) return trimmed;
 
+  const dec = decimalPlaces != null ? Math.max(0, Math.min(6, decimalPlaces)) : 2;
   switch (numberFormat) {
     case 'number':
-      return n % 1 === 0 ? String(Math.round(n)) : formatUaNumber(n, 2, locale);
+      return formatUaNumber(n, dec, locale);
     case 'uah':
-      return formatUaMoney(n, locale);
+      return formatUaMoney(n, locale, dec);
     case 'percent':
-      return formatUaPercent(n, 2, locale);
+      return formatUaPercent(n, dec, locale);
     case 'plain':
     default:
-      return n % 1 === 0 ? String(Math.round(n)) : formatUaNumber(n, 2, locale);
+      return formatUaNumber(n, dec, locale);
   }
 }

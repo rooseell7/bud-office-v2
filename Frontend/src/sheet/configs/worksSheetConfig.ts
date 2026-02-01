@@ -1,5 +1,6 @@
 /**
  * Роботи — таблиця етапу КП
+ * TABLE CORE: DO NOT CHANGE WITHOUT EXPLICIT TASK (Nazar)
  */
 
 import type { SheetConfig } from './types';
@@ -14,7 +15,7 @@ export const worksSheetColumnHeaders = [
   'Сума',
   'Собівартість одиниці',
   'Загалом собівартість',
-  'Примітка',
+  'Примітки',
 ] as const;
 
 export const W_COL = {
@@ -30,7 +31,7 @@ export const W_COL = {
 } as const;
 
 export const worksSheetConfig: Partial<SheetConfig> = {
-  rowCount: 100,
+  rowCount: 20,
   colCount: worksSheetColumnHeaders.length,
   locale: uaLocale,
   columnHeaders: [...worksSheetColumnHeaders],

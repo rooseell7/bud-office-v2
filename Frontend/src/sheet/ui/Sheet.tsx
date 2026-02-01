@@ -76,7 +76,7 @@ export const Sheet: React.FC<SheetProps> = ({
     config,
     initialSnapshot,
     adapter,
-    onPersistableAction: () => persistRef.current?.onLocalChange?.(),
+    onPersistableAction: (actionType) => persistRef.current?.onLocalChange?.({ type: actionType }),
   });
 
   const { accessToken } = useAuth();

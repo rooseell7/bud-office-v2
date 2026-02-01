@@ -1,5 +1,6 @@
 /**
  * Матеріали — таблиця етапу КП
+ * TABLE CORE: DO NOT CHANGE WITHOUT EXPLICIT TASK (Nazar)
  */
 
 import type { SheetConfig } from './types';
@@ -12,8 +13,8 @@ export const materialsSheetColumnHeaders = [
   'К-ть',
   'Ціна за од.',
   'Сума',
-  'Собівартість одиниці',
-  'Загалом собівартість',
+  'Собівартість',
+  'Сума собівартість',
   'Постачальник / Примітка',
 ] as const;
 
@@ -30,7 +31,7 @@ export const M_COL = {
 } as const;
 
 export const materialsSheetConfig: Partial<SheetConfig> = {
-  rowCount: 100,
+  rowCount: 20,
   colCount: materialsSheetColumnHeaders.length,
   locale: uaLocale,
   columnHeaders: [...materialsSheetColumnHeaders],

@@ -43,8 +43,10 @@ export function formatUaNumber(
 export function formatUaMoney(
   value: number,
   locale?: LocaleSettings,
+  decimals?: number,
 ): string {
-  return `${fmt(value, 2, locale ?? defaultLocale)} ₴`;
+  const d = decimals ?? 2;
+  return `${fmt(value, d, locale ?? defaultLocale)} ₴`;
 }
 
 /**

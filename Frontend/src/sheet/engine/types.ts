@@ -23,9 +23,14 @@ export type CellStyle = {
   align?: 'left' | 'center' | 'right';
   numberFormat?: 'plain' | 'number' | 'uah' | 'percent';
   fill?: string;
+  /** Decimal places for number/uah/percent display (0-6) */
+  decimalPlaces?: number;
 };
 
-export type StylePatch = Partial<CellStyle>;
+export type StylePatch = Partial<CellStyle> & {
+  /** +1 or -1 to adjust decimal places for selection (per-cell) */
+  decimalPlacesDelta?: number;
+};
 
 /** Toggle state for computed style */
 export type ToggleState = 'on' | 'off' | 'mixed';

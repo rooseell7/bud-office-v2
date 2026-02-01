@@ -11,6 +11,7 @@ export type ComputedStyle = {
   bold: ToggleState;
   italic: ToggleState;
   align: 'left' | 'center' | 'right' | 'mixed';
+  numberFormat: 'plain' | 'number' | 'uah' | 'percent' | 'mixed';
 };
 
 export function getComputedStyleForSelection(
@@ -28,6 +29,7 @@ export function getComputedStyleForSelection(
   let italicTrue = 0;
   let italicFalse = 0;
   const aligns = new Set<string>();
+  const formats = new Set<string>();
 
   for (let r = r1; r <= r2; r++) {
     for (let c = c1; c <= c2; c++) {
@@ -38,6 +40,8 @@ export function getComputedStyleForSelection(
       if (s?.italic) italicTrue++;
       else italicFalse++;
       if (s?.align) aligns.add(s.align);
+      const f = s?.numberFormat ?? 'plain';
+      formats.add(f);
     }
   }
 
@@ -51,6 +55,11 @@ export function getComputedStyleForSelection(
     alignList.length === 1
       ? (alignList[0] as 'left' | 'center' | 'right')
       : 'mixed';
+  const formatList = [...formats];
+  const numberFormat: ComputedStyle['numberFormat'] =
+    formatList.length === 1
+      ? (formatList[0] as 'plain' | 'number' | 'uah' | 'percent')
+      : 'mixed';
 
-  return { bold, italic, align };
+  return { bold, italic, align, numberFormat };
 }

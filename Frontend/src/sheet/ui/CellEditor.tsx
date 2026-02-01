@@ -28,8 +28,8 @@ export const CellEditor: React.FC<CellEditorProps> = ({
       style={{
         position: 'absolute',
         inset: 0,
-        width: colWidth - 2,
-        height: rowHeight - 2,
+        width: Math.max(0, colWidth - 2),
+        height: Math.max(0, rowHeight - 2),
         margin: 1,
         padding: '0 8px',
         fontSize: 13,

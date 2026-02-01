@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Accordion,
@@ -10,14 +10,18 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
+  Switch,
   Tab,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -35,8 +39,11 @@ import {
   type EstimateStage,
 } from '../../api/estimates';
 import { acquireEditSession, releaseEditSession } from '../../api/documents';
+import { lsGetJson, lsSetJson } from '../../shared/localStorageJson';
 
 const HEARTBEAT_INTERVAL_MS = 25000;
+const LS_FOCUS_MODE = (estimateId: number) => `estimate:${estimateId}:focusMode`;
+const LS_EXPANDED_STAGES = (estimateId: number) => `estimate:${estimateId}:expandedStages`;
 
 export const EstimateEditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -48,12 +55,27 @@ export const EstimateEditorPage: React.FC = () => {
   const [doc, setDoc] = useState<Awaited<ReturnType<typeof getDocumentWithStages>> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedStage, setExpandedStage] = useState<string | null>(null);
+  const [focusMode, setFocusModeState] = useState<boolean>(true);
+  const [expandedStages, setExpandedStages] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    if (!validId) return;
+    setFocusModeState(lsGetJson(LS_FOCUS_MODE(validId), true));
+  }, [validId]);
+
+  const setFocusMode = useCallback(
+    (v: boolean) => {
+      setFocusModeState(v);
+      if (validId) lsSetJson(LS_FOCUS_MODE(validId), v);
+    },
+    [validId],
+  );
   const [activeTabByStage, setActiveTabByStage] = useState<Record<string, number>>({});
   const [renameStageId, setRenameStageId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [deleteConfirmStage, setDeleteConfirmStage] = useState<EstimateStage | null>(null);
   const [addingStage, setAddingStage] = useState(false);
+  const stageRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const canWrite = can('estimates:write') || can('documents:write') || can('sheet:write');
   const canDeleteStage = canWrite;
@@ -65,9 +87,19 @@ export const EstimateEditorPage: React.FC = () => {
     try {
       const data = await getDocumentWithStages(validId);
       setDoc(data);
-      if (data.stages.length > 0 && !expandedStage) {
-        setExpandedStage(data.stages[0].id);
-      }
+      const stageIds = new Set(data.stages.map((s) => s.id));
+      setExpandedStages((prev) => {
+        const saved = lsGetJson<string[]>(LS_EXPANDED_STAGES(validId), []);
+        const valid = saved.filter((id) => stageIds.has(id));
+        let next: Set<string>;
+        if (valid.length > 0) next = new Set(valid);
+        else if (prev.size > 0) {
+          const filtered = [...prev].filter((id) => stageIds.has(id));
+          next = filtered.length > 0 ? new Set(filtered) : new Set(data.stages.length > 0 ? [data.stages[0].id] : []);
+        } else next = data.stages.length > 0 ? new Set([data.stages[0].id]) : new Set();
+        if (validId && next.size > 0) lsSetJson(LS_EXPANDED_STAGES(validId), [...next]);
+        return next;
+      });
     } catch (e: any) {
       setError(e?.response?.data?.message || 'Помилка завантаження');
     } finally {
@@ -113,12 +145,39 @@ export const EstimateEditorPage: React.FC = () => {
         name: `Етап ${(doc?.stages?.length ?? 0) + 1}`,
       });
       await loadDoc();
-      setExpandedStage(stage.id);
+      setExpandedStages((prev) => {
+        const next = focusMode ? new Set([stage.id]) : new Set([...prev, stage.id]);
+        if (validId) lsSetJson(LS_EXPANDED_STAGES(validId), [...next]);
+        return next;
+      });
       setActiveTabByStage((prev) => ({ ...prev, [stage.id]: 0 }));
     } finally {
       setAddingStage(false);
     }
   };
+
+  const handleStageExpand = useCallback(
+    (stageId: string) => {
+      setExpandedStages((prev) => {
+        const next = focusMode ? new Set([stageId]) : new Set([...prev, stageId]);
+        if (validId) lsSetJson(LS_EXPANDED_STAGES(validId), [...next]);
+        return next;
+      });
+    },
+    [focusMode, validId],
+  );
+
+  const handleStageCollapse = useCallback(
+    (stageId: string) => {
+      setExpandedStages((prev) => {
+        const next = new Set(prev);
+        next.delete(stageId);
+        if (validId) lsSetJson(LS_EXPANDED_STAGES(validId), [...next]);
+        return next;
+      });
+    },
+    [validId],
+  );
 
   const handleRenameStage = async () => {
     if (!validId || !renameStageId || !renameValue.trim()) {
@@ -133,16 +192,58 @@ export const EstimateEditorPage: React.FC = () => {
     }
   };
 
+  const getCurrentStageIndex = useCallback(() => {
+    const stages = doc?.stages ?? [];
+    if (stages.length === 0) return -1;
+    let best = 0;
+    let bestTop = Infinity;
+    for (let i = 0; i < stages.length; i++) {
+      const el = stageRefs.current[stages[i].id];
+      if (!el) continue;
+      const top = el.getBoundingClientRect().top;
+      if (top >= -100 && top < bestTop) {
+        bestTop = top;
+        best = i;
+      }
+    }
+    if (bestTop === Infinity) {
+      const firstEl = stages[0] ? stageRefs.current[stages[0].id] : null;
+      const firstTop = firstEl?.getBoundingClientRect().top ?? 0;
+      return firstTop > (typeof window !== 'undefined' ? window.innerHeight : 800) ? 0 : stages.length - 1;
+    }
+    return best;
+  }, [doc?.stages]);
+
+  const scrollToStage = useCallback(
+    (index: number) => {
+      const stages = doc?.stages ?? [];
+      const stage = stages[index];
+      if (!stage) return;
+      const el = stageRefs.current[stage.id];
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+    [doc?.stages],
+  );
+
+  const handleScrollToPrev = useCallback(() => {
+    const i = getCurrentStageIndex();
+    if (i <= 0) return;
+    scrollToStage(i - 1);
+  }, [getCurrentStageIndex, scrollToStage]);
+
+  const handleScrollToNext = useCallback(() => {
+    const stages = doc?.stages ?? [];
+    const i = getCurrentStageIndex();
+    if (i < 0 || i >= stages.length - 1) return;
+    scrollToStage(i + 1);
+  }, [doc?.stages, getCurrentStageIndex, scrollToStage]);
+
   const handleDeleteStage = async () => {
     if (!validId || !deleteConfirmStage) return;
     try {
       await deleteStage(validId, deleteConfirmStage.id);
       await loadDoc();
       setDeleteConfirmStage(null);
-      if (expandedStage === deleteConfirmStage.id) {
-        const remaining = doc?.stages?.filter((s) => s.id !== deleteConfirmStage.id) ?? [];
-        setExpandedStage(remaining[0]?.id ?? null);
-      }
     } finally {
       setDeleteConfirmStage(null);
     }
@@ -197,10 +298,50 @@ export const EstimateEditorPage: React.FC = () => {
         </Typography>
       </Box>
 
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-        <Typography variant="subtitle2" color="text.secondary">
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+        <Typography variant="subtitle2" color="text.secondary" sx={{ mr: 1 }}>
           Етапи
         </Typography>
+        {doc?.stages && doc.stages.length > 0 && (
+          <>
+            <Tooltip title="При відкритті етапу інші згортаються">
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={focusMode}
+                    onChange={(_, v) => setFocusMode(v)}
+                    color="primary"
+                  />
+                }
+                label={
+                  <Typography variant="body2" sx={{ fontSize: 12 }}>
+                    Фокус етапу
+                  </Typography>
+                }
+                sx={{ mr: 0.5 }}
+              />
+            </Tooltip>
+            <Box sx={{ display: 'flex', gap: 0.5 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={handleScrollToPrev}
+              sx={{ whiteSpace: 'nowrap' }}
+            >
+              ↑ Попередній етап
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={handleScrollToNext}
+              sx={{ whiteSpace: 'nowrap' }}
+            >
+              ↓ Наступний етап
+            </Button>
+          </Box>
+          </>
+        )}
         {canWrite && (
           <Button
             size="small"
@@ -231,23 +372,31 @@ export const EstimateEditorPage: React.FC = () => {
         </Box>
       ) : (
         doc?.stages?.map((stage) => (
-          <StageAccordion
+          <Box
             key={stage.id}
-            stage={stage}
-            estimateId={validId!}
-            expanded={expandedStage === stage.id}
-            onExpand={() => setExpandedStage(stage.id)}
-            activeTab={activeTabByStage[stage.id] ?? 0}
-            onTabChange={(v) =>
-              setActiveTabByStage((prev) => ({ ...prev, [stage.id]: v }))
-            }
-            canDelete={canDeleteStage}
-            onRenameClick={() => {
-              setRenameStageId(stage.id);
-              setRenameValue(stage.name);
+            ref={(el) => {
+              if (el) stageRefs.current[stage.id] = el;
+              else delete stageRefs.current[stage.id];
             }}
-            onDeleteClick={() => setDeleteConfirmStage(stage)}
-          />
+          >
+            <StageAccordion
+              stage={stage}
+              estimateId={validId!}
+              expanded={expandedStages.has(stage.id)}
+              onExpand={() => handleStageExpand(stage.id)}
+              onCollapse={() => handleStageCollapse(stage.id)}
+              activeTab={activeTabByStage[stage.id] ?? 0}
+              onTabChange={(v) =>
+                setActiveTabByStage((prev) => ({ ...prev, [stage.id]: v }))
+              }
+              canDelete={canDeleteStage}
+              onRenameClick={() => {
+                setRenameStageId(stage.id);
+                setRenameValue(stage.name);
+              }}
+              onDeleteClick={() => setDeleteConfirmStage(stage)}
+            />
+          </Box>
         ))
       )}
 
@@ -297,6 +446,7 @@ type StageAccordionProps = {
   estimateId: number;
   expanded: boolean;
   onExpand: () => void;
+  onCollapse: () => void;
   activeTab: number;
   onTabChange: (v: number) => void;
   canDelete: boolean;
@@ -309,6 +459,7 @@ function StageAccordion({
   estimateId,
   expanded,
   onExpand,
+  onCollapse,
   activeTab,
   onTabChange,
   canDelete,
@@ -323,7 +474,7 @@ function StageAccordion({
   return (
     <Accordion
       expanded={expanded}
-      onChange={(_, isExp) => isExp && onExpand()}
+      onChange={(_, isExp) => (isExp ? onExpand() : onCollapse())}
       sx={{
         '&:before': { display: 'none' },
         boxShadow: 0,
@@ -333,10 +484,13 @@ function StageAccordion({
       }}
     >
       <AccordionSummary
-        expandIcon={<ExpandMoreIcon />}
+        expandIcon={expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
         sx={{ minHeight: 44, '& .MuiAccordionSummary-content': { my: 0.5 } }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
+        <Box
+          sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}
+          onClick={(e) => e.stopPropagation()}
+        >
           <Typography variant="body2" fontWeight={600}>
             {stage.name}
           </Typography>

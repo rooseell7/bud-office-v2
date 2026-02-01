@@ -11,7 +11,7 @@ import type { SheetState } from '../engine/state';
 import type { SheetSnapshot } from '../engine/types';
 import type { SheetAdapter } from '../adapters/types';
 
-const TRAILING_MS = 250;
+const TRAILING_MS = 400;
 const MAX_WAIT_MS = 2000;
 const DEV = import.meta.env?.DEV ?? false;
 const DEBUG = typeof localStorage !== 'undefined' && localStorage.getItem('DEBUG_PERSIST') === '1';
@@ -178,7 +178,6 @@ export function useSaveOrchestrator(options: UseSaveOrchestratorOptions) {
     (changeMeta?: { type?: string }) => {
       if (mode === 'readonly') return;
       localRevRef.current += 1;
-      const wasClean = ackedRevRef.current >= localRevRef.current - 1;
       setUiState((s) => ({
         ...s,
         status: 'dirty',
@@ -186,10 +185,13 @@ export function useSaveOrchestrator(options: UseSaveOrchestratorOptions) {
         localRev: localRevRef.current,
       }));
       if (DEBUG || DEV) console.log('[persist] LOCAL_CHANGE rev=', localRevRef.current, 'type=', changeMeta?.type);
-      if (wasClean) scheduleFlush();
-      else scheduleFlush();
+      if (changeMeta?.type === 'COMMIT_EDIT') {
+        void performFlush();
+      } else {
+        scheduleFlush();
+      }
     },
-    [mode, scheduleFlush],
+    [mode, scheduleFlush, performFlush],
   );
 
   const flushNow = useCallback(

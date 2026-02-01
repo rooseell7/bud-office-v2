@@ -71,9 +71,9 @@ function buildWorksSnapshot(): Record<string, any> {
     { id: 'col-5', title: 'Сума', key: 'total', type: 'uah' as const, computed: { expr: '{qty} * {price}' }, editable: false },
     { id: 'col-6', title: 'Собівартість одиниці', key: 'costUnit', type: 'uah' as const },
     { id: 'col-7', title: 'Загалом собівартість', key: 'costTotal', type: 'uah' as const, computed: { expr: '{qty} * {costUnit}' }, editable: false },
-    { id: 'col-8', title: 'Примітка', key: 'note', type: 'text' as const },
+    { id: 'col-8', title: 'Примітки', key: 'note', type: 'text' as const },
   ];
-  return buildSheetFromColumns(columns, 100, [48, 360, 90, 90, 120, 130, 120, 130, 180]);
+  return buildSheetFromColumns(columns, 20, [48, 360, 90, 90, 120, 130, 120, 130, 180]);
 }
 
 /** Матеріали — шаблон для етапу КП */
@@ -85,11 +85,11 @@ function buildMaterialsSnapshot(): Record<string, any> {
     { id: 'col-3', title: 'К-ть', key: 'qty', type: 'number' as const },
     { id: 'col-4', title: 'Ціна за од.', key: 'price', type: 'uah' as const },
     { id: 'col-5', title: 'Сума', key: 'total', type: 'uah' as const, computed: { expr: '{qty} * {price}' }, editable: false },
-    { id: 'col-6', title: 'Собівартість одиниці', key: 'costUnit', type: 'uah' as const },
-    { id: 'col-7', title: 'Загалом собівартість', key: 'costTotal', type: 'uah' as const, computed: { expr: '{qty} * {costUnit}' }, editable: false },
+    { id: 'col-6', title: 'Собівартість', key: 'costUnit', type: 'uah' as const },
+    { id: 'col-7', title: 'Сума собівартість', key: 'costTotal', type: 'uah' as const, computed: { expr: '{qty} * {costUnit}' }, editable: false },
     { id: 'col-8', title: 'Постачальник / Примітка', key: 'note', type: 'text' as const },
   ];
-  return buildSheetFromColumns(columns, 100, [48, 360, 90, 90, 120, 130, 120, 130, 180]);
+  return buildSheetFromColumns(columns, 20, [48, 360, 90, 90, 120, 130, 120, 130, 180]);
 }
 
 function buildSheetFromColumns(columns: any[], rowCount: number, widths?: number[]): Record<string, any> {

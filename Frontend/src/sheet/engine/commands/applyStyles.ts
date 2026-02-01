@@ -23,6 +23,12 @@ function mergeStyle(current: CellStyle | undefined, patch: StylePatch): CellStyl
   if (patch.align !== undefined) out.align = patch.align;
   if (patch.numberFormat !== undefined) out.numberFormat = patch.numberFormat;
   if (patch.fill !== undefined) out.fill = patch.fill;
+  if (patch.decimalPlaces !== undefined) out.decimalPlaces = patch.decimalPlaces;
+  if (patch.decimalPlacesDelta !== undefined) {
+    const cur = current?.decimalPlaces ?? 2;
+    const next = Math.max(0, Math.min(6, cur + patch.decimalPlacesDelta));
+    out.decimalPlaces = next;
+  }
   return out;
 }
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useLayoutEffect, useState } from 'react';
 import { Box, Tooltip } from '@mui/material';
 import type { CellCoord, CellStyle } from '../engine/types';
 import type { LocaleSettings } from '../configs/types';
@@ -68,17 +68,26 @@ export const Cell = React.memo<CellProps>(function Cell({
   gridCell = false,
   wrap = false,
 }) {
+  const cellRef = useRef<HTMLDivElement>(null);
+  const [editorWidth, setEditorWidth] = useState(0);
+  useLayoutEffect(() => {
+    if (!isEditingThis || !cellRef.current) return;
+    const rect = cellRef.current.getBoundingClientRect();
+    setEditorWidth(rect.width);
+  }, [isEditingThis]);
+
   const numberFormat = getNumberFormat(cellStyle, columnType);
   const isComputedErr = value === '#ERR';
   const displayValue = isComputedErr
     ? '#ERR'
     : cellError
       ? (rawValue ?? value)
-      : (formatForDisplay(value, numberFormat, locale) || value);
+      : (formatForDisplay(value, numberFormat, locale, cellStyle?.decimalPlaces) || value);
   const showErrorBorder = cellError || isComputedErr;
   return (
   <Tooltip title={cellError?.message ?? (isComputedErr ? 'Помилка обчислення' : '')} disableHoverListener={!cellError && !isComputedErr}>
   <Box
+    ref={cellRef}
     onMouseDown={onSelect}
     onMouseEnter={onMouseEnter}
     onDoubleClick={onDoubleClick}
@@ -93,6 +102,7 @@ export const Cell = React.memo<CellProps>(function Cell({
       height: rowHeight,
       display: 'flex',
       alignItems: wrap ? 'flex-start' : 'center',
+      justifyContent: cellStyle?.align === 'center' ? 'center' : cellStyle?.align === 'right' ? 'flex-end' : 'flex-start',
       px: 1,
       py: wrap ? 0.5 : 0,
       fontSize: 13,
@@ -128,7 +138,7 @@ export const Cell = React.memo<CellProps>(function Cell({
         value={editorValue}
         onChange={onEditorChange ?? (() => {})}
         rowHeight={rowHeight}
-        colWidth={gridCell ? 200 : flex ? 200 : colWidth}
+        colWidth={editorWidth > 0 ? editorWidth : (gridCell ? 200 : flex ? 200 : colWidth)}
       />
     ) : (
       displayValue
