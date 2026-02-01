@@ -1,0 +1,262 @@
+/**
+ * Variant 3 — UI Assets (1:1)
+ * Concrete + blueprint grid + grunge header + glass content
+ */
+
+:root {
+  --bg-app: #0b0f0d;
+  --bg-sidebar: rgba(10, 12, 11, 0.78);
+  --bg-header: rgba(12, 14, 13, 0.82);
+  --bg-surface: rgba(15, 15, 15, 0.55);
+
+  --text-primary: #e6e6e6;
+  --text-secondary: rgba(230, 230, 230, 0.65);
+  --divider: rgba(255, 255, 255, 0.06);
+
+  --accent: #7ac854;
+  --accent-dark: #5fa93e;
+  --accent-glow: rgba(122, 200, 84, 0.25);
+
+  --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-hard: 0 10px 30px rgba(0, 0, 0, 0.55);
+
+  --anim-fast: 140ms ease-out;
+
+  /* Sheet table (тільки для sheet/editor) */
+  --sheet-bg: #d8dce0;
+  --sheet-grid: rgba(0, 0, 0, 0.12);
+  --sheet-header-bg: #ced2d6;
+  --sheet-header-text: #0a0a0a;
+  --sheet-cell-text: #0a0a0a;
+  --sheet-cell-bg: #d8dce0;
+  --sheet-cell-bg-alt: #d4d8dc;
+  --sheet-selection: rgba(25, 118, 210, 0.18);
+  --sheet-active-border: #1976d2;
+}
+
+/* --- Base typography (заборонити глобальний zoom) --- */
+html {
+  font-size: 16px;
+}
+body {
+  font-size: 14px;
+}
+
+/* --- Background: concrete + blueprint overlay --- */
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(20, 28, 24, 0.9) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 80%, rgba(15, 20, 17, 0.95) 0%, transparent 50%),
+    linear-gradient(180deg, #0d1210 0%, #0b0f0d 50%, #080c0a 100%);
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+}
+
+/* blueprint overlay — CSS-only сітка */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 59px,
+      rgba(122, 200, 84, 0.04) 59px,
+      rgba(122, 200, 84, 0.04) 60px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 59px,
+      rgba(122, 200, 84, 0.04) 59px,
+      rgba(122, 200, 84, 0.04) 60px
+    );
+  background-size: 60px 60px;
+  opacity: 0.8;
+  z-index: 0;
+}
+
+/* Підняти весь UI над overlay */
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- Header --- */
+.boHeader {
+  position: relative;
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--divider);
+  box-shadow: var(--shadow-soft), inset 0 -1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.boHeader::after {
+  content: '';
+  position: absolute;
+  left: 260px;
+  top: 50%;
+  width: 240px;
+  height: 2px;
+  transform: translateY(-50%);
+  background: radial-gradient(
+    circle,
+    rgba(122, 200, 84, 0.35) 0%,
+    rgba(122, 200, 84, 0) 70%
+  );
+  pointer-events: none;
+}
+
+.boBrand {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.boBrandLogo {
+  font-family: 'Oswald', sans-serif;
+  font-weight: 700;
+  font-size: 1.5rem;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+}
+
+/* --- Sidebar --- */
+.boSidebar {
+  font-size: 14px;
+  background: var(--bg-sidebar);
+  backdrop-filter: blur(6px);
+  border-right: 1px solid var(--divider);
+}
+
+.boSidebar .boNavSection {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  opacity: 0.72;
+}
+
+.boSidebar .boNavItem {
+  font-size: 15px !important;
+  padding: 10px 14px !important;
+}
+
+.boNavItem {
+  color: var(--text-primary);
+  border-left: 2px solid transparent;
+  transition: background var(--anim-fast), box-shadow var(--anim-fast), border-color var(--anim-fast);
+}
+
+.boNavItem:hover {
+  background: rgba(122, 200, 84, 0.1);
+  border-left-color: rgba(122, 200, 84, 0.35);
+}
+
+.boNavItem.isActive {
+  background: rgba(122, 200, 84, 0.16);
+  border-left-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-glow);
+}
+
+.boNavIcon {
+  opacity: 0.75;
+  transition: color var(--anim-fast), opacity var(--anim-fast);
+}
+
+.boNavItem.isActive .boNavIcon {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.boNavSection {
+  margin: 14px 0 6px 0;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  font-weight: 700;
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+/* --- MAIN wrapper — прозорий, без завіси --- */
+.boMain,
+main {
+  background: transparent !important;
+  background-color: transparent !important;
+  backdrop-filter: none !important;
+}
+
+/* --- Content panel (glass) — centered card, НЕ full-screen --- */
+.boContentPanel {
+  width: min(1200px, calc(100% - 48px));
+  max-width: 1200px;
+  margin: 24px auto;
+  padding: 22px;
+
+  background: var(--bg-surface);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+/* КП редактор — full width */
+.boContentPanel:has(.estimate-editor-full) {
+  width: calc(100% - 32px);
+  max-width: none;
+  margin: 16px;
+  padding: 12px;
+}
+
+/* --- Dropdown --- */
+.boMenu {
+  background: rgba(10, 10, 10, 0.92);
+  border: 1px solid var(--divider);
+  box-shadow: var(--shadow-hard);
+}
+
+.boMenuItem:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* --- Поля форми та таблиці: легко сірі, текст чорний насичений --- */
+.boContentPanel input,
+.boContentPanel select,
+.boContentPanel .list-table,
+.boContentPanel .list-table th,
+.boContentPanel .list-table td {
+  background: #e8e9ec !important;
+  color: #0a0a0a !important;
+  font-weight: 500;
+}
+
+.boContentPanel input::placeholder {
+  color: rgba(10, 10, 10, 0.5);
+}
+
+.boContentPanel .list-table {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.boContentPanel .list-table th,
+.boContentPanel .list-table td {
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+/* MUI поля та таблиці (якщо використовуються) */
+.boContentPanel .MuiInputBase-root,
+.boContentPanel .MuiTableCell-root {
+  background: #e8e9ec !important;
+  color: #0a0a0a !important;
+}
+
+.boContentPanel .MuiInputBase-input {
+  color: #0a0a0a !important;
+  font-weight: 500;
+}

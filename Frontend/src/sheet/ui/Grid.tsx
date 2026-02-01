@@ -28,7 +28,6 @@ const ROW_HEIGHT_DEFAULT = 28;
 const LETTERS_ROW_HEIGHT = 22;
 const COL_WIDTH_DEFAULT = 140;
 const ROW_HEADER_WIDTH = 48;
-const HEADER_BG = '#f1f5f9';
 const RESIZE_HANDLE_WIDTH = 8;
 
 export type GridProps = {
@@ -255,7 +254,7 @@ export const Grid: React.FC<GridProps> = ({
     return r >= r1 && r <= r2 && c >= c1 && c <= c2;
   };
 
-  const useGrid = Boolean(config?.gridTemplateColumns);
+  const useGrid = Boolean(config?.gridTemplateColumns) || Boolean(config?.columnHeaders?.length);
   const flexCol = config?.flexColumn;
   /** When using grid, letter/header count must match gridTemplateColumns tracks (1 corner + N data). Use config.columnHeaders to avoid wrap. */
   const dataColCount = useGrid
@@ -285,15 +284,15 @@ export const Grid: React.FC<GridProps> = ({
         display: 'grid' as const,
         gridTemplateColumns: gridTemplate,
         borderBottom: 1,
-        borderColor: 'divider',
-        background: '#fff',
+        borderColor: 'var(--sheet-grid)',
+        background: 'var(--sheet-bg)',
       }
     : {
         width: '100%',
         minWidth: minTableWidth,
         display: 'flex' as const,
         borderBottom: 1,
-        borderColor: 'divider',
+        borderColor: 'var(--sheet-grid)',
       };
 
   const dataRowSx = useGrid
@@ -316,8 +315,8 @@ export const Grid: React.FC<GridProps> = ({
         display: 'grid' as const,
         gridTemplateColumns: gridTemplate,
         borderBottom: 1,
-        borderColor: 'divider',
-        background: HEADER_BG,
+        borderColor: 'var(--sheet-grid)',
+        background: 'var(--sheet-header-bg)',
       }
     : null;
 
@@ -346,10 +345,10 @@ export const Grid: React.FC<GridProps> = ({
     justifyContent: 'center' as const,
     fontSize: 11,
     fontWeight: 700,
-    color: 'text.secondary',
-    bgcolor: HEADER_BG,
+    color: 'var(--sheet-header-text)',
+    bgcolor: 'var(--sheet-header-bg)',
     borderRight: 1,
-    borderColor: 'divider',
+    borderColor: 'var(--sheet-grid)',
     whiteSpace: 'nowrap' as const,
     wordBreak: 'normal' as const,
     overflowWrap: 'normal' as const,
@@ -362,9 +361,11 @@ export const Grid: React.FC<GridProps> = ({
       sx={{
         width: '100%',
         minWidth: minTableWidth,
-        border: '1px solid #e2e8f0',
+        border: '1px solid var(--sheet-grid)',
         overflow: 'auto',
         maxHeight: '72vh',
+        scrollbarGutter: 'stable',
+        bgcolor: 'var(--sheet-bg)',
       }}
     >
       {/* Sticky container: letters row + column headers */}
@@ -374,7 +375,7 @@ export const Grid: React.FC<GridProps> = ({
             position: 'sticky',
             top: 0,
             zIndex: 5,
-            background: HEADER_BG,
+            background: 'var(--sheet-header-bg)',
           }}
         >
           {/* Letters row (A, B, C, ...) */}
@@ -388,9 +389,9 @@ export const Grid: React.FC<GridProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                bgcolor: HEADER_BG,
+                bgcolor: 'var(--sheet-header-bg)',
                 borderRight: 1,
-                borderColor: 'divider',
+                borderColor: 'var(--sheet-grid)',
                 ...(freezeCols > 0 && {
                   position: 'sticky' as const,
                   left: 0,
@@ -410,7 +411,7 @@ export const Grid: React.FC<GridProps> = ({
                     zIndex: 6,
                     boxShadow: c === freezeCols - 1 ? '2px 0 4px -2px rgba(0,0,0,0.1)' : undefined,
                     borderRight: c === freezeCols - 1 ? '1px solid' : undefined,
-                    borderColor: c === freezeCols - 1 ? 'divider' : undefined,
+                    borderColor: c === freezeCols - 1 ? 'var(--sheet-grid)' : undefined,
                   }),
                 }}
               >
@@ -419,7 +420,7 @@ export const Grid: React.FC<GridProps> = ({
             ))}
           </Box>
           {/* Column headers */}
-          <Box sx={{ ...headerRowSx, background: '#fff' }}>
+          <Box sx={{ ...headerRowSx, background: 'var(--sheet-bg)' }}>
         <Box
           sx={{
             width: ROW_HEADER_WIDTH,
@@ -429,9 +430,9 @@ export const Grid: React.FC<GridProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            bgcolor: HEADER_BG,
+            bgcolor: 'var(--sheet-header-bg)',
             borderRight: 1,
-            borderColor: 'divider',
+            borderColor: 'var(--sheet-grid)',
             position: 'relative',
             ...(freezeCols > 0 && {
               position: 'sticky' as const,
@@ -474,10 +475,10 @@ export const Grid: React.FC<GridProps> = ({
                 justifyContent: 'center',
                 fontSize: 12,
                 fontWeight: 600,
-                color: 'text.secondary',
-                bgcolor: HEADER_BG,
+                color: 'var(--sheet-header-text)',
+                bgcolor: 'var(--sheet-header-bg)',
                 borderRight: 1,
-                borderColor: 'divider',
+                borderColor: 'var(--sheet-grid)',
                 position: 'relative',
                 ...(freezeCols > 0 && c < freezeCols && {
                   position: 'sticky' as const,
@@ -485,7 +486,7 @@ export const Grid: React.FC<GridProps> = ({
                   zIndex: 6,
                   boxShadow: c === freezeCols - 1 ? '2px 0 4px -2px rgba(0,0,0,0.1)' : undefined,
                   borderRight: c === freezeCols - 1 ? '1px solid' : 1,
-                  borderColor: 'divider',
+                  borderColor: 'var(--sheet-grid)',
                 }),
               }}
             >
@@ -563,9 +564,9 @@ export const Grid: React.FC<GridProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              bgcolor: HEADER_BG,
+              bgcolor: 'var(--sheet-header-bg)',
               borderRight: 1,
-              borderColor: 'divider',
+              borderColor: 'var(--sheet-grid)',
             }}
           />
           {Array.from({ length: dataColCount }, (_, c) => {
@@ -589,16 +590,16 @@ export const Grid: React.FC<GridProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: 'text.secondary',
-                  bgcolor: HEADER_BG,
-                  borderRight: 1,
-                  borderColor: 'divider',
-                  position: 'relative',
-                }}
-              >
-                {editingHeaderCol === c ? (
+                fontSize: 12,
+                fontWeight: 600,
+                color: 'var(--sheet-header-text)',
+                bgcolor: 'var(--sheet-header-bg)',
+                borderRight: 1,
+                borderColor: 'var(--sheet-grid)',
+                position: 'relative',
+              }}
+            >
+              {editingHeaderCol === c ? (
                   <TextField
                     inputRef={headerInputRef}
                     value={headerEditValue}
@@ -674,7 +675,7 @@ export const Grid: React.FC<GridProps> = ({
               zIndex: 4,
               boxShadow: r === freezeRows - 1 ? '0 2px 4px -2px rgba(0,0,0,0.1)' : undefined,
               borderBottom: r === freezeRows - 1 ? '1px solid' : undefined,
-              borderColor: r === freezeRows - 1 ? 'divider' : undefined,
+              borderColor: r === freezeRows - 1 ? 'var(--sheet-grid)' : undefined,
             }),
           }}
           data-row={r}
@@ -699,11 +700,11 @@ export const Grid: React.FC<GridProps> = ({
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: 12,
-              color: 'text.secondary',
-              bgcolor: HEADER_BG,
+              color: 'var(--sheet-header-text)',
+              bgcolor: 'var(--sheet-header-bg)',
               borderRight: 1,
               borderBottom: 1,
-              borderColor: 'divider',
+              borderColor: 'var(--sheet-grid)',
               ...(freezeCols > 0 && {
                 position: 'sticky' as const,
                 left: 0,
@@ -801,7 +802,7 @@ export const Grid: React.FC<GridProps> = ({
                     minWidth: 0,
                     boxShadow: c === freezeCols - 1 ? '2px 0 4px -2px rgba(0,0,0,0.1)' : undefined,
                     borderRight: c === freezeCols - 1 ? '1px solid' : undefined,
-                    borderColor: c === freezeCols - 1 ? 'divider' : undefined,
+                    borderColor: c === freezeCols - 1 ? 'var(--sheet-grid)' : undefined,
                   }
                 : { position: 'relative' as const, minWidth: 0 };
             return isBottomRightOfSelection && sourceRange ? (

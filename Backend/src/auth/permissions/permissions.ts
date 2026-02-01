@@ -64,6 +64,8 @@ export const PERMISSIONS = [
   'documents:approve',
 
   // ===== Estimates (КП) =====
+  'estimates:read',
+  'estimates:write',
   'estimates:delete',
 
   // ===== Sheet (table / document sheet) =====
@@ -181,6 +183,8 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
 
     'documents:read',
     'sheet:read',
+    'estimates:read',
+    'estimates:write',
   ],
 
   // ===== Sales =====
@@ -189,6 +193,9 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
     'sales:read',
     'sales:write',
     'sales:approve',
+
+    'estimates:read',
+    'estimates:write',
 
     'warehouse:read',
     'materials:read',
@@ -212,6 +219,9 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
     // legacy aggregate
     'sales:read',
     'sales:write',
+
+    'estimates:read',
+    'estimates:write',
 
     'warehouse:read',
     'materials:read',
@@ -275,6 +285,8 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
     'sheet:write',
     'sheet:approve',
     'sheet:export',
+    'estimates:read',
+    'estimates:write',
   ],
 
   viewer: [
@@ -293,6 +305,7 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
 
     'documents:read',
     'sheet:read',
+    'estimates:read',
   ],
 };
 

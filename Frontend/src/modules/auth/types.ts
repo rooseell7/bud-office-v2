@@ -20,6 +20,7 @@ export type User = {
   bio?: string | null;
   isActive?: boolean;
   roles: Role[] | string[];
+  updatedAt?: string | null;
 };
 
 export type LoginDto = {

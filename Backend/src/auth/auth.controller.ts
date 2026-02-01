@@ -51,6 +51,7 @@ export class AuthController {
       bio: user.bio ?? null,
       roles: roleCodes,
       permissions,
+      updatedAt: user.updatedAt ? user.updatedAt.toISOString() : null,
     };
   }
 }

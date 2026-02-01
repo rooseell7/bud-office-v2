@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Box, Dialog, DialogTitle, DialogContent, IconButton, Snackbar } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { useAuth } from '../../modules/auth/context/AuthContext';
@@ -6,7 +6,7 @@ import { useSheetController } from '../hooks/useSheetController';
 import { useSheetKeymap } from '../hooks/useSheetKeymap';
 import { useSheetClipboard } from '../hooks/useSheetClipboard';
 import { useSheetLocalDraft } from '../hooks/useSheetLocalDraft';
-import { useSheetServerSave } from '../hooks/useSheetServerSave';
+import { useSaveOrchestrator } from '../persist/useSaveOrchestrator';
 import { useSheetServerLoad } from '../hooks/useSheetServerLoad';
 import { useSheetCollab } from '../hooks/useSheetCollab';
 import { SaveIndicator } from './SaveIndicator';
@@ -41,6 +41,7 @@ export const Sheet: React.FC<SheetProps> = ({
   onSaved,
 }) => {
   const isPreview = sheetMode === 'readonly' || readonly;
+  const persistRef = useRef<{ onLocalChange: (m?: { type?: string }) => void } | null>(null);
   const {
     state,
     dispatch,
@@ -71,7 +72,12 @@ export const Sheet: React.FC<SheetProps> = ({
     clearAllFilters,
     setFreezeRows,
     setFreezeCols,
-  } = useSheetController({ config, initialSnapshot, adapter });
+  } = useSheetController({
+    config,
+    initialSnapshot,
+    adapter,
+    onPersistableAction: () => persistRef.current?.onLocalChange?.(),
+  });
 
   const { accessToken } = useAuth();
   const [previewSnapshot, setPreviewSnapshot] = React.useState<SheetSnapshot | null>(null);
@@ -218,18 +224,36 @@ export const Sheet: React.FC<SheetProps> = ({
     [applyOp],
   );
 
-  const saveResult = useSheetServerSave({
+  const persistResult = useSaveOrchestrator({
     state,
     adapter,
     mode: isPreview ? 'readonly' : 'edit',
-    onSaved,
     collabConnected,
     applyOpViaCollab: collabConnected ? applyOpViaCollab : undefined,
-    externalRevision: serverVersion,
+    serverVersion,
+    onServerVersion: (v) => setRevisionRef.current?.(v),
+    onSaved,
   });
-  const { status: saveStatus, errorMessage, setLastSavedSnapshot, setRevision } = saveResult;
-  setLastSavedSnapshotRef.current = setLastSavedSnapshot;
+  persistRef.current = { onLocalChange: persistResult.onLocalChange };
+  const { flushNow, uiState: persistUi, setRevision } = persistResult;
+
+  const saveStatus: import('./SaveIndicator').SaveStatus =
+    persistUi.status === 'clean' ? 'idle'
+    : persistUi.status === 'saved' ? 'saved'
+    : persistUi.status === 'dirty' ? 'dirty'
+    : persistUi.status === 'saving' ? 'saving'
+    : persistUi.status === 'error' ? 'error'
+    : 'idle';
+  const errorMessage = persistUi.lastError ?? '';
+  const setLastSavedSnapshot = persistResult.setLastSavedSnapshot;
   setRevisionRef.current = setRevision;
+
+  useEffect(() => {
+    return () => {
+      void flushNow('unmount');
+    };
+  }, [flushNow]);
+
 
   const handleLoaded = useCallback(
     (snap: SheetSnapshot | null, revision?: number) => {
@@ -271,7 +295,7 @@ export const Sheet: React.FC<SheetProps> = ({
   );
 
   return (
-    <Box sx={{ width: '100%', border: '1px solid #e2e8f0', position: 'relative' }}>
+    <Box sx={{ width: '100%', border: '1px solid var(--sheet-grid)', position: 'relative' }}>
       {isPreview && (
         <Box
           sx={{
@@ -290,7 +314,11 @@ export const Sheet: React.FC<SheetProps> = ({
           Перегляд (read-only)
         </Box>
       )}
-      <SaveIndicator status={saveStatus} message={errorMessage || undefined} />
+      <SaveIndicator
+        status={saveStatus}
+        message={errorMessage || undefined}
+        onRetry={saveStatus === 'error' ? () => void flushNow('retry') : undefined}
+      />
       <Snackbar
         open={!!undoToast}
         message={undoToast ?? ''}

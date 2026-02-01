@@ -33,7 +33,6 @@ export type CellProps = {
 
 const ROW_HEIGHT = 28;
 const COL_WIDTH = 100;
-const ACTIVE_BORDER = '#1976d2';
 
 function getNumberFormat(
   cellStyle?: CellStyle,
@@ -101,26 +100,27 @@ export const Cell = React.memo<CellProps>(function Cell({
       ...(wrap
         ? { whiteSpace: 'normal' as const, wordBreak: 'break-word' as const, overflowWrap: 'anywhere' as const, overflow: 'hidden' }
         : { whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis' }),
-      fontWeight: cellStyle?.bold ? 700 : undefined,
+      fontWeight: cellStyle?.bold ? 700 : 500,
       fontStyle: cellStyle?.italic ? 'italic' : undefined,
       textAlign: cellStyle?.align ?? 'left',
       borderRight: 1,
       borderBottom: 1,
-      borderColor: 'divider',
-      outline: isActive ? `2px solid ${ACTIVE_BORDER}` : 'none',
+      borderColor: 'var(--sheet-grid)',
+      outline: isActive ? '2px solid var(--sheet-active-border)' : 'none',
       outlineOffset: -1,
       border: showErrorBorder ? '2px solid #d32f2f' : undefined,
       boxSizing: 'border-box',
       zIndex: isActive ? 1 : 0,
+      color: 'var(--sheet-cell-text)',
       bgcolor: cellStyle?.fill
         ? cellStyle.fill
         : isInFillTarget
-          ? 'rgba(25, 118, 210, 0.12)'
+          ? 'var(--sheet-selection)'
           : isActive
-            ? 'rgba(25, 118, 210, 0.08)'
+            ? 'rgba(25, 118, 210, 0.12)'
             : isInSelection
-              ? 'rgba(25, 118, 210, 0.04)'
-              : 'background.paper',
+              ? 'var(--sheet-selection)'
+              : 'var(--sheet-cell-bg)',
     }}
   >
     {isEditingThis ? (

@@ -1,0 +1,260 @@
+/**
+ * Industrial Light — світлий індустріальний стиль
+ * Бетон + blueprint, світло-сірі таблиці
+ */
+
+:root {
+  /* BASE */
+  --bg-app: #e7e8ea;
+  --bg-app-overlay: rgba(255, 255, 255, 0.4);
+
+  /* SURFACES */
+  --surface-0: rgba(255, 255, 255, 0.55);
+  --surface-1: rgba(255, 255, 255, 0.72);
+  --surface-2: rgba(245, 246, 248, 0.92);
+
+  /* HEADER/SIDEBAR */
+  --header-bg: rgba(28, 30, 32, 0.88);
+  --sidebar-bg: rgba(32, 34, 36, 0.86);
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+
+  /* TEXT */
+  --text: #1d1f21;
+  --text-muted: rgba(29, 31, 33, 0.65);
+
+  --text-on-dark: rgba(255, 255, 255, 0.92);
+  --text-on-dark-muted: rgba(255, 255, 255, 0.7);
+
+  /* DIVIDERS */
+  --line: rgba(0, 0, 0, 0.08);
+  --line-strong: rgba(0, 0, 0, 0.14);
+
+  /* ACCENT */
+  --accent: #7ac854;
+  --accent-2: #5fa93e;
+  --accent-soft: rgba(122, 200, 84, 0.18);
+
+  /* SHADOW */
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  --shadow-strong: 0 14px 40px rgba(0, 0, 0, 0.18);
+
+  /* RADIUS */
+  --r-lg: 18px;
+  --r-md: 14px;
+
+  /* ANIM */
+  --t: 140ms ease-out;
+}
+
+/* --- Base typography --- */
+html {
+  font-size: 16px;
+}
+body {
+  font-size: 14px;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+/* --- Background: світлий + blueprint сітка (CSS-only) --- */
+body {
+  margin: 0;
+  background: var(--bg-app);
+  color: var(--text);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 59px, rgba(0,0,0,0.03) 59px, rgba(0,0,0,0.03) 60px),
+    repeating-linear-gradient(90deg, transparent, transparent 59px, rgba(0,0,0,0.03) 59px, rgba(0,0,0,0.03) 60px);
+  background-size: 60px 60px;
+  z-index: 0;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- MAIN — прозорий --- */
+.boMain,
+main {
+  background: transparent !important;
+  background-color: transparent !important;
+  backdrop-filter: none !important;
+}
+
+/* --- Content panel (boPage) — легка панель, НЕ full-screen --- */
+.boPage {
+  width: min(1400px, calc(100% - 48px));
+  margin: 22px auto;
+  padding: 18px;
+  border-radius: var(--r-lg);
+
+  background: var(--surface-0);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(6px);
+}
+
+/* --- Header — графіт --- */
+.boHeader {
+  background-color: var(--header-bg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-on-dark);
+  box-shadow: var(--shadow);
+}
+
+.boBrand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+  min-width: 380px;
+}
+
+.boBrand img {
+  display: block;
+  flex: 0 0 auto;
+  width: auto !important;
+  max-width: none !important;
+}
+
+.boCrane {
+  height: 28px;
+  opacity: 0.75;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
+}
+
+.boLogo {
+  height: 36px;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
+}
+
+/* --- Sidebar --- */
+.boSidebar {
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
+  color: var(--text-on-dark);
+}
+
+.boNavSection {
+  color: var(--text-on-dark-muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+  margin: 14px 12px 6px;
+}
+
+.boNavItem {
+  color: var(--text-on-dark);
+  border-left: 3px solid transparent;
+  border-radius: 12px;
+  margin: 4px 10px;
+  padding: 10px 12px;
+  transition: background var(--t), border-color var(--t);
+}
+
+.boNavItem:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.boNavItem.isActive {
+  background: rgba(122, 200, 84, 0.16);
+  border-left-color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(122, 200, 84, 0.2);
+}
+
+.boNavIcon {
+  opacity: 0.85;
+}
+
+.boNavItem.isActive .boNavIcon {
+  color: var(--accent);
+  opacity: 1;
+}
+
+/* --- Table wrap --- */
+.boTableWrap {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+/* --- MUI Table --- */
+.MuiTableContainer-root {
+  background: var(--surface-2);
+}
+
+.MuiTableHead-root {
+  background: rgba(235, 237, 240, 0.95);
+}
+
+.MuiTableCell-root {
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+}
+
+.MuiTableRow-root:hover {
+  background: rgba(122, 200, 84, 0.08);
+}
+
+/* --- MUI DataGrid --- */
+.MuiDataGrid-root {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+}
+
+.MuiDataGrid-columnHeaders {
+  background: rgba(235, 237, 240, 0.95);
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.MuiDataGrid-cell,
+.MuiDataGrid-columnHeader {
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.MuiDataGrid-row:hover {
+  background: rgba(122, 200, 84, 0.08);
+}
+
+/* --- Buttons --- */
+.boBtnPrimary {
+  background: var(--accent);
+  color: #0f140f;
+  border-radius: 12px;
+}
+
+.boBtnPrimary:hover {
+  background: var(--accent-2);
+}
+
+/* --- Inputs --- */
+.MuiInputBase-root {
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 12px;
+}
+
+/* --- Dropdown --- */
+.boMenu {
+  background: rgba(32, 34, 36, 0.95);
+  border: 1px solid var(--sidebar-border);
+  box-shadow: var(--shadow-strong);
+}
+
+.boMenuItem:hover {
+  background: rgba(255, 255, 255, 0.06);
+}

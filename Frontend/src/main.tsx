@@ -10,6 +10,7 @@ import App from './App';
 import { AuthProvider } from './modules/auth/context/AuthContext';
 
 import './index.css';
+import './shared/theme/variant3.css';
 import { muiTheme } from './theme/muiTheme';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

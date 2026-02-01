@@ -6,12 +6,9 @@ import {
   AppBar,
   Box,
   Toolbar,
-  Typography,
   Button,
   IconButton,
   Drawer,
-  List,
-  ListSubheader,
   ListItemButton,
   ListItemIcon,
   ListItemText,
@@ -87,47 +84,44 @@ const MainLayout: React.FC = () => {
       <AppBar
         position="fixed"
         elevation={0}
+        className="boHeader"
         sx={{
           zIndex: (t) => t.zIndex.drawer + 1,
-          backgroundColor: BRAND.primary,
-          borderBottom: `1px solid rgba(255,255,255,0.08)`,
         }}
       >
         <Toolbar sx={{ gap: 2 }}>
-          <Typography
-            component={Link}
+          <Link
             to="/home"
-            variant="h6"
+            className="boBrand"
             aria-label="BUD Office — на головну"
-            sx={{
-              fontWeight: 800,
-              color: '#fff',
-              letterSpacing: 0.2,
-              textDecoration: 'none',
-              cursor: 'pointer',
-              '&:hover': { color: 'rgba(255,255,255,0.95)', textDecoration: 'underline' },
-            }}
+            style={{ textDecoration: 'none' }}
           >
-            BUD Office
-          </Typography>
+            <span className="boBrandLogo">BUD Office</span>
+          </Link>
 
           <Box sx={{ flex: 1 }} />
 
           {user && (
-            <Typography
-              component={Link}
+            <Link
               to="/profile"
-              variant="body2"
-              aria-label="Перейти до профілю"
-              sx={{
-                color: 'rgba(255,255,255,0.82)',
-                cursor: 'pointer',
+              style={{
+                color: 'var(--text-secondary)',
                 textDecoration: 'none',
-                '&:hover': { color: '#fff', textDecoration: 'underline' },
+                fontSize: '0.875rem',
+                transition: 'color var(--anim-fast)',
               }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--text-primary)';
+                e.currentTarget.style.textDecoration = 'underline';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--text-secondary)';
+                e.currentTarget.style.textDecoration = 'none';
+              }}
+              aria-label="Перейти до профілю"
             >
               {user.fullName}
-            </Typography>
+            </Link>
           )}
           {can('users:read') && (
             <IconButton
@@ -135,8 +129,13 @@ const MainLayout: React.FC = () => {
               to="/admin/users"
               size="small"
               sx={{
-                color: 'rgba(255,255,255,0.9)',
-                '&:hover': { color: '#fff', bgcolor: 'rgba(255,255,255,0.1)' },
+                color: 'var(--text-primary)',
+                borderRadius: '10px',
+                transition: 'all 120ms ease-out',
+                '&:hover': {
+                  color: BRAND.accent,
+                  backgroundColor: 'rgba(255,255,255,0.06)',
+                },
               }}
               aria-label="Меню адміна"
             >
@@ -146,10 +145,17 @@ const MainLayout: React.FC = () => {
           <Button
             onClick={logout}
             variant="outlined"
+            size="small"
             sx={{
-              borderColor: 'rgba(255,255,255,0.35)',
-              color: '#fff',
-              '&:hover': { borderColor: 'rgba(255,255,255,0.65)' },
+              borderColor: 'var(--divider)',
+              color: 'var(--text-primary)',
+              borderRadius: '10px',
+              transition: 'all 120ms ease-out',
+              '&:hover': {
+                borderColor: BRAND.accent,
+                color: BRAND.accent,
+                backgroundColor: BRAND.accentGlow,
+              },
             }}
           >
             Вийти
@@ -159,91 +165,84 @@ const MainLayout: React.FC = () => {
 
       <Drawer
         variant="permanent"
-        sx={{
-          width: drawerWidth,
-          flexShrink: 0,
-          [`& .MuiDrawer-paper`]: {
+        sx={{ width: drawerWidth, flexShrink: 0 }}
+        PaperProps={{
+          className: 'boSidebar',
+          sx: {
             width: drawerWidth,
             boxSizing: 'border-box',
-            backgroundColor: BRAND.primary,
-            borderRight: `1px solid rgba(255,255,255,0.08)`,
-            color: '#fff',
+            overflow: 'hidden',
           },
         }}
       >
         <Toolbar />
-        <Box sx={{ px: 1, py: 1 }}>
-          <List
-            disablePadding
-            subheader={
-              <ListSubheader
-                component="div"
-                disableSticky
-                sx={{
-                  bgcolor: 'transparent',
-                  color: 'rgba(255,255,255,0.72)',
-                  px: 2,
-                  py: 1,
-                }}
-              >
-                Навігація
-              </ListSubheader>
-            }
-          >
-            {navGroups.map((group) => (
-              <Box key={group.title} sx={{ pb: 1 }}>
-                <Typography
-                  variant="overline"
+        <Box
+          sx={{
+            height: '100%',
+            px: 1,
+            py: 1,
+            overflow: 'auto',
+          }}
+        >
+          {navGroups.map((group, idx) => (
+            <Box key={group.title} sx={{ mt: idx === 0 ? 0 : undefined }}>
+              <Box component="div" className="boNavSection" sx={{ px: 2, py: 0.5 }}>
+                {group.title}
+              </Box>
+
+              {group.items.map((item) => (
+                <ListItemButton
+                  key={item.to}
+                  component={NavLink}
+                  to={item.to}
+                  className={({ isActive }) => `boNavItem ${isActive ? 'isActive' : ''}`}
                   sx={{
-                    px: 2,
-                    color: BRAND.accent,
-                    letterSpacing: '0.08em',
+                    borderRadius: 2,
+                    mx: 1,
+                    my: 0.5,
+                    py: 1,
+                    '& .MuiListItemIcon-root': { minWidth: 40 },
+                    '& .MuiListItemText-primary': { fontWeight: 500, fontSize: '0.875rem' },
                   }}
                 >
-                  {group.title}
-                </Typography>
+                  <ListItemIcon className="boNavIcon">{item.icon}</ListItemIcon>
+                  <ListItemText primary={item.label} />
+                </ListItemButton>
+              ))}
+            </Box>
+          ))}
 
-                {group.items.map((item) => (
-                  <ListItemButton
-                    key={item.to}
-                    component={NavLink}
-                    to={item.to}
-                    sx={{
-                      borderRadius: 2,
-                      mx: 1,
-                      my: 0.5,
-                      color: '#fff',
-                      '& .MuiListItemIcon-root': { color: 'rgba(255,255,255,0.8)' },
-                      '&.active': {
-                        bgcolor: 'rgba(205,214,41,0.16)',
-                        '& .MuiListItemIcon-root': { color: BRAND.accent },
-                        '& .MuiListItemText-primary': { fontWeight: 700 },
-                      },
-                      '&:hover': {
-                        bgcolor: 'rgba(255,255,255,0.06)',
-                      },
-                    }}
-                  >
-                    <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
-                    <ListItemText primary={item.label} />
-                  </ListItemButton>
-                ))}
-              </Box>
-            ))}
-          </List>
+          <Divider sx={{ my: 1.5, borderColor: 'var(--divider)' }} />
 
-          <Divider sx={{ my: 1.5 }} />
-
-          <Typography variant="caption" sx={{ px: 2, color: 'rgba(255,255,255,0.6)' }}>
+          <Box
+            component="span"
+            sx={{
+              px: 2,
+              color: 'var(--text-secondary)',
+              fontSize: '0.7rem',
+              display: 'block',
+            }}
+          >
             BUD Office v2.1 — структура меню затверджена
-          </Typography>
+          </Box>
         </Box>
       </Drawer>
 
-      <Box component="main" sx={{ flex: 1, bgcolor: 'background.default' }}>
+      <Box
+        component="main"
+        className="boMain"
+        sx={{
+          flex: 1,
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
         <Toolbar />
-        <Box sx={{ p: 3 }}>
-          <Outlet />
+        <Box sx={{ flex: 1 }}>
+          <Box className="boContentPanel">
+            <Outlet />
+          </Box>
         </Box>
       </Box>
     </Box>

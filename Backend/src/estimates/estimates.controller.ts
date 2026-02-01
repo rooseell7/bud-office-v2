@@ -1,10 +1,13 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
+  NotFoundException,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Query,
   Req,
@@ -15,6 +18,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { Permissions } from '../auth/decorators/permissions.decorator';
 import { EstimatesService } from './estimates.service';
+import { CreateStageDto } from './dto/create-stage.dto';
+import { UpdateStageDto } from './dto/update-stage.dto';
 
 function getUserId(req: Request): number | null {
   const anyReq = req as any;
@@ -28,14 +33,14 @@ function getUserId(req: Request): number | null {
 export class EstimatesController {
   constructor(private readonly service: EstimatesService) {}
 
-  @Permissions('documents:read', 'sheet:read')
+  @Permissions('documents:read', 'sheet:read', 'estimates:read')
   @Get('recent')
   findRecent(@Query('limit') limit?: string) {
     const lim = limit ? Math.min(parseInt(limit, 10) || 10, 50) : 10;
     return this.service.findRecent(lim);
   }
 
-  @Permissions('documents:read', 'sheet:read')
+  @Permissions('documents:read', 'sheet:read', 'estimates:read')
   @Get()
   findByProject(
     @Query('projectId') projectId: string,
@@ -47,7 +52,7 @@ export class EstimatesController {
     return this.service.findByProject(pid, lim);
   }
 
-  @Permissions('documents:write', 'sheet:write')
+  @Permissions('documents:write', 'sheet:write', 'estimates:write')
   @Post()
   create(
     @Body() body: { projectId: number; title?: string },
@@ -60,5 +65,72 @@ export class EstimatesController {
   @Delete(':id')
   delete(@Param('id', ParseIntPipe) id: number) {
     return this.service.delete(id);
+  }
+
+  @Permissions('documents:read', 'sheet:read', 'estimates:read')
+  @Get(':id/document')
+  getDocumentWithStages(@Param('id', ParseIntPipe) id: number) {
+    return this.service.getDocumentWithStages(id);
+  }
+
+  @Permissions('documents:read', 'sheet:read', 'estimates:read')
+  @Get(':id/stages')
+  async getStages(@Param('id', ParseIntPipe) id: number) {
+    const doc = await this.service.getDocumentWithStages(id);
+    return { stages: doc.stages };
+  }
+
+  @Permissions('documents:write', 'sheet:write', 'estimates:write')
+  @Post(':id/stages')
+  createStage(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateStageDto,
+  ) {
+    return this.service.createStage(id, dto);
+  }
+
+  @Permissions('documents:write', 'sheet:write', 'estimates:write')
+  @Patch(':id/stages/:stageId')
+  updateStage(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('stageId') stageId: string,
+    @Body() dto: UpdateStageDto,
+  ) {
+    return this.service.updateStage(id, stageId, dto);
+  }
+
+  @Permissions('documents:write', 'sheet:write', 'estimates:write')
+  @Delete(':id/stages/:stageId')
+  deleteStage(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('stageId') stageId: string,
+  ) {
+    return this.service.deleteStage(id, stageId);
+  }
+
+  @Permissions('documents:read', 'sheet:read', 'estimates:read')
+  @Get(':id/sheet')
+  async getSheet(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('docKey') docKey: string,
+  ) {
+    if (!docKey?.trim()) throw new BadRequestException('docKey required');
+    const result = await this.service.getSheetByDocKey(docKey.trim());
+    if (!result) throw new NotFoundException('Sheet not found');
+    return result;
+  }
+
+  @Permissions('documents:write', 'sheet:write', 'estimates:write')
+  @Patch(':id/sheet')
+  async saveSheet(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { docKey: string; snapshot: Record<string, any>; expectedRevision?: number },
+  ) {
+    if (!body.docKey?.trim()) throw new BadRequestException('docKey required');
+    return this.service.saveSheetByDocKey(
+      body.docKey.trim(),
+      body.snapshot,
+      body.expectedRevision,
+    );
   }
 }

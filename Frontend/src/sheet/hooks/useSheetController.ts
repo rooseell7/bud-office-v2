@@ -2,7 +2,7 @@
  * Sheet controller hook. Canonical sheet: src/sheet/**
  */
 
-import { useReducer, useCallback } from 'react';
+import React, { useReducer, useCallback, useRef } from 'react';
 import {
   createInitialState,
   createInitialStateFromSnapshot,
@@ -53,6 +53,8 @@ export type UseSheetControllerOptions = {
   config?: Partial<SheetConfig>;
   initialSnapshot?: SheetSnapshot | null;
   adapter?: { getDraftKey?(): string | null };
+  /** Called after persistable actions (commit, format, paste, etc.) */
+  onPersistableAction?: (actionType: string) => void;
 };
 
 const DEFAULT_CONFIG: SheetConfig = {
@@ -60,11 +62,21 @@ const DEFAULT_CONFIG: SheetConfig = {
   rowCount: 100,
 };
 
+const PERSISTABLE_ACTIONS = new Set([
+  'COMMIT_EDIT', 'SET_VALUE', 'APPLY_STYLES', 'PASTE_TSV',
+  'INSERT_ROW', 'INSERT_COLUMN', 'RENAME_COLUMN', 'DELETE_ROW', 'DELETE_COLUMN',
+  'DELETE_COLUMNS_BATCH', 'DELETE_ROWS_BATCH', 'SET_COLUMN_FORMULA', 'APPLY_FILL',
+  'SORT_ROWS', 'SET_FILTERS_ENABLED', 'SET_COLUMN_FILTER', 'CLEAR_ALL_FILTERS',
+  'RESIZE_COLUMN', 'RESIZE_COLUMN_WITH_REFLOW', 'RESIZE_ROW', 'UNDO', 'REDO',
+]);
+
 export function useSheetController(options: UseSheetControllerOptions = {}) {
   const config = { ...DEFAULT_CONFIG, ...options.config };
   const { rowCount, colCount } = config;
+  const onPersistableRef = useRef(options.onPersistableAction);
+  onPersistableRef.current = options.onPersistableAction;
 
-  const [state, dispatch] = useReducer<React.Reducer<SheetState, SheetAction>>(
+  const [state, dispatchBase] = useReducer<React.Reducer<SheetState, SheetAction>>(
     sheetReducer,
     { config, snapshot: options.initialSnapshot ?? null },
     (init: { config: SheetConfig; snapshot: SheetSnapshot | null }) => {
@@ -90,6 +102,13 @@ export function useSheetController(options: UseSheetControllerOptions = {}) {
       );
     },
   );
+
+  const dispatch = useCallback((action: SheetAction) => {
+    dispatchBase(action);
+    if (PERSISTABLE_ACTIONS.has(action.type)) {
+      onPersistableRef.current?.(action.type);
+    }
+  }, []);
 
   const setActiveCell = useCallback((coord: CellCoord) => {
     dispatch({ type: SET_ACTIVE_CELL, payload: coord });

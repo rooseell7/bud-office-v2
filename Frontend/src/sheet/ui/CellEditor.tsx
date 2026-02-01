@@ -33,9 +33,11 @@ export const CellEditor: React.FC<CellEditorProps> = ({
         margin: 1,
         padding: '0 8px',
         fontSize: 13,
-        border: '2px solid #1976d2',
+        border: '2px solid var(--sheet-active-border)',
         outline: 'none',
         boxSizing: 'border-box',
+        background: 'var(--sheet-cell-bg)',
+        color: 'var(--sheet-cell-text)',
       }}
     />
   );
