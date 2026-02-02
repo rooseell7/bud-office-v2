@@ -39,6 +39,7 @@ export function serialize(state: SheetState): SheetSnapshot {
     filtersEnabled: state.filtersEnabled ?? undefined,
     filters: state.filters && Object.keys(state.filters).length > 0 ? { ...state.filters } : undefined,
     freeze: state.freeze && (state.freeze.rows > 0 || state.freeze.cols > 0) ? { ...state.freeze } : undefined,
+    cellComments: state.cellComments && Object.keys(state.cellComments).length > 0 ? { ...state.cellComments } : undefined,
   };
 }
 
@@ -87,6 +88,7 @@ export function hydrate(
     rowHeights: snapshot.rowHeights != null ? rowHeights : baseState.rowHeights,
     cellErrors: snapshot.cellErrors ? { ...snapshot.cellErrors } : baseState.cellErrors,
     freeze: snapshot.freeze ?? baseState.freeze,
+    cellComments: snapshot.cellComments ? { ...snapshot.cellComments } : baseState.cellComments,
   };
 }
 

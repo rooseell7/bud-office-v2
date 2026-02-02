@@ -49,7 +49,7 @@ export function createPasteCommand(
         next = shiftFormulaRefsForPaste(next, startRow, startCol);
       }
       const colDef = columns?.[c];
-      const { error } = validateCellByColumnType(next, colDef?.type, locale);
+      const { error } = validateCellByColumnType(next, colDef?.type, locale, { min: 0 });
       valueChanges.push({ row: r, col: c, prev, next, nextError: error ?? null });
 
       if (norm.suggestedType && norm.suggestedType !== 'text') {

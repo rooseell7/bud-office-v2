@@ -33,6 +33,7 @@ import {
   CLEAR_ALL_FILTERS,
   SET_FREEZE_ROWS,
   SET_FREEZE_COLS,
+  SET_CELL_COMMENT,
   START_EDIT,
   UPDATE_EDITOR_VALUE,
   CANCEL_EDIT,
@@ -63,7 +64,7 @@ const DEFAULT_CONFIG: SheetConfig = {
 };
 
 const PERSISTABLE_ACTIONS = new Set([
-  'COMMIT_EDIT', 'SET_VALUE', 'APPLY_STYLES', 'PASTE_TSV',
+  'COMMIT_EDIT', 'SET_VALUE', 'APPLY_STYLES', 'PASTE_TSV', 'SET_CELL_COMMENT',
   'INSERT_ROW', 'INSERT_COLUMN', 'RENAME_COLUMN', 'DELETE_ROW', 'DELETE_COLUMN',
   'DELETE_COLUMNS_BATCH', 'DELETE_ROWS_BATCH', 'SET_COLUMN_FORMULA', 'APPLY_FILL',
   'SORT_ROWS', 'SET_FILTERS_ENABLED', 'SET_COLUMN_FILTER', 'CLEAR_ALL_FILTERS',
@@ -314,6 +315,10 @@ export function useSheetController(options: UseSheetControllerOptions = {}) {
     dispatch({ type: SET_FREEZE_COLS, payload: count });
   }, []);
 
+  const setCellComment = useCallback((row: number, col: number, text: string) => {
+    dispatch({ type: SET_CELL_COMMENT, payload: { row, col, text } });
+  }, []);
+
   return {
     state,
     dispatch,
@@ -347,5 +352,6 @@ export function useSheetController(options: UseSheetControllerOptions = {}) {
     clearAllFilters,
     setFreezeRows,
     setFreezeCols,
+    setCellComment,
   };
 }

@@ -27,3 +27,9 @@ export { useDocumentsAdapter } from './hooks/useDocumentsAdapter';
 export { useSheetCollab } from './hooks/useSheetCollab';
 export { CollabClient } from './collab/collabClient';
 export { computeQuoteTotals, getInitialQuoteSnapshot } from './adapters/quoteAdapter';
+export {
+  computeSheetTotals,
+  formatUaMoney,
+  formatPercent,
+  type SheetTotals,
+} from './utils/computeTotals';

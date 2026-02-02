@@ -122,7 +122,7 @@ export const EstimateIndexPage: React.FC = () => {
     setError(null);
     try {
       const { id } = await createEstimate({ projectId: selectedProjectId });
-      navigate(`/estimate/${id}`);
+      navigate(`/estimate/${id}`, { state: { from: '/estimate' } });
     } catch (e: any) {
       setError(e?.response?.data?.message || 'Не вдалося створити КП');
     } finally {
@@ -264,17 +264,17 @@ export const EstimateIndexPage: React.FC = () => {
                       </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', gap: 0.5, ml: 1, flexShrink: 0 }}>
-                      <Tooltip title="Поки недоступно">
-                        <span>
-                          <Button size="small" disabled>
-                            Відкрити
-                          </Button>
-                        </span>
-                      </Tooltip>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => navigate(`/estimate/${e.id}?mode=read`, { state: { from: '/estimate' } })}
+                      >
+                        Відкрити
+                      </Button>
                       <Button
                         size="small"
                         variant="contained"
-                        onClick={() => navigate(`/estimate/${e.id}`)}
+                        onClick={() => navigate(`/estimate/${e.id}`, { state: { from: '/estimate' } })}
                       >
                         Редагувати
                       </Button>
@@ -346,17 +346,17 @@ export const EstimateIndexPage: React.FC = () => {
                       </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', gap: 0.5, ml: 1, flexShrink: 0 }}>
-                      <Tooltip title="Поки недоступно">
-                        <span>
-                          <Button size="small" disabled>
-                            Відкрити
-                          </Button>
-                        </span>
-                      </Tooltip>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => navigate(`/estimate/${e.id}?mode=read`, { state: { from: '/estimate' } })}
+                      >
+                        Відкрити
+                      </Button>
                       <Button
                         size="small"
                         variant="contained"
-                        onClick={() => navigate(`/estimate/${e.id}`)}
+                        onClick={() => navigate(`/estimate/${e.id}`, { state: { from: '/estimate' } })}
                       >
                         Редагувати
                       </Button>

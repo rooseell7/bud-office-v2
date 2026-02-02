@@ -34,7 +34,7 @@ function applyRawAndCompute(state: SheetState, changes: CellChange[], useNext: b
       else delete cellErrors[key];
     } else if (!useNext) {
       const colDef = state.columns?.[c];
-      const { error } = validateCellByColumnType(val, colDef?.type, state.locale);
+      const { error } = validateCellByColumnType(val, colDef?.type, state.locale, { min: 0 });
       if (error) cellErrors[key] = error;
       else delete cellErrors[key];
     }

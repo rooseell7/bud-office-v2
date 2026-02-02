@@ -143,7 +143,29 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         onClose={() => setFillAnchor(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       >
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 0.25, p: 1 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, p: 1 }}>
+          <Box
+            component="button"
+            onClick={() => handleFill('')}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              px: 1,
+              py: 0.5,
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 0.5,
+              cursor: 'pointer',
+              fontSize: 12,
+              bgcolor: 'background.paper',
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+          >
+            <Box sx={{ width: 20, height: 20, border: '1px solid', borderColor: 'divider', borderRadius: 0.25, bgcolor: 'transparent' }} />
+            Без заливки
+          </Box>
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 0.25 }}>
           {FILL_COLORS.map((color) => (
             <Box
               key={color}
@@ -161,6 +183,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               }}
             />
           ))}
+          </Box>
         </Box>
       </Popover>
       <ButtonGroup size="small" disabled={readonly}>

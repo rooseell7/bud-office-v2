@@ -12,11 +12,12 @@ export class WorkItemsService {
     private readonly workItemRepo: Repository<WorkItem>,
   ) {}
 
-  findAll(): Promise<WorkItem[]> {
-    return this.workItemRepo.find({
-      where: { isActive: true },
-      order: { name: 'ASC' },
-    });
+  findAll(q?: string): Promise<WorkItem[]> {
+    const qb = this.workItemRepo.createQueryBuilder('w').where('w.isActive = :active', { active: true });
+    if (q?.trim()) {
+      qb.andWhere('w.name ILIKE :q', { q: `%${q.trim()}%` });
+    }
+    return qb.orderBy('w.name', 'ASC').getMany();
   }
 
   async findOne(id: number): Promise<WorkItem> {

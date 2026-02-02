@@ -111,4 +111,6 @@ export type SheetSnapshot = {
   filters?: Record<string, FilterSpec>;
   /** Freeze panes: N rows from top, N cols from left */
   freeze?: { rows: number; cols: number };
+  /** Cell comments (cellKey -> text) */
+  cellComments?: Record<string, string>;
 };

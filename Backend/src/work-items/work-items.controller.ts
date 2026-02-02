@@ -9,6 +9,7 @@ import {
   Post,
   Patch,
   Delete,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 
@@ -26,10 +27,10 @@ import { Permissions } from '../auth/decorators/permissions.decorator';
 export class WorkItemsController {
   constructor(private readonly workItemsService: WorkItemsService) {}
 
-  @Permissions('delivery:read')
+  @Permissions('delivery:read', 'estimates:read')
   @Get()
-  findAll() {
-    return this.workItemsService.findAll();
+  findAll(@Query('q') q?: string) {
+    return this.workItemsService.findAll(q);
   }
 
   @Permissions('delivery:read')

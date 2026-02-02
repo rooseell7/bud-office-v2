@@ -5,8 +5,6 @@ import { CssBaseline } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
 
 import App from './App';
-
-// ✅ ЄДИНИЙ канонічний AuthProvider
 import { AuthProvider } from './modules/auth/context/AuthContext';
 
 import './index.css';

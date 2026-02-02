@@ -40,9 +40,9 @@ export const SaveIndicator: React.FC<SaveIndicatorProps> = ({
     <Box
       sx={{
         position: 'fixed',
-        top: 8,
-        left: 8,
-        zIndex: 1300,
+        bottom: 16,
+        right: 16,
+        zIndex: 1200,
         px: 1.5,
         py: 0.5,
         borderRadius: 1,

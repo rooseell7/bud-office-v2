@@ -17,8 +17,11 @@ import { ExportButton } from './ExportButton';
 import type { SheetConfig } from '../configs/types';
 import type { SheetSnapshot } from '../engine/types';
 import type { SheetAdapter } from '../adapters/types';
+import { computeSheetTotals, type SheetTotals } from '../utils/computeTotals';
 
 export type SheetMode = 'edit' | 'readonly';
+
+export type TotalsConfig = { sumCol: number; costCol: number };
 
 export type SheetProps = {
   config?: Partial<SheetConfig>;
@@ -29,6 +32,9 @@ export type SheetProps = {
   /** Explicit mode: 'readonly' shows preview badge, disables all edit */
   sheetMode?: SheetMode;
   onSaved?: () => void;
+  /** КП: report totals for sum/cost columns (e.g. Сума=5, Собівартість=7) */
+  totalsConfig?: TotalsConfig | null;
+  onTotalsChange?: (t: SheetTotals) => void;
 };
 
 export const Sheet: React.FC<SheetProps> = ({
@@ -39,6 +45,8 @@ export const Sheet: React.FC<SheetProps> = ({
   readonly = false,
   sheetMode,
   onSaved,
+  totalsConfig = null,
+  onTotalsChange,
 }) => {
   const isPreview = sheetMode === 'readonly' || readonly;
   const persistRef = useRef<{ onLocalChange: (m?: { type?: string }) => void } | null>(null);
@@ -51,8 +59,11 @@ export const Sheet: React.FC<SheetProps> = ({
     extendSelection,
     startEdit,
     updateEditorValue,
+    commitEdit,
+    cancelEdit,
     applyStyles,
     hydrate,
+    setValue,
     setColumnWidth,
     commitColumnResize,
     commitRowResize,
@@ -72,6 +83,7 @@ export const Sheet: React.FC<SheetProps> = ({
     clearAllFilters,
     setFreezeRows,
     setFreezeCols,
+    setCellComment,
   } = useSheetController({
     config,
     initialSnapshot,
@@ -129,6 +141,29 @@ export const Sheet: React.FC<SheetProps> = ({
   const useServerUndoRedo = Boolean(adapter?.requestUndo && adapter?.requestRedo);
 
   useSheetLocalDraft({ state, adapter, onHydrate: hydrate });
+
+  const handleAutocompleteSelect = React.useCallback(
+    (row: number, name: string, unit?: string | null) => {
+      setValue(row, 1, name);
+      if (unit != null && String(unit).trim()) setValue(row, 2, String(unit).trim());
+      cancelEdit();
+    },
+    [setValue, cancelEdit],
+  );
+
+  React.useEffect(() => {
+    if (!totalsConfig || !onTotalsChange) return;
+    const { sumCol, costCol } = totalsConfig;
+    const locale = state.locale ?? { decimalSeparator: ',', argSeparator: ';', thousandsSeparator: ' ' };
+    const t = computeSheetTotals(
+      state.values,
+      state.rowCount,
+      sumCol,
+      costCol,
+      locale,
+    );
+    onTotalsChange(t);
+  }, [state.values, state.rowCount, state.version, totalsConfig, onTotalsChange, state.locale]);
 
   const setLastSavedSnapshotRef = React.useRef<((s: SheetSnapshot | null) => void) | null>(null);
   const setRevisionRef = React.useRef<((v: number) => void) | null>(null);
@@ -280,11 +315,17 @@ export const Sheet: React.FC<SheetProps> = ({
 
   const handleCellSelect = React.useCallback(
     (coord: { row: number; col: number }) => {
+      if (state.isEditing) {
+        const ec = state.editCell;
+        const hasError = ec && state.cellErrors?.[`${ec.row}:${ec.col}`];
+        if (hasError) cancelEdit();
+        else commitEdit();
+      }
       setActiveCell(coord);
       setSelection({ r1: coord.row, c1: coord.col, r2: coord.row, c2: coord.col });
       setSelectionAnchor(coord);
     },
-    [setActiveCell, setSelection, setSelectionAnchor],
+    [state.isEditing, state.editCell, state.cellErrors, commitEdit, cancelEdit, setActiveCell, setSelection, setSelectionAnchor],
   );
 
   const handleExtendSelection = React.useCallback(
@@ -356,6 +397,7 @@ export const Sheet: React.FC<SheetProps> = ({
             }
       }
       onEditorChange={updateEditorValue}
+      onEditorBlur={isPreview ? undefined : commitEdit}
       onColumnResize={isPreview ? undefined : setColumnWidth}
       onColumnResizeCommit={isPreview ? undefined : commitColumnResize}
       onRowResizeCommit={isPreview ? undefined : commitRowResize}
@@ -374,6 +416,17 @@ export const Sheet: React.FC<SheetProps> = ({
       onRenameColumn={isPreview || !config?.allowColumnRename ? undefined : renameColumn}
       onInsertRowAbove={isPreview || !config?.allowRowInsert ? undefined : insertRowAbove}
       onInsertRowBelow={isPreview || !config?.allowRowInsert ? undefined : insertRowBelow}
+      onAddRowAtEnd={
+        isPreview || !config?.allowRowInsert
+          ? undefined
+          : () => {
+              const newRowIdx = state.rowCount;
+              insertRowBelow(state.rowCount - 1);
+              setActiveCell({ row: newRowIdx, col: 1 });
+              setSelection({ r1: newRowIdx, c1: 1, r2: newRowIdx, c2: 1 });
+              setTimeout(() => startEdit(), 0);
+            }
+      }
       onDeleteRow={isPreview || !config?.allowRowDelete ? undefined : deleteRow}
       onSetColumnFormula={
         isPreview || !config?.allowColumnFormulaEdit ? undefined : setColumnFormula
@@ -385,6 +438,8 @@ export const Sheet: React.FC<SheetProps> = ({
       onClearAllFilters={isPreview || !config?.allowFilter ? undefined : clearAllFilters}
       onSetFreezeRows={isPreview || !config?.allowFreeze ? undefined : setFreezeRows}
       onSetFreezeCols={isPreview || !config?.allowFreeze ? undefined : setFreezeCols}
+      onAutocompleteSelect={config?.autocompleteForColumn ? handleAutocompleteSelect : undefined}
+      onSetCellComment={config?.allowCellComments && !isPreview ? setCellComment : undefined}
     />
       {previewSnapshot && (
         <Dialog

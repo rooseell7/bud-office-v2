@@ -1,5 +1,5 @@
-import React, { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
 import LoginPage from './modules/auth/LoginPage';
 import { ProtectedRoute } from './modules/auth/ProtectedRoute';
@@ -53,27 +53,23 @@ import ForbiddenPage from './pages/ForbiddenPage';
 import { SheetDemoPage } from './pages/sheet/SheetDemoPage';
 // ✅ КП index + editor
 import { EstimateIndexPage } from './pages/estimate/EstimateIndexPage';
+import { EstimateByIdPage } from './pages/estimate/EstimateByIdPage';
 
-// Lazy: sheet module великий — відкладаємо завантаження до переходу на сторінку
-const EstimateEditorPage = lazy(() =>
-  import('./pages/estimate/EstimateEditorPage').then((m) => ({ default: m.EstimateEditorPage })),
+const RootLayout: React.FC = () => (
+  <ProtectedRoute>
+    <MainLayout />
+  </ProtectedRoute>
 );
 
 const App: React.FC = () => {
+  const location = useLocation();
   return (
     <Routes>
       {/* Публічний роут */}
       <Route path="/login" element={<LoginPage />} />
 
-      {/* Основний CRM-кабінет */}
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <MainLayout />
-          </ProtectedRoute>
-        }
-      >
+      {/* Основний CRM-кабінет — key примушує unmount при зміні маршруту (без location prop) */}
+      <Route path="/" element={<RootLayout key={location.key ?? location.pathname} />}>
         {/* ✅ Перша сторінка після логіну */}
         <Route index element={<Navigate to="/home" replace />} />
 
@@ -111,14 +107,7 @@ const App: React.FC = () => {
         <Route path="estimate/acts" element={<ActsPage />} />
         <Route path="estimate/quotes" element={<QuotesPage />} />
         <Route path="estimate/invoices" element={<InvoicesPage />} />
-        <Route
-          path="estimate/:id"
-          element={
-            <Suspense fallback={<div style={{ padding: 24 }}>Завантаження…</div>}>
-              <EstimateEditorPage />
-            </Suspense>
-          }
-        />
+        <Route path="estimate/:id" element={<EstimateByIdPage />} />
 
         {/* ✅ Відділ постачання (alias routes) */}
         <Route path="supply" element={<Navigate to="/supply/invoices" replace />} />

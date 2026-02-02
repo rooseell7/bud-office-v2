@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
   Box,
   Button,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -20,14 +21,19 @@ import {
   Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import HistoryIcon from '@mui/icons-material/History';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { Sheet } from '../../sheet';
+import DownloadIcon from '@mui/icons-material/Download';
+import { Sheet, formatUaMoney, formatPercent, type SheetTotals } from '../../sheet';
 import { worksSheetConfig } from '../../sheet/configs/worksSheetConfig';
 import { materialsSheetConfig } from '../../sheet/configs/materialsSheetConfig';
+import { W_COL } from '../../sheet/configs/worksSheetConfig';
+import { M_COL } from '../../sheet/configs/materialsSheetConfig';
 import { useStageSheetAdapter } from '../../sheet/hooks/useStageSheetAdapter';
 import { useAuth } from '../../modules/auth/AuthContext';
 import {
@@ -35,19 +41,46 @@ import {
   createStage,
   updateStage,
   deleteStage,
+  duplicateStage,
+  exportEstimateXlsx,
   buildDocKey,
   type EstimateStage,
 } from '../../api/estimates';
-import { acquireEditSession, releaseEditSession } from '../../api/documents';
+import { acquireEditSession, releaseEditSession, getSheetHistory } from '../../api/documents';
 import { lsGetJson, lsSetJson } from '../../shared/localStorageJson';
+import { DEBUG_NAV } from '../../shared/config/env';
+import { enableClickDebug } from '../../shared/debug/navDebug';
 
 const HEARTBEAT_INTERVAL_MS = 25000;
+const ESTIMATE_LOCK_COLUMNS = true;
+/** Дозволити додавати колонки зліва/справа через ПКМ (без видалення/перейменування) */
+const ESTIMATE_ALLOW_COLUMN_INSERT = true;
 const LS_FOCUS_MODE = (estimateId: number) => `estimate:${estimateId}:focusMode`;
 const LS_EXPANDED_STAGES = (estimateId: number) => `estimate:${estimateId}:expandedStages`;
+const LS_HIDE_COST = (estimateId: number) => `estimate:${estimateId}:hideCost`;
 
 export const EstimateEditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const loc = useLocation();
+  useEffect(() => {
+    if (!DEBUG_NAV) return;
+    console.log('[EDIT] mount');
+    return () => console.log('[EDIT] unmount');
+  }, []);
+  useEffect(() => {
+    if (!DEBUG_NAV) return;
+    console.log('[EDIT] location:', loc.pathname, 'key:', (loc as any).key);
+  }, [loc.pathname, (loc as any).key]);
+  useEffect(() => {
+    if (!DEBUG_NAV) return;
+    const off = enableClickDebug();
+    return () => off();
+  }, []);
+  const goBack = () => {
+    const target = (loc.state as { from?: string })?.from || '/estimate';
+    window.location.href = target;
+  };
   const { can } = useAuth();
   const estimateId = id ? parseInt(id, 10) : NaN;
   const validId = Number.isFinite(estimateId) && estimateId > 0 ? estimateId : null;
@@ -57,10 +90,13 @@ export const EstimateEditorPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [focusMode, setFocusModeState] = useState<boolean>(true);
   const [expandedStages, setExpandedStages] = useState<Set<string>>(() => new Set());
+  const [viewMode, setViewMode] = useState(false);
+  const [hideCost, setHideCostState] = useState(false);
 
   useEffect(() => {
     if (!validId) return;
     setFocusModeState(lsGetJson(LS_FOCUS_MODE(validId), true));
+    setHideCostState(lsGetJson(LS_HIDE_COST(validId), false));
   }, [validId]);
 
   const setFocusMode = useCallback(
@@ -70,12 +106,24 @@ export const EstimateEditorPage: React.FC = () => {
     },
     [validId],
   );
+  const setHideCost = useCallback(
+    (v: boolean) => {
+      setHideCostState(v);
+      if (validId) lsSetJson(LS_HIDE_COST(validId), v);
+    },
+    [validId],
+  );
   const [activeTabByStage, setActiveTabByStage] = useState<Record<string, number>>({});
   const [renameStageId, setRenameStageId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [deleteConfirmStage, setDeleteConfirmStage] = useState<EstimateStage | null>(null);
   const [addingStage, setAddingStage] = useState(false);
+  const [duplicatingStageId, setDuplicatingStageId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<Awaited<ReturnType<typeof getSheetHistory>>>([]);
   const stageRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [totalsByStage, setTotalsByStage] = useState<Record<string, { works: SheetTotals; materials: SheetTotals }>>({});
 
   const canWrite = can('estimates:write') || can('documents:write') || can('sheet:write');
   const canDeleteStage = canWrite;
@@ -192,51 +240,55 @@ export const EstimateEditorPage: React.FC = () => {
     }
   };
 
-  const getCurrentStageIndex = useCallback(() => {
-    const stages = doc?.stages ?? [];
-    if (stages.length === 0) return -1;
-    let best = 0;
-    let bestTop = Infinity;
-    for (let i = 0; i < stages.length; i++) {
-      const el = stageRefs.current[stages[i].id];
-      if (!el) continue;
-      const top = el.getBoundingClientRect().top;
-      if (top >= -100 && top < bestTop) {
-        bestTop = top;
-        best = i;
-      }
+  const handleDuplicateStage = async (stageId: string) => {
+    if (!validId) return;
+    setDuplicatingStageId(stageId);
+    try {
+      const stage = await duplicateStage(validId, stageId);
+      await loadDoc();
+      setExpandedStages((prev) => {
+        const next = new Set(prev);
+        next.add(stage.id);
+        if (validId) lsSetJson(LS_EXPANDED_STAGES(validId), [...next]);
+        return next;
+      });
+      setActiveTabByStage((prev) => ({ ...prev, [stage.id]: 0 }));
+    } catch {
+      // error handled by loadDoc
+    } finally {
+      setDuplicatingStageId(null);
     }
-    if (bestTop === Infinity) {
-      const firstEl = stages[0] ? stageRefs.current[stages[0].id] : null;
-      const firstTop = firstEl?.getBoundingClientRect().top ?? 0;
-      return firstTop > (typeof window !== 'undefined' ? window.innerHeight : 800) ? 0 : stages.length - 1;
+  };
+
+  const loadHistory = useCallback(async () => {
+    if (!validId) return;
+    try {
+      const h = await getSheetHistory(validId, 20);
+      setHistory(h);
+    } catch {
+      setHistory([]);
     }
-    return best;
-  }, [doc?.stages]);
+  }, [validId]);
 
-  const scrollToStage = useCallback(
-    (index: number) => {
-      const stages = doc?.stages ?? [];
-      const stage = stages[index];
-      if (!stage) return;
-      const el = stageRefs.current[stage.id];
-      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    },
-    [doc?.stages],
-  );
+  useEffect(() => {
+    if (historyOpen && validId) loadHistory();
+  }, [historyOpen, validId, loadHistory]);
 
-  const handleScrollToPrev = useCallback(() => {
-    const i = getCurrentStageIndex();
-    if (i <= 0) return;
-    scrollToStage(i - 1);
-  }, [getCurrentStageIndex, scrollToStage]);
-
-  const handleScrollToNext = useCallback(() => {
-    const stages = doc?.stages ?? [];
-    const i = getCurrentStageIndex();
-    if (i < 0 || i >= stages.length - 1) return;
-    scrollToStage(i + 1);
-  }, [doc?.stages, getCurrentStageIndex, scrollToStage]);
+  const handleExport = useCallback(async () => {
+    if (!validId) return;
+    setExporting(true);
+    try {
+      const blob = await exportEstimateXlsx(validId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `КП-${validId}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  }, [validId]);
 
   const handleDeleteStage = async () => {
     if (!validId || !deleteConfirmStage) return;
@@ -273,7 +325,7 @@ export const EstimateEditorPage: React.FC = () => {
   if (error && !doc) {
     return (
       <Box>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/estimate')}>
+        <Button startIcon={<ArrowBackIcon />} onClick={goBack}>
           Назад
         </Button>
         <Typography color="error" sx={{ mt: 2 }}>
@@ -285,25 +337,47 @@ export const EstimateEditorPage: React.FC = () => {
 
   return (
     <Box className="estimate-editor-full" sx={{ width: '100%', maxWidth: '100%' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
         <Button
           size="small"
           startIcon={<ArrowBackIcon />}
-          onClick={() => navigate('/estimate')}
+          onClick={goBack}
         >
           Назад
         </Button>
         <Typography variant="h6" sx={{ flex: 1 }}>
           {doc?.title ?? `КП #${validId}`}
         </Typography>
-      </Box>
-
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 1 }}>
-        <Typography variant="subtitle2" color="text.secondary" sx={{ mr: 1 }}>
-          Етапи
-        </Typography>
-        {doc?.stages && doc.stages.length > 0 && (
-          <>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+          {canWrite && (
+            <Tooltip title="Режим тільки перегляд — без редагування">
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={viewMode}
+                    onChange={(_, v) => setViewMode(v)}
+                    color="primary"
+                  />
+                }
+                label={<Typography sx={{ fontSize: 12 }}>Тільки перегляд</Typography>}
+              />
+            </Tooltip>
+          )}
+          <Tooltip title="Приховати колонки собівартості">
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={hideCost}
+                  onChange={(_, v) => setHideCost(v)}
+                  color="primary"
+                />
+              }
+              label={<Typography sx={{ fontSize: 12 }}>Приховати собівартість</Typography>}
+            />
+          </Tooltip>
+          {doc?.stages && doc.stages.length > 0 && (
             <Tooltip title="При відкритті етапу інші згортаються">
               <FormControlLabel
                 control={
@@ -315,34 +389,121 @@ export const EstimateEditorPage: React.FC = () => {
                   />
                 }
                 label={
-                  <Typography variant="body2" sx={{ fontSize: 12 }}>
-                    Фокус етапу
-                  </Typography>
+                  <Typography sx={{ fontSize: 12 }}>Фокус етапу</Typography>
                 }
-                sx={{ mr: 0.5 }}
               />
             </Tooltip>
-            <Box sx={{ display: 'flex', gap: 0.5 }}>
-            <Button
-              size="small"
-              variant="outlined"
-              onClick={handleScrollToPrev}
-              sx={{ whiteSpace: 'nowrap' }}
-            >
-              ↑ Попередній етап
-            </Button>
-            <Button
-              size="small"
-              variant="outlined"
-              onClick={handleScrollToNext}
-              sx={{ whiteSpace: 'nowrap' }}
-            >
-              ↓ Наступний етап
-            </Button>
+          )}
+        </Box>
+        <Button
+          size="small"
+          startIcon={<DownloadIcon />}
+          onClick={handleExport}
+          disabled={exporting || !doc?.stages?.length}
+        >
+          {exporting ? '…' : 'Експорт XLSX'}
+        </Button>
+        <Tooltip title={historyOpen ? 'Згорнути історію' : 'Історія змін'}>
+          <IconButton size="small" onClick={() => setHistoryOpen((v) => !v)} color={historyOpen ? 'primary' : 'default'}>
+            <HistoryIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Box>
+      <Collapse in={historyOpen}>
+        <Box sx={{ mb: 2, p: 1.5, bgcolor: 'action.hover', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+          <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            Останні зміни
+          </Typography>
+          {history.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              Історія змін поки відсутня
+            </Typography>
+          ) : (
+            <Box component="ul" sx={{ m: 0, pl: 2.5, fontSize: 13 }}>
+              {history.map((item) => (
+                <li key={`${item.kind}-${item.id}`}>
+                  {item.kind === 'version' ? 'Версія' : 'Оновлення'} #{item.id} ·{' '}
+                  {item.createdAt ? new Date(item.createdAt).toLocaleString('uk-UA') : ''}
+                  {item.note ? ` · ${item.note}` : ''}
+                </li>
+              ))}
+            </Box>
+          )}
+        </Box>
+      </Collapse>
+
+      {doc?.stages && doc.stages.length > 0 && (() => {
+        const agg = doc.stages.reduce(
+          (a, s) => {
+            const t = totalsByStage[s.id];
+            if (t) {
+              a.worksSum += t.works.sum;
+              a.worksCost += t.works.cost;
+              a.materialsSum += t.materials.sum;
+              a.materialsCost += t.materials.cost;
+            }
+            return a;
+          },
+          { worksSum: 0, worksCost: 0, materialsSum: 0, materialsCost: 0 },
+        );
+        const totalSum = agg.worksSum + agg.materialsSum;
+        const totalCost = agg.worksCost + agg.materialsCost;
+        const totalProfit = totalSum - totalCost;
+        const marginPct = totalSum > 0 ? (totalProfit / totalSum) * 100 : 0;
+        const SumRow = ({ label, value }: { label: string; value: string }) => (
+          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
+            <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{label}:</Typography>
+            <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{value}</Typography>
           </Box>
-          </>
-        )}
-        {canWrite && (
+        );
+        return (
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: 2,
+              p: 0.75,
+              mb: 1,
+              borderRadius: 1,
+              bgcolor: 'action.hover',
+              border: '1px solid',
+              borderColor: 'divider',
+              alignItems: 'center',
+            }}
+          >
+            <Typography sx={{ fontSize: 11, fontWeight: 600, color: 'text.secondary', mr: 0.5 }}>
+              Загалом КП
+            </Typography>
+            {hideCost ? (
+              <>
+                <SumRow label="Сума в роботах" value={formatUaMoney(agg.worksSum)} />
+                <SumRow label="Сума в матеріалах" value={formatUaMoney(agg.materialsSum)} />
+                <SumRow label="Всього" value={formatUaMoney(totalSum)} />
+              </>
+            ) : (
+              <>
+                <SumRow label="Роботи: сума" value={formatUaMoney(agg.worksSum)} />
+                <SumRow label="Роботи: собівартість" value={formatUaMoney(agg.worksCost)} />
+                <SumRow label="Роботи: прибуток" value={formatUaMoney(agg.worksSum - agg.worksCost)} />
+                <SumRow label="Матеріали: сума" value={formatUaMoney(agg.materialsSum)} />
+                <SumRow label="Матеріали: собівартість" value={formatUaMoney(agg.materialsCost)} />
+                <SumRow label="Матеріали: прибуток" value={formatUaMoney(agg.materialsSum - agg.materialsCost)} />
+                <SumRow label="Всього: сума" value={formatUaMoney(totalSum)} />
+                <SumRow label="Всього: собівартість" value={formatUaMoney(totalCost)} />
+                <SumRow label="Маржа" value={formatPercent(marginPct)} />
+                <SumRow label="Прибуток" value={formatUaMoney(totalProfit)} />
+              </>
+            )}
+          </Box>
+        );
+      })()}
+
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+        <Typography variant="subtitle2" color="text.secondary" sx={{ mr: 1 }}>
+          Етапи
+        </Typography>
+        {canWrite && !viewMode && (
           <Button
             size="small"
             startIcon={<AddIcon />}
@@ -389,12 +550,19 @@ export const EstimateEditorPage: React.FC = () => {
               onTabChange={(v) =>
                 setActiveTabByStage((prev) => ({ ...prev, [stage.id]: v }))
               }
-              canDelete={canDeleteStage}
+              canEdit={!viewMode && canWrite}
+              canDelete={canDeleteStage && !viewMode}
+              hideCost={hideCost}
               onRenameClick={() => {
                 setRenameStageId(stage.id);
                 setRenameValue(stage.name);
               }}
+              onDuplicateClick={() => handleDuplicateStage(stage.id)}
+              isDuplicating={duplicatingStageId === stage.id}
               onDeleteClick={() => setDeleteConfirmStage(stage)}
+              onTotalsChange={(works, materials) =>
+                setTotalsByStage((prev) => ({ ...prev, [stage.id]: { works, materials } }))
+              }
             />
           </Box>
         ))
@@ -441,6 +609,58 @@ export const EstimateEditorPage: React.FC = () => {
   );
 };
 
+function StageTotalsBlock({
+  worksTotals,
+  materialsTotals,
+  hideCost = false,
+}: {
+  worksTotals: SheetTotals;
+  materialsTotals: SheetTotals;
+  hideCost?: boolean;
+}) {
+  const stageSum = worksTotals.sum + materialsTotals.sum;
+  const stageCost = worksTotals.cost + materialsTotals.cost;
+  const stageProfit = stageSum - stageCost;
+  const marginPct = stageSum > 0 ? (stageProfit / stageSum) * 100 : 0;
+  const SumItem = ({ label, value }: { label: string; value: string }) => (
+    <Box sx={{ display: 'flex', gap: 0.5, fontSize: 12 }}>
+      <span style={{ color: 'var(--mui-palette-text-secondary)' }}>{label}:</span>
+      <span style={{ fontWeight: 600 }}>{value}</span>
+    </Box>
+  );
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-end',
+        gap: 0.25,
+        px: 1.5,
+        py: 0.75,
+        fontSize: 12,
+        bgcolor: 'action.hover',
+        borderRadius: 1,
+        border: '1px solid',
+        borderColor: 'divider',
+      }}
+    >
+      {hideCost ? (
+        <>
+          <SumItem label="Роботи" value={formatUaMoney(worksTotals.sum)} />
+          <SumItem label="Матеріали" value={formatUaMoney(materialsTotals.sum)} />
+          <SumItem label="Етап" value={formatUaMoney(stageSum)} />
+        </>
+      ) : (
+        <>
+          <SumItem label="Роботи" value={`${formatUaMoney(worksTotals.sum)} / соб. ${formatUaMoney(worksTotals.cost)}`} />
+          <SumItem label="Матеріали" value={`${formatUaMoney(materialsTotals.sum)} / соб. ${formatUaMoney(materialsTotals.cost)}`} />
+          <SumItem label="Етап" value={`${formatUaMoney(stageSum)} · маржа ${formatPercent(marginPct)}`} />
+        </>
+      )}
+    </Box>
+  );
+}
+
 type StageAccordionProps = {
   stage: EstimateStage;
   estimateId: number;
@@ -449,9 +669,14 @@ type StageAccordionProps = {
   onCollapse: () => void;
   activeTab: number;
   onTabChange: (v: number) => void;
+  canEdit: boolean;
   canDelete: boolean;
+  hideCost: boolean;
   onRenameClick: () => void;
+  onDuplicateClick: () => void;
+  isDuplicating?: boolean;
   onDeleteClick: () => void;
+  onTotalsChange?: (works: SheetTotals, materials: SheetTotals) => void;
 };
 
 function StageAccordion({
@@ -462,14 +687,45 @@ function StageAccordion({
   onCollapse,
   activeTab,
   onTabChange,
+  canEdit,
   canDelete,
+  hideCost,
   onRenameClick,
+  onDuplicateClick,
+  isDuplicating = false,
   onDeleteClick,
+  onTotalsChange,
 }: StageAccordionProps) {
   const sheetType = activeTab === 0 ? 'works' : 'materials';
   const docKey = buildDocKey(estimateId, stage.id, sheetType);
-  const config = activeTab === 0 ? worksSheetConfig : materialsSheetConfig;
+  const baseConfig = activeTab === 0 ? worksSheetConfig : materialsSheetConfig;
+  const config = ESTIMATE_LOCK_COLUMNS
+    ? {
+        ...baseConfig,
+        allowColumnInsert: ESTIMATE_ALLOW_COLUMN_INSERT,
+        allowColumnDelete: false,
+        allowColumnRename: false,
+      }
+    : baseConfig;
+  const configWithAutocomplete = {
+    ...config,
+    autocompleteForColumn: { colIndex: 1, type: sheetType },
+    hiddenColumns: hideCost ? [6, 7] : undefined,
+    allowCellComments: true,
+    allowFreeze: true,
+  };
   const { adapter, initialSnapshot } = useStageSheetAdapter(estimateId, docKey);
+  const [worksTotals, setWorksTotals] = React.useState<SheetTotals>({ sum: 0, cost: 0, profit: 0 });
+  const [materialsTotals, setMaterialsTotals] = React.useState<SheetTotals>({ sum: 0, cost: 0, profit: 0 });
+
+  React.useEffect(() => {
+    onTotalsChange?.(worksTotals, materialsTotals);
+  }, [worksTotals, materialsTotals, onTotalsChange]);
+
+  const handleTotalsChange = React.useCallback((t: SheetTotals) => {
+    if (sheetType === 'works') setWorksTotals(t);
+    else setMaterialsTotals(t);
+  }, [sheetType]);
 
   return (
     <Accordion
@@ -494,9 +750,21 @@ function StageAccordion({
           <Typography variant="body2" fontWeight={600}>
             {stage.name}
           </Typography>
-          <IconButton size="small" onClick={(e) => { e.stopPropagation(); onRenameClick(); }} aria-label="Перейменувати">
-            <EditIcon fontSize="small" />
-          </IconButton>
+          {canEdit && (
+            <IconButton size="small" onClick={(e) => { e.stopPropagation(); onRenameClick(); }} aria-label="Перейменувати">
+              <EditIcon fontSize="small" />
+            </IconButton>
+          )}
+          {canEdit && (
+            <IconButton
+              size="small"
+              onClick={(e) => { e.stopPropagation(); onDuplicateClick(); }}
+              aria-label="Дублювати"
+              disabled={isDuplicating}
+            >
+              <ContentCopyIcon fontSize="small" />
+            </IconButton>
+          )}
           {canDelete && (
             <IconButton
               size="small"
@@ -521,14 +789,23 @@ function StageAccordion({
           <Tab label="Роботи" sx={{ minHeight: 36, py: 0.5 }} />
           <Tab label="Матеріали" sx={{ minHeight: 36, py: 0.5 }} />
         </Tabs>
-        <Box sx={{ pt: 0.5 }}>
+        <Box sx={{ pt: 0.5, position: 'relative' }}>
           <Sheet
-            config={config}
+            config={configWithAutocomplete}
             adapter={adapter ?? undefined}
             documentId={null}
             initialSnapshot={initialSnapshot}
-            readonly={false}
+            readonly={!canEdit}
+            totalsConfig={sheetType === 'works' ? { sumCol: W_COL.TOTAL, costCol: W_COL.COST_TOTAL } : { sumCol: M_COL.TOTAL, costCol: M_COL.COST_TOTAL }}
+            onTotalsChange={handleTotalsChange}
           />
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.5 }}>
+            <StageTotalsBlock
+              worksTotals={worksTotals}
+              materialsTotals={materialsTotals}
+              hideCost={hideCost}
+            />
+          </Box>
         </Box>
       </AccordionDetails>
     </Accordion>

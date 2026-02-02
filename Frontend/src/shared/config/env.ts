@@ -20,6 +20,10 @@ export const origin =
 /** Build mode: true when vite build --mode production */
 export const isProdLike = _env?.PROD === true;
 
+/** Діагностика навігації: VITE_DEBUG_NAV=1 у .env.local, або у dev за замовчуванням */
+export const DEBUG_NAV =
+  _env?.VITE_DEBUG_NAV === '1' || (_env?.DEV === true && _env?.VITE_DEBUG_NAV !== '0');
+
 /** Vite dev: origin includes port 5173 */
 function isDevOrigin(): boolean {
   return typeof origin === 'string' && (origin.includes('5173') || /localhost:5173/.test(origin));

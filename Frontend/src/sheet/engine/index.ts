@@ -49,6 +49,7 @@ export {
   CLEAR_ALL_FILTERS,
   SET_FREEZE_ROWS,
   SET_FREEZE_COLS,
+  SET_CELL_COMMENT,
   type SheetAction,
   type MoveDirection,
 } from './reducer';

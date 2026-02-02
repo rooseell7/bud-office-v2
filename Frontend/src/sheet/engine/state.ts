@@ -72,6 +72,8 @@ export type SheetState = {
   filters?: Record<string, import('./types').FilterSpec>;
   /** Freeze panes: rows from top, cols from left (0 = no freeze) */
   freeze?: { rows: number; cols: number };
+  /** Cell comments (cellKey -> text) */
+  cellComments?: Record<string, string>;
 };
 
 /** Create initial empty state */
@@ -172,6 +174,7 @@ export function createInitialStateFromSnapshot(
     filtersEnabled: snapshot.filtersEnabled ?? false,
     filters: snapshot.filters ? { ...snapshot.filters } : undefined,
     freeze: snapshot.freeze ?? { rows: 0, cols: 0 },
+    cellComments: snapshot.cellComments ? { ...snapshot.cellComments } : undefined,
     activeCell: { row: 0, col: 0 },
     selection: { r1: 0, c1: 0, r2: 0, c2: 0 },
     isEditing: false,

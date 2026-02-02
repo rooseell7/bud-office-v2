@@ -34,7 +34,7 @@ export function createApplyFillCommand(
 
   for (const { r, c, prevRaw, nextRaw, prevStyle, nextStyle } of changes) {
     const colDef = state.columns?.[c];
-    const { error } = validateCellByColumnType(nextRaw, colDef?.type, state.locale);
+    const { error } = validateCellByColumnType(nextRaw, colDef?.type, state.locale, { min: 0 });
     valueChanges.push({
       row: r,
       col: c,

@@ -5,6 +5,7 @@
 import type { CellCoord, SelectionRange, StylePatch } from './types';
 import type { SheetSnapshot } from './types';
 import type { SheetState } from './state';
+import { cellKey } from './state';
 import { clampCell, normalizeSelection } from './selection';
 import { executeCommand } from './history';
 import { clampColWidth, clampRowHeight } from './resizeConstants';
@@ -84,6 +85,7 @@ export const SET_COLUMN_FILTER = 'SET_COLUMN_FILTER' as const;
 export const CLEAR_ALL_FILTERS = 'CLEAR_ALL_FILTERS' as const;
 export const SET_FREEZE_ROWS = 'SET_FREEZE_ROWS' as const;
 export const SET_FREEZE_COLS = 'SET_FREEZE_COLS' as const;
+export const SET_CELL_COMMENT = 'SET_CELL_COMMENT' as const;
 
 export type MoveDirection = 'down' | 'up' | 'right' | 'left';
 
@@ -146,7 +148,8 @@ export type SheetAction =
     }
   | { type: typeof CLEAR_ALL_FILTERS }
   | { type: typeof SET_FREEZE_ROWS; payload: number }
-  | { type: typeof SET_FREEZE_COLS; payload: number };
+  | { type: typeof SET_FREEZE_COLS; payload: number }
+  | { type: typeof SET_CELL_COMMENT; payload: { row: number; col: number; text: string } };
 
 export function sheetReducer(state: SheetState, action: SheetAction): SheetState {
   switch (action.type) {
@@ -219,11 +222,17 @@ export function sheetReducer(state: SheetState, action: SheetAction): SheetState
       };
     }
     case CANCEL_EDIT: {
+      if (!state.editCell) return state;
+      const { row, col } = state.editCell;
+      const key = cellKey(row, col);
+      const cellErrors = state.cellErrors ? { ...state.cellErrors } : {};
+      delete cellErrors[key];
       return {
         ...state,
         isEditing: false,
         editCell: null,
         editorValue: '',
+        cellErrors: Object.keys(cellErrors).length ? cellErrors : undefined,
       };
     }
     case COMMIT_EDIT: {
@@ -237,8 +246,19 @@ export function sheetReducer(state: SheetState, action: SheetAction): SheetState
       if (_dbg) console.log('[edit] commit start', { cell, value });
       const prev = state.rawValues[r]?.[c] ?? '';
       const colDef = state.columns?.[c];
-      const { error } = validateCellByColumnType(value, colDef?.type, state.locale);
+      const { error } = validateCellByColumnType(value, colDef?.type, state.locale, { min: 0 });
       const nextError = error ?? null;
+      if (nextError) {
+        const key = cellKey(r, c);
+        const cellErrors = { ...(state.cellErrors ?? {}), [key]: nextError };
+        return {
+          ...state,
+          cellErrors: Object.keys(cellErrors).length ? cellErrors : undefined,
+          isEditing: true,
+          editCell: state.editCell,
+          editorValue: value,
+        };
+      }
       const command = createApplyValuesCommand([{ row: r, col: c, prev, next: value, nextError }]);
       const base = {
         ...state,
@@ -534,6 +554,22 @@ export function sheetReducer(state: SheetState, action: SheetAction): SheetState
         columnWidths,
         rowHeights,
         cellErrors,
+        version: (state.version ?? 0) + 1,
+        cellComments: snap.cellComments ? { ...snap.cellComments } : state.cellComments,
+      };
+    }
+    case SET_CELL_COMMENT: {
+      const { row, col, text } = action.payload;
+      const key = cellKey(row, col);
+      const next = { ...(state.cellComments ?? {}) };
+      if (text.trim()) {
+        next[key] = text.trim();
+      } else {
+        delete next[key];
+      }
+      return {
+        ...state,
+        cellComments: Object.keys(next).length > 0 ? next : undefined,
         version: (state.version ?? 0) + 1,
       };
     }

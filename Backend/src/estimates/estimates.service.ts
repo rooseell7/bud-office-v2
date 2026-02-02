@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import * as XLSX from 'xlsx';
 import { Document } from '../documents/document.entity';
 import { Project } from '../projects/project.entity';
 import { User } from '../users/user.entity';
@@ -25,6 +26,10 @@ export type EstimateStage = {
 
 function generateStageId(): string {
   return `stg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function generateRowId(): string {
+  return `row_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function emptyWorksSheet(): Record<string, any> {
@@ -280,6 +285,49 @@ export class EstimatesService {
     return { ok: true };
   }
 
+  /** Дублювати етап: назва + "(копія)", копія worksSheet + materialsSheet + styles */
+  async duplicateStage(estimateId: number, stageId: string) {
+    const doc = await this.getDoc(estimateId);
+    const meta = (doc as any).meta ?? {};
+    const stages = migrateLegacyToStages(meta) as EstimateStage[];
+    const idx = stages.findIndex((s) => s.id === stageId);
+    if (idx < 0) throw new NotFoundException('Етап не знайдено');
+    const src = stages[idx] as EstimateStage;
+    const newId = generateStageId();
+    const maxOrder = stages.reduce((m, s) => Math.max(m, s.order), -1);
+    const copySheet = (sheet: Record<string, any> | undefined): Record<string, any> => {
+      if (!sheet || typeof sheet !== 'object') return emptyWorksSheet();
+      const raw = sheet.rawValues as string[][] | undefined;
+      const vals = sheet.values as string[][] | undefined;
+      const styles = sheet.styles as Record<string, any> | undefined;
+      const cellComments = sheet.cellComments as Record<string, string> | undefined;
+      const rowIds = Array.isArray(sheet.rowIds)
+        ? sheet.rowIds.map(() => generateRowId())
+        : Array.from({ length: (raw ?? vals ?? [[]]).length }, () => generateRowId());
+      return {
+        ...sheet,
+        rawValues: raw ? raw.map((r) => [...r]) : sheet.rawValues,
+        values: vals ? vals.map((r) => [...r]) : sheet.values,
+        styles: styles ? { ...styles } : sheet.styles,
+        cellComments: cellComments ? { ...cellComments } : sheet.cellComments,
+        rowIds,
+      };
+    };
+    const newStage: EstimateStage = {
+      id: newId,
+      name: (src.name || 'Етап').trim() + ' (копія)',
+      order: maxOrder + 1,
+      worksSheet: copySheet(src.worksSheet),
+      materialsSheet: copySheet(src.materialsSheet),
+      worksRevision: 1,
+      materialsRevision: 1,
+    };
+    stages.push(newStage);
+    stages.sort((a, b) => a.order - b.order);
+    await this.ensureAndSaveStages(doc, stages);
+    return { id: newStage.id, name: newStage.name, order: newStage.order };
+  }
+
   /** Отримати snapshot за docKey. */
   async getSheetByDocKey(docKey: string): Promise<{ snapshot: Record<string, any>; revision: number } | null> {
     const parsed = parseDocKey(docKey);
@@ -323,5 +371,42 @@ export class EstimatesService {
     (stages[idx] as any)[revKey] = currentRev + 1;
     await this.ensureAndSaveStages(doc, stages);
     return { revision: currentRev + 1 };
+  }
+
+  /** Експорт КП в XLSX (по етапах: кожен етап = 2 аркуші: Роботи + Матеріали) */
+  async exportXlsx(estimateId: number): Promise<Buffer> {
+    const doc = await this.getDoc(estimateId);
+    const meta = (doc as any).meta ?? {};
+    const stages = migrateLegacyToStages(meta) as EstimateStage[];
+    const wb = XLSX.utils.book_new();
+
+    for (const stage of stages) {
+      const safeName = (stage.name || 'Етап').replace(/[*?:/\\[\]]/g, '_').slice(0, 31);
+      for (const [sheetType, sheet, title] of [
+        ['works', stage.worksSheet, 'Роботи'],
+        ['materials', stage.materialsSheet, 'Матеріали'],
+      ] as const) {
+        const snap = sheet && typeof sheet === 'object' ? sheet : sheetType === 'works' ? emptyWorksSheet() : emptyMaterialsSheet();
+        const cols = snap.columns ?? [];
+        const values = snap.values ?? snap.rawValues ?? [];
+        const colCount = snap.colCount ?? cols.length ?? (values[0]?.length ?? 0);
+        const headers = cols.map((c: any) => c?.title ?? '');
+        const wsData: (string | number)[][] = headers.some(Boolean) ? [headers] : [];
+        for (const row of values) {
+          const r = Array(colCount)
+            .fill('')
+            .map((_, i) => row?.[i] ?? '');
+          wsData.push(r);
+        }
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        const sheetName = `${safeName} - ${title}`.slice(0, 31);
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      }
+    }
+
+    if (wb.SheetNames.length === 0) {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['(порожньо)']]), 'КП');
+    }
+    return Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
   }
 }

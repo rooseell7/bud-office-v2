@@ -34,6 +34,19 @@ export async function getMaterials(): Promise<MaterialDto[]> {
   return [];
 }
 
+export async function searchMaterials(q: string): Promise<{ id: number; name: string; unit?: string | null }[]> {
+  const res = await api.get<MaterialDto[] | PagedMaterialsResponse>('/materials', {
+    params: { q: q.trim(), limit: 20 },
+  });
+  const data: any = res.data;
+  const items = Array.isArray(data) ? data : data?.items ?? [];
+  return items.map((m: any) => ({
+    id: m.id,
+    name: m.name,
+    unit: m.unit ?? m.unitRef?.code ?? null,
+  }));
+}
+
 export type CreateMaterialDto = {
   name: string;
   unit?: string | null;

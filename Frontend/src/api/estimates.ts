@@ -57,6 +57,16 @@ export async function deleteStage(estimateId: number, stageId: string): Promise<
   await api.delete(`/estimates/${estimateId}/stages/${encodeURIComponent(stageId)}`);
 }
 
+export async function duplicateStage(
+  estimateId: number,
+  stageId: string,
+): Promise<EstimateStage> {
+  const res = await api.post<EstimateStage>(
+    `/estimates/${estimateId}/stages/${encodeURIComponent(stageId)}/duplicate`,
+  );
+  return res.data;
+}
+
 export async function getSheetByDocKey(
   estimateId: number,
   docKey: string,
@@ -118,4 +128,11 @@ export async function createEstimate(payload: {
  */
 export async function deleteEstimate(id: number): Promise<void> {
   await deleteDocument(id);
+}
+
+export async function exportEstimateXlsx(estimateId: number): Promise<Blob> {
+  const res = await api.get<Blob>(`/estimates/${estimateId}/export/xlsx`, {
+    responseType: 'blob',
+  });
+  return res.data;
 }

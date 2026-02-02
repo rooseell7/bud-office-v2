@@ -86,4 +86,10 @@ export type SheetConfig = {
   allowFilter?: boolean;
   /** Allow freeze panes via context menu */
   allowFreeze?: boolean;
+  /** Autocomplete for name column (КП): colIndex + dict type */
+  autocompleteForColumn?: { colIndex: number; type: 'works' | 'materials' };
+  /** Hidden column indices (e.g. cost columns when hideCost) */
+  hiddenColumns?: number[];
+  /** Allow cell comments (context menu, indicator) */
+  allowCellComments?: boolean;
 };

@@ -5,6 +5,7 @@ import type { LocaleSettings } from '../configs/types';
 import { defaultLocale } from '../configs/types';
 import { formatForDisplay } from '../engine/number/formatNumber';
 import { CellEditor } from './CellEditor';
+import { CellEditorWithAutocomplete } from './CellEditorWithAutocomplete';
 
 export type CellProps = {
   coord: CellCoord;
@@ -29,6 +30,10 @@ export type CellProps = {
   isEditingThis?: boolean;
   editorValue?: string;
   onEditorChange?: (value: string) => void;
+  onEditorBlur?: () => void;
+  autocompleteType?: 'works' | 'materials';
+  onAutocompleteSelect?: (name: string, unit?: string | null) => void;
+  cellComment?: string;
 };
 
 const ROW_HEIGHT = 28;
@@ -62,6 +67,10 @@ export const Cell = React.memo<CellProps>(function Cell({
   isEditingThis = false,
   editorValue = '',
   onEditorChange,
+  onEditorBlur,
+  autocompleteType,
+  onAutocompleteSelect,
+  cellComment,
   rowHeight = ROW_HEIGHT,
   colWidth = COL_WIDTH,
   flex = false,
@@ -103,8 +112,8 @@ export const Cell = React.memo<CellProps>(function Cell({
       display: 'flex',
       alignItems: wrap ? 'flex-start' : 'center',
       justifyContent: cellStyle?.align === 'center' ? 'center' : cellStyle?.align === 'right' ? 'flex-end' : 'flex-start',
-      px: 1,
-      py: wrap ? 0.5 : 0,
+      px: isEditingThis ? 0 : 1,
+      py: isEditingThis ? 0 : (wrap ? 0.5 : 0),
       fontSize: 13,
       cursor: 'cell',
       ...(wrap
@@ -133,13 +142,43 @@ export const Cell = React.memo<CellProps>(function Cell({
               : 'var(--sheet-cell-bg)',
     }}
   >
-    {isEditingThis ? (
-      <CellEditor
-        value={editorValue}
-        onChange={onEditorChange ?? (() => {})}
-        rowHeight={rowHeight}
-        colWidth={editorWidth > 0 ? editorWidth : (gridCell ? 200 : flex ? 200 : colWidth)}
+    {cellComment && (
+      <Box
+        component="span"
+        title={cellComment}
+        sx={{
+          position: 'absolute',
+          top: 2,
+          right: 2,
+          width: 0,
+          height: 0,
+          borderLeft: '6px solid transparent',
+          borderTop: '6px solid #d32f2f',
+          zIndex: 2,
+        }}
       />
+    )}
+    {isEditingThis ? (
+      autocompleteType && onAutocompleteSelect ? (
+        <CellEditorWithAutocomplete
+          value={editorValue ?? ''}
+          onChange={onEditorChange ?? (() => {})}
+          onBlur={onEditorBlur}
+          onCommit={onEditorBlur}
+          onSelectWithUnit={onAutocompleteSelect}
+          rowHeight={rowHeight}
+          colWidth={editorWidth > 0 ? editorWidth : (gridCell ? 200 : flex ? 200 : colWidth)}
+          type={autocompleteType}
+        />
+      ) : (
+        <CellEditor
+          value={editorValue ?? ''}
+          onChange={onEditorChange ?? (() => {})}
+          onBlur={onEditorBlur}
+          rowHeight={rowHeight}
+          colWidth={editorWidth > 0 ? editorWidth : (gridCell ? 200 : flex ? 200 : colWidth)}
+        />
+      )
     ) : (
       displayValue
     )}

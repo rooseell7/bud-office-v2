@@ -1,6 +1,7 @@
-import React from 'react';
-import { NavLink, Outlet, Link } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { NavLink, Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { DEBUG_NAV } from '../../shared/config/env';
 
 import {
   AppBar,
@@ -13,6 +14,7 @@ import {
   ListItemIcon,
   ListItemText,
   Divider,
+  Typography,
 } from '@mui/material';
 
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
@@ -33,7 +35,24 @@ import { BRAND } from '../../theme/muiTheme';
 const drawerWidth = 260;
 
 const MainLayout: React.FC = () => {
+  const loc = useLocation();
+  const navigate = useNavigate();
   const { user, logout, can } = useAuth();
+  useEffect(() => {
+    if (!DEBUG_NAV) return;
+    console.log('[RR][layout] init, DEBUG_NAV=on');
+    return undefined;
+  }, []);
+  useEffect(() => {
+    if (!DEBUG_NAV) return;
+    console.log('[RR][layout] location:', {
+      pathname: loc.pathname,
+      search: loc.search,
+      hash: loc.hash,
+      key: (loc as any).key,
+      state: (loc as any).state,
+    });
+  }, [loc.pathname, loc.search, loc.hash, (loc as any).key]);
 
   const navGroups = [
     {
@@ -86,18 +105,28 @@ const MainLayout: React.FC = () => {
         elevation={0}
         className="boHeader"
         sx={{
-          zIndex: (t) => t.zIndex.drawer + 1,
+          zIndex: 2147483647,
+          isolation: 'isolate',
         }}
       >
         <Toolbar sx={{ gap: 2 }}>
-          <Link
-            to="/home"
+          <Box
+            component="a"
+            href="/home"
             className="boBrand"
             aria-label="BUD Office — на головну"
-            style={{ textDecoration: 'none' }}
+            onClick={(e) => {
+              e.preventDefault();
+              if (/^\/estimate\/\d+$/.test(loc.pathname)) {
+                window.location.href = '/home';
+              } else {
+                navigate('/home', { state: undefined });
+              }
+            }}
+            sx={{ cursor: 'pointer', textDecoration: 'none', color: 'inherit' }}
           >
             <span className="boBrandLogo">BUD Office</span>
-          </Link>
+          </Box>
 
           <Box sx={{ flex: 1 }} />
 
@@ -172,6 +201,9 @@ const MainLayout: React.FC = () => {
             width: drawerWidth,
             boxSizing: 'border-box',
             overflow: 'hidden',
+            position: 'relative',
+            zIndex: 2147483646,
+            isolation: 'isolate',
           },
         }}
       >
@@ -196,6 +228,12 @@ const MainLayout: React.FC = () => {
                   component={NavLink}
                   to={item.to}
                   className={({ isActive }) => `boNavItem ${isActive ? 'isActive' : ''}`}
+                  onClick={(e) => {
+                    if (/^\/estimate\/\d+$/.test(loc.pathname)) {
+                      e.preventDefault();
+                      window.location.href = item.to;
+                    }
+                  }}
                   sx={{
                     borderRadius: 2,
                     mx: 1,
@@ -236,12 +274,19 @@ const MainLayout: React.FC = () => {
           minHeight: '100vh',
           display: 'flex',
           flexDirection: 'column',
+          position: 'relative',
+          zIndex: 0,
         }}
       >
         <Toolbar />
+        {DEBUG_NAV && (
+          <Typography variant="caption" sx={{ px: 2, color: 'text.disabled', fontFamily: 'monospace' }}>
+            route: {loc.pathname}
+          </Typography>
+        )}
         <Box sx={{ flex: 1 }}>
           <Box className="boContentPanel">
-            <Outlet />
+            <Outlet key={loc.pathname} />
           </Box>
         </Box>
       </Box>

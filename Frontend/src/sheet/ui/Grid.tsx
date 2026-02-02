@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Menu, MenuItem, TextField, Divider, Snackbar } from '@mui/material';
+import { Box, Button, Menu, MenuItem, TextField, Divider, Snackbar, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
 import { colToLetter } from '../utils';
 import { colToLabel } from '../utils/colLabel';
 import { Cell } from './Cell';
@@ -24,6 +25,50 @@ import { useFillHandle } from '../hooks/useFillHandle';
 import { computeRowVisibility } from '../engine/filter/applyFilters';
 import { ColumnFilterDialog } from './ColumnFilterDialog';
 
+function CommentDialog({
+  open,
+  row,
+  col,
+  initialText,
+  onSave,
+  onCancel,
+}: {
+  open: boolean;
+  row: number;
+  col: number;
+  initialText: string;
+  onSave: (text: string) => void;
+  onCancel: () => void;
+}) {
+  const [text, setText] = useState(initialText);
+  useEffect(() => {
+    if (open) setText(initialText);
+  }, [open, initialText]);
+  return (
+    <Dialog open={open} onClose={onCancel} maxWidth="sm" fullWidth>
+      <DialogTitle>Коментар до клітинки {colToLabel(col)}{row + 1}</DialogTitle>
+      <DialogContent>
+        <TextField
+          autoFocus
+          fullWidth
+          multiline
+          rows={4}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Введіть коментар..."
+          sx={{ mt: 1 }}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onCancel}>Скасувати</Button>
+        <Button variant="contained" onClick={() => onSave(text)}>
+          Зберегти
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 const ROW_HEIGHT_DEFAULT = 28;
 const LETTERS_ROW_HEIGHT = 22;
 const COL_WIDTH_DEFAULT = 140;
@@ -37,6 +82,7 @@ export type GridProps = {
   onExtendSelection?: (coord: CellCoord) => void;
   onCellDoubleClick?: () => void;
   onEditorChange?: (value: string) => void;
+  onEditorBlur?: () => void;
   onColumnResize?: (col: number, width: number) => void;
   onColumnResizeCommit?: (col: number, prevWidth: number, nextWidth: number) => void;
   onRowResizeCommit?: (row: number, prevHeight: number, nextHeight: number) => void;
@@ -59,6 +105,9 @@ export type GridProps = {
   onClearAllFilters?: () => void;
   onSetFreezeRows?: (count: number) => void;
   onSetFreezeCols?: (count: number) => void;
+  onAddRowAtEnd?: () => void;
+  onAutocompleteSelect?: (row: number, name: string, unit?: string | null) => void;
+  onSetCellComment?: (row: number, col: number, text: string) => void;
 };
 
 export const Grid: React.FC<GridProps> = ({
@@ -68,6 +117,7 @@ export const Grid: React.FC<GridProps> = ({
   onExtendSelection,
   onCellDoubleClick,
   onEditorChange,
+  onEditorBlur,
   onColumnResize,
   onColumnResizeCommit,
   onRowResizeCommit,
@@ -87,6 +137,9 @@ export const Grid: React.FC<GridProps> = ({
   onClearAllFilters,
   onSetFreezeRows,
   onSetFreezeCols,
+  onAddRowAtEnd,
+  onAutocompleteSelect,
+  onSetCellComment,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [resizingCol, setResizingCol] = useState<number | null>(null);
@@ -114,6 +167,7 @@ export const Grid: React.FC<GridProps> = ({
     hasFormulas: boolean;
   } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [commentDialog, setCommentDialog] = useState<{ row: number; col: number; text: string } | null>(null);
   const [filterDialog, setFilterDialog] = useState<{
     colIndex: number;
     columnTitle: string;
@@ -257,20 +311,23 @@ export const Grid: React.FC<GridProps> = ({
   const useGrid = Boolean(config?.gridTemplateColumns) || Boolean(config?.columnHeaders?.length);
   const flexCol = config?.flexColumn;
   /** When using grid, letter/header count must match gridTemplateColumns tracks (1 corner + N data). Use config.columnHeaders to avoid wrap. */
-  const dataColCount = useGrid
+  const fullColCount = useGrid
     ? (state.columns?.length ?? config?.columnHeaders?.length ?? colCount)
     : colCount;
+  const hiddenSet = new Set(config?.hiddenColumns ?? []);
+  const visibleCols = Array.from({ length: fullColCount }, (_, i) => i).filter((i) => !hiddenSet.has(i));
+  const dataColCount = visibleCols.length;
   const getHeaderTitle = (c: number) =>
     state.columns?.[c]?.title ?? config?.columnHeaders?.[c] ?? colToLetter(c);
   const dynamicGridTemplate = useGrid
-    ? [`${ROW_HEADER_WIDTH}px`, ...Array.from({ length: dataColCount }, (_, c) => `${getColWidth(c)}px`)].join(' ')
+    ? [`${ROW_HEADER_WIDTH}px`, ...visibleCols.map((c) => `${getColWidth(c)}px`)].join(' ')
     : '';
   const gridTemplate = dynamicGridTemplate || (config?.gridTemplateColumns ?? '');
   const freezeRows = useGrid ? Math.min(state.freeze?.rows ?? 0, state.rowCount) : 0;
   const freezeCols = useGrid ? Math.min(state.freeze?.cols ?? 0, dataColCount) : 0;
 
   const minTableWidth = useGrid
-    ? ROW_HEADER_WIDTH + Array.from({ length: dataColCount }, (_, c) => getColWidth(c)).reduce((a, b) => a + b, 0)
+    ? ROW_HEADER_WIDTH + visibleCols.reduce((a, c) => a + getColWidth(c), 0)
     : 40 +
       Array.from({ length: colCount }, (_, c) => (flexCol === c ? 80 : getColWidth(c))).reduce(
         (a, b) => a + b,
@@ -323,11 +380,11 @@ export const Grid: React.FC<GridProps> = ({
   const headerTotalHeight = LETTERS_ROW_HEIGHT + defaultRowHeight;
   const cumulativeColLeft = React.useMemo(() => {
     const out: number[] = [ROW_HEADER_WIDTH];
-    for (let c = 0; c < dataColCount - 1; c++) {
-      out.push(out[out.length - 1] + getColWidth(c));
+    for (let i = 0; i < visibleCols.length - 1; i++) {
+      out.push(out[out.length - 1] + getColWidth(visibleCols[i]));
     }
     return out;
-  }, [dataColCount, resizingCol, tempColWidth, state.columnWidths, config]);
+  }, [visibleCols, resizingCol, tempColWidth, state.columnWidths, config]);
 
   const cumulativeRowTop = React.useMemo(() => {
     const out: number[] = [headerTotalHeight];
@@ -357,6 +414,7 @@ export const Grid: React.FC<GridProps> = ({
   };
 
   return (
+    <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
     <Box
       sx={{
         width: '100%',
@@ -400,18 +458,18 @@ export const Grid: React.FC<GridProps> = ({
                 }),
               }}
             />
-            {Array.from({ length: dataColCount }, (_, c) => (
+            {visibleCols.map((c, i) => (
               <Box
                 key={c}
                 sx={{
                   ...letterCellSx,
-                  ...(freezeCols > 0 && c < freezeCols && {
+                  ...(freezeCols > 0 && i < freezeCols && {
                     position: 'sticky' as const,
-                    left: cumulativeColLeft[c],
+                    left: cumulativeColLeft[i],
                     zIndex: 6,
-                    boxShadow: c === freezeCols - 1 ? '2px 0 4px -2px rgba(0,0,0,0.1)' : undefined,
-                    borderRight: c === freezeCols - 1 ? '1px solid' : undefined,
-                    borderColor: c === freezeCols - 1 ? 'var(--sheet-grid)' : undefined,
+                    boxShadow: i === freezeCols - 1 ? '2px 0 4px -2px rgba(0,0,0,0.1)' : undefined,
+                    borderRight: i === freezeCols - 1 ? '1px solid' : undefined,
+                    borderColor: i === freezeCols - 1 ? 'var(--sheet-grid)' : undefined,
                   }),
                 }}
               >
@@ -452,7 +510,7 @@ export const Grid: React.FC<GridProps> = ({
             </Box>
           )}
         </Box>
-        {Array.from({ length: dataColCount }, (_, c) => {
+        {visibleCols.map((c, i) => {
           const cw = getColWidth(c);
           const isFlex = !useGrid && config?.flexColumn === c;
           return (
@@ -480,12 +538,12 @@ export const Grid: React.FC<GridProps> = ({
                 borderRight: 1,
                 borderColor: 'var(--sheet-grid)',
                 position: 'relative',
-                ...(freezeCols > 0 && c < freezeCols && {
+                ...(freezeCols > 0 && i < freezeCols && {
                   position: 'sticky' as const,
-                  left: cumulativeColLeft[c],
+                  left: cumulativeColLeft[i],
                   zIndex: 6,
-                  boxShadow: c === freezeCols - 1 ? '2px 0 4px -2px rgba(0,0,0,0.1)' : undefined,
-                  borderRight: c === freezeCols - 1 ? '1px solid' : 1,
+                  boxShadow: i === freezeCols - 1 ? '2px 0 4px -2px rgba(0,0,0,0.1)' : undefined,
+                  borderRight: i === freezeCols - 1 ? '1px solid' : 1,
                   borderColor: 'var(--sheet-grid)',
                 }),
               }}
@@ -569,7 +627,7 @@ export const Grid: React.FC<GridProps> = ({
               borderColor: 'var(--sheet-grid)',
             }}
           />
-          {Array.from({ length: dataColCount }, (_, c) => {
+          {visibleCols.map((c, i) => {
             const cw = getColWidth(c);
             const isFlex = config?.flexColumn === c;
             return (
@@ -741,7 +799,7 @@ export const Grid: React.FC<GridProps> = ({
               />
             )}
           </Box>
-          {Array.from({ length: dataColCount }, (_, c) => {
+          {visibleCols.map((c, i) => {
             const coord = { row: r, col: c };
             const isActive = activeCell.row === r && activeCell.col === c;
             const inSel = isInSelection(r, c);
@@ -791,6 +849,18 @@ export const Grid: React.FC<GridProps> = ({
                 isEditingThis={isEditingThis}
                 editorValue={editorValue}
                 onEditorChange={onEditorChange ?? (() => {})}
+                onEditorBlur={onEditorBlur}
+                cellComment={state.cellComments?.[`${r}:${c}`]}
+                autocompleteType={
+                  config?.autocompleteForColumn?.colIndex === c
+                    ? config.autocompleteForColumn.type
+                    : undefined
+                }
+                onAutocompleteSelect={
+                  config?.autocompleteForColumn?.colIndex === c && onAutocompleteSelect
+                    ? (name, unit) => onAutocompleteSelect(r, name, unit)
+                    : undefined
+                }
               />
             );
             const cellWrapperSx =
@@ -837,6 +907,16 @@ export const Grid: React.FC<GridProps> = ({
         </Box>
       ))
       }
+    </Box>
+    {onAddRowAtEnd && (
+      <Button
+        size="small"
+        onClick={onAddRowAtEnd}
+        sx={{ alignSelf: 'flex-start', mt: 0.5 }}
+      >
+        +рядок
+      </Button>
+    )}
       <Menu
         open={contextMenu != null}
         onClose={() => setContextMenu(null)}
@@ -1076,6 +1156,20 @@ export const Grid: React.FC<GridProps> = ({
               ]
             : []),
         ]}
+        {config?.allowCellComments && onSetCellComment && contextMenu != null && (
+          <MenuItem
+            onClick={() => {
+              if (contextMenu != null) {
+                const key = `${contextMenu.row}:${contextMenu.col}`;
+                const text = state.cellComments?.[key] ?? '';
+                setCommentDialog({ row: contextMenu.row, col: contextMenu.col, text });
+                setContextMenu(null);
+              }
+            }}
+          >
+            Коментар
+          </MenuItem>
+        )}
         {onSetFreezeRows && onSetFreezeCols && contextMenu != null && !state.isEditing && [
           <Divider key="freeze-div" />,
           <MenuItem
@@ -1277,6 +1371,19 @@ export const Grid: React.FC<GridProps> = ({
             setFilterDialog(null);
           }}
           onCancel={() => setFilterDialog(null)}
+        />
+      )}
+      {commentDialog != null && onSetCellComment && (
+        <CommentDialog
+          open
+          row={commentDialog.row}
+          col={commentDialog.col}
+          initialText={commentDialog.text}
+          onSave={(text) => {
+            onSetCellComment(commentDialog.row, commentDialog.col, text);
+            setCommentDialog(null);
+          }}
+          onCancel={() => setCommentDialog(null)}
         />
       )}
     </Box>

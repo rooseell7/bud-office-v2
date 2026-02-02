@@ -11,6 +11,7 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
@@ -67,6 +68,18 @@ export class EstimatesController {
     return this.service.delete(id);
   }
 
+  @Permissions('sheet:export', 'estimates:read')
+  @Get(':id/export/xlsx')
+  async exportXlsx(
+    @Param('id', ParseIntPipe) id: number,
+    @Res() res: any,
+  ) {
+    const buf = await this.service.exportXlsx(id);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="KP-${id}.xlsx"`);
+    res.send(buf);
+  }
+
   @Permissions('documents:read', 'sheet:read', 'estimates:read')
   @Get(':id/document')
   getDocumentWithStages(@Param('id', ParseIntPipe) id: number) {
@@ -97,6 +110,15 @@ export class EstimatesController {
     @Body() dto: UpdateStageDto,
   ) {
     return this.service.updateStage(id, stageId, dto);
+  }
+
+  @Permissions('documents:write', 'sheet:write', 'estimates:write')
+  @Post(':id/stages/:stageId/duplicate')
+  duplicateStage(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('stageId') stageId: string,
+  ) {
+    return this.service.duplicateStage(id, stageId);
   }
 
   @Permissions('documents:write', 'sheet:write', 'estimates:write')

@@ -17,7 +17,7 @@ import { UpdateMaterialDto } from './dto/update-material.dto';
 export class MaterialsController {
   constructor(private readonly service: MaterialsService) {}
 
-  @Permissions('supply:read', 'sales:read')
+  @Permissions('supply:read', 'sales:read', 'estimates:read')
   @Get()
   findAll(@Query() query: MaterialsQueryDto) {
     return this.service.findAll(query);
