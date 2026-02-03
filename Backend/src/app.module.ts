@@ -38,6 +38,10 @@ import { SheetsModule } from './sheets/sheets.module';
 import { CollabModule } from './collab/collab.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { AdminModule } from './admin/admin.module';
+import { ForemanModule } from './foreman/foreman.module';
+import { ExecutionModule } from './execution/execution.module';
+import { FinanceModule } from './finance/finance.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 function toBool(v: unknown, def = false): boolean {
   if (v === undefined || v === null) return def;
@@ -116,6 +120,10 @@ function toBool(v: unknown, def = false): boolean {
     CollabModule,
     AttachmentsModule,
     AdminModule,
+    ForemanModule,
+    ExecutionModule,
+    FinanceModule,
+    AnalyticsModule,
   ],
 })
 export class AppModule {}

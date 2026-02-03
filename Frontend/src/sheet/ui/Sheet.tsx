@@ -143,12 +143,18 @@ export const Sheet: React.FC<SheetProps> = ({
   useSheetLocalDraft({ state, adapter, onHydrate: hydrate });
 
   const handleAutocompleteSelect = React.useCallback(
-    (row: number, name: string, unit?: string | null) => {
-      setValue(row, 1, name);
-      if (unit != null && String(unit).trim()) setValue(row, 2, String(unit).trim());
+    (row: number, name: string, unit?: string | null, materialId?: number) => {
+      const ac = config?.autocompleteForColumn;
+      const nameCol = ac?.colIndex ?? 1;
+      const unitCol = nameCol + 1;
+      setValue(row, nameCol, name);
+      if (unit != null && String(unit).trim()) setValue(row, unitCol, String(unit).trim());
+      if (materialId != null && ac?.materialIdColIndex != null) {
+        setValue(row, ac.materialIdColIndex, String(materialId));
+      }
       cancelEdit();
     },
-    [setValue, cancelEdit],
+    [config?.autocompleteForColumn, setValue, cancelEdit],
   );
 
   React.useEffect(() => {

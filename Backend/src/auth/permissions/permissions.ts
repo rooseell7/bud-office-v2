@@ -73,6 +73,23 @@ export const PERMISSIONS = [
   'sheet:write',
   'sheet:approve',
   'sheet:export',
+
+  // ===== Execution (Відділ реалізації) =====
+  'execution:read',
+  'execution:write',
+
+  // ===== Foreman (Кабінет виконроба) =====
+  'foreman:read',
+  'foreman:write',
+
+  // ===== Finance (Відділ фінансів) =====
+  'finance:read',
+  'finance:write',
+  'finance:admin',
+
+  // ===== Analytics (для власників) =====
+  'analytics:read',
+  'analytics:admin',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -88,6 +105,7 @@ export type PermissionCode = Permission;
  */
 export type RoleCode =
   | 'admin'
+  | 'foreman'
   | 'supply_head'
   | 'supply_manager'
   | 'estimator'
@@ -100,6 +118,17 @@ export type RoleCode =
 
 export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
   admin: [...PERMISSIONS],
+
+  // ===== Foreman =====
+  foreman: [
+    'foreman:read',
+    'foreman:write',
+    'projects:read',
+    'objects:read',
+    'documents:read',
+    'sheet:read',
+    'execution:read',
+  ],
 
   // ===== Supply =====
   supply_head: [
@@ -240,6 +269,9 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
     'delivery:write',
     'delivery:approve',
 
+    'execution:read',
+    'execution:write',
+
     'warehouse:read',
     'materials:read',
     'units:read',
@@ -254,6 +286,9 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
   delivery_manager: [
     'delivery:read',
     'delivery:write',
+
+    'execution:read',
+    'execution:write',
 
     'warehouse:read',
     'materials:read',
@@ -287,6 +322,11 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
     'sheet:export',
     'estimates:read',
     'estimates:write',
+
+    'finance:read',
+    'finance:write',
+
+    'analytics:read',
   ],
 
   viewer: [
@@ -308,6 +348,8 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
     'estimates:read',
   ],
 };
+
+// finance:admin only for admin (already has [...PERMISSIONS])
 
 // -------------------------------------------------------------------------------------
 // Helpers

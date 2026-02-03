@@ -25,11 +25,24 @@ import MaterialsPage from './modules/materials/MaterialsPage';
 // ✅ Delivery сторінки
 import DeliveryIndexPage from './modules/delivery/pages/DeliveryIndexPage';
 import DeliveryProjectPage from './modules/delivery/pages/DeliveryProjectPage';
-import DeliveryActDetailsPage from './modules/delivery/pages/DeliveryActDetailsPage';
+import { ActByIdPage } from './pages/acts/ActByIdPage';
 import ActsPage from './pages/acts/ActsPage';
 
 // ✅ Stub pages (нові розділи меню)
 import StubPage from './pages/stubs/StubPage';
+import AnalyticsOverviewPage from './modules/analytics/pages/AnalyticsOverviewPage';
+import AnalyticsProjectsPage from './modules/analytics/pages/AnalyticsProjectsPage';
+import AnalyticsFinancePage from './modules/analytics/pages/AnalyticsFinancePage';
+import AnalyticsExecutionPage from './modules/analytics/pages/AnalyticsExecutionPage';
+// ✅ Фінанси
+import FinanceDashboardPage from './modules/finance/pages/FinanceDashboardPage';
+import FinanceWalletsPage from './modules/finance/pages/FinanceWalletsPage';
+// ✅ Кабінет виконроба
+import ForemanObjectsPage from './modules/foreman/pages/ForemanObjectsPage';
+import ForemanObjectPage from './modules/foreman/pages/ForemanObjectPage';
+// ✅ Відділ реалізації
+import ExecutionProjectsPage from './modules/execution/pages/ExecutionProjectsPage';
+import ExecutionProjectDetailsPage from './modules/execution/pages/ExecutionProjectDetailsPage';
 
 // ✅ Warehouse details pages (з твого дерева: src/pages/warehouse/*)
 import WarehouseDetailsPage from './pages/warehouse/WarehouseDetailsPage';
@@ -105,6 +118,7 @@ const App: React.FC = () => {
         <Route path="estimate/objects" element={<ProjectsPage />} />
         <Route path="estimate/objects/:id" element={<ProjectDetailsPage />} />
         <Route path="estimate/acts" element={<ActsPage />} />
+        <Route path="estimate/acts/:id" element={<ActByIdPage />} />
         <Route path="estimate/quotes" element={<QuotesPage />} />
         <Route path="estimate/invoices" element={<InvoicesPage />} />
         <Route path="estimate/:id" element={<EstimateByIdPage />} />
@@ -129,26 +143,20 @@ const App: React.FC = () => {
         <Route path="delivery" element={<DeliveryIndexPage />} />
         {/* ✅ Глобальний список актів (не project-scoped) */}
         <Route path="delivery/acts" element={<ActsPage />} />
-        <Route path="delivery/acts/:id" element={<DeliveryActDetailsPage />} />
+        <Route path="delivery/acts/:id" element={<ActByIdPage />} />
         <Route path="delivery/:projectId" element={<DeliveryProjectPage />} />
 
         {/* ✅ Заглушки розділів */}
-        <Route
-          path="realization"
-          element={<StubPage title="Відділ реалізації" description="Розділ доданий у меню. Реалізацію (виконання робіт) будемо розгортати наступними кроками." />}
-        />
-        <Route
-          path="foreman"
-          element={<StubPage title="Кабінет виконроба" description="Розділ доданий у меню. Далі зробимо мінімальний набір: задачі/матеріали/акти по обʼєкту." />}
-        />
-        <Route
-          path="finance"
-          element={<StubPage title="Відділ фінансів" description="Розділ доданий у меню. Далі: платежі, оплати постачальникам, звіти." />}
-        />
-        <Route
-          path="analytics"
-          element={<StubPage title="Аналітика (для власників)" description="Розділ доданий у меню. Далі: маржа, роботи vs матеріали, динаміка по обʼєктах." />}
-        />
+        <Route path="execution/projects" element={<ExecutionProjectsPage />} />
+        <Route path="execution/projects/:id" element={<ExecutionProjectDetailsPage />} />
+        <Route path="foreman" element={<ForemanObjectsPage />} />
+        <Route path="foreman/objects/:objectId" element={<ForemanObjectPage />} />
+        <Route path="finance" element={<FinanceDashboardPage />} />
+        <Route path="finance/wallets" element={<FinanceWalletsPage />} />
+        <Route path="analytics" element={<AnalyticsOverviewPage />} />
+        <Route path="analytics/projects" element={<AnalyticsProjectsPage />} />
+        <Route path="analytics/finance" element={<AnalyticsFinancePage />} />
+        <Route path="analytics/execution" element={<AnalyticsExecutionPage />} />
       </Route>
 
       {/* 403 */}

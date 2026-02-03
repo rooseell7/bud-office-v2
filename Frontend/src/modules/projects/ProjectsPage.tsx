@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
+import { getForemanCandidates, type ForemanCandidate } from '../../api/objects';
 
 /* ====== Типи ====== */
 
@@ -16,6 +17,7 @@ interface ProjectObject {
   address?: string | null;
   status: 'planned' | 'in_progress' | 'paused' | 'done';
   clientId: number;
+  foremanId?: number | null;
 }
 
 /* ====== Лейбли ====== */
@@ -52,6 +54,8 @@ const ProjectsPage: React.FC = () => {
   // clientId може бути необов'язковим: обʼєкт можна створити без привʼязки до клієнта.
   // Якщо клієнта вибрано — передаємо тільки валідний int >= 1.
   const [clientId, setClientId] = useState<number | ''>('');
+  const [foremanId, setForemanId] = useState<number | ''>('');
+  const [foremanCandidates, setForemanCandidates] = useState<ForemanCandidate[]>([]);
   const [creating, setCreating] = useState(false);
 
   /* ====== Завантаження ====== */
@@ -66,6 +70,15 @@ const ProjectsPage: React.FC = () => {
       setError(e?.response?.data?.message || 'Помилка завантаження обʼєктів');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadForemanCandidates = async () => {
+    try {
+      const list = await getForemanCandidates();
+      setForemanCandidates(list);
+    } catch {
+      // ignore
     }
   };
 
@@ -88,6 +101,7 @@ const ProjectsPage: React.FC = () => {
   useEffect(() => {
     loadObjects();
     loadClients();
+    loadForemanCandidates();
   }, []);
 
   /* ====== Створення ====== */
@@ -118,6 +132,7 @@ const ProjectsPage: React.FC = () => {
       };
 
       if (hasValidClient) payload.clientId = cid;
+      if (foremanId !== '' && Number.isFinite(Number(foremanId))) payload.foremanId = Number(foremanId);
 
       const res = await api.post<ProjectObject>('/objects', payload);
 
@@ -129,6 +144,7 @@ const ProjectsPage: React.FC = () => {
       setType('apartment');
       setStatus('planned');
       setClientId('');
+      setForemanId('');
     } catch (e: any) {
       alert(e?.response?.data?.message || 'Не вдалося створити обʼєкт');
     } finally {
@@ -189,6 +205,21 @@ const ProjectsPage: React.FC = () => {
               </option>
             ))}
           </select>
+
+          <select
+            value={foremanId === '' ? '' : String(foremanId)}
+            onChange={(e) => {
+              const v = (e.target.value ?? '').toString();
+              setForemanId(v ? Number(v) : '');
+            }}
+          >
+            <option value="">— Виконроб (не обовʼязково)</option>
+            {foremanCandidates.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.fullName}
+              </option>
+            ))}
+          </select>
         </div>
 
         <button type="submit" disabled={creating}>
@@ -211,6 +242,7 @@ const ProjectsPage: React.FC = () => {
               <th>Тип</th>
               <th>Адреса</th>
               <th>Статус</th>
+              <th>Виконроб</th>
             </tr>
           </thead>
           <tbody>
@@ -225,6 +257,11 @@ const ProjectsPage: React.FC = () => {
                 <td>{typeLabels[o.type]}</td>
                 <td>{o.address || '—'}</td>
                 <td>{statusLabels[o.status]}</td>
+                <td>
+                  {o.foremanId
+                    ? foremanCandidates.find((f) => f.id === o.foremanId)?.fullName ?? `#${o.foremanId}`
+                    : '—'}
+                </td>
               </tr>
             ))}
           </tbody>

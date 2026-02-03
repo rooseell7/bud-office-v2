@@ -106,7 +106,7 @@ export type GridProps = {
   onSetFreezeRows?: (count: number) => void;
   onSetFreezeCols?: (count: number) => void;
   onAddRowAtEnd?: () => void;
-  onAutocompleteSelect?: (row: number, name: string, unit?: string | null) => void;
+  onAutocompleteSelect?: (row: number, name: string, unit?: string | null, materialId?: number) => void;
   onSetCellComment?: (row: number, col: number, text: string) => void;
 };
 
@@ -858,7 +858,7 @@ export const Grid: React.FC<GridProps> = ({
                 }
                 onAutocompleteSelect={
                   config?.autocompleteForColumn?.colIndex === c && onAutocompleteSelect
-                    ? (name, unit) => onAutocompleteSelect(r, name, unit)
+                    ? (name, unit, materialId) => onAutocompleteSelect(r, name, unit, materialId)
                     : undefined
                 }
               />

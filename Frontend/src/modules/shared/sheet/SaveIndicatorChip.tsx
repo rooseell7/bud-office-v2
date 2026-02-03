@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { Box, Chip } from '@mui/material';
 
 export type SaveIndicatorState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
@@ -43,9 +44,8 @@ function getColor(state: SaveIndicatorState): 'default' | 'warning' | 'info' | '
 
 export default function SaveIndicatorChip({ state, showDirty = true }: Props) {
   const shouldShow = state !== 'idle' && (showDirty ? true : state !== 'dirty');
-  if (!shouldShow) return null;
 
-  return (
+  const content = (
     <Box
       sx={{
         position: 'fixed',
@@ -53,14 +53,21 @@ export default function SaveIndicatorChip({ state, showDirty = true }: Props) {
         bottom: 16,
         zIndex: 1500,
         pointerEvents: 'none',
+        opacity: shouldShow ? 1 : 0,
+        visibility: shouldShow ? 'visible' : 'hidden',
+        transition: 'opacity 0.15s ease',
       }}
     >
       <Chip
         size="small"
-        label={getLabel(state)}
+        label={getLabel(state) || '\u00A0'}
         color={getColor(state) as any}
         variant="outlined"
+        sx={{ minWidth: 120 }}
       />
     </Box>
   );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(content, document.body);
 }

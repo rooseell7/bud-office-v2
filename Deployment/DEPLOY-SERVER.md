@@ -151,7 +151,13 @@ Backend має слухати порт 3000 на localhost.
    npm install
    ```
 
-3. Запустити:
+3. Застосувати міграції БД (один раз або після оновлення):
+   ```bash
+   npm run migrate
+   ```
+   (потрібен налаштований `.env` з DB_HOST, DB_PORT, DB_USER, DB_PASS, DB_NAME)
+
+4. Запустити:
    ```bash
    npm run start
    ```
@@ -162,14 +168,14 @@ Backend має слухати порт 3000 на localhost.
    pm2 startup
    ```
 
-4. Перевірити, що Backend відповідає:
+5. Перевірити, що Backend відповідає:
    ```bash
    curl http://127.0.0.1:3000/api/health
    ```
 
 ---
 
-## КРОК 5. Перевірка
+## КРОК 5. Перевірка (після запуску Backend)
 
 1. Відкрити в браузері: http://95.47.196.98
 2. Має з’явитися сторінка логіну BUD Office
@@ -197,6 +203,7 @@ Backend має слухати порт 3000 на localhost.
 - [ ] Конфіг Nginx з блоком /socket.io/ (Upgrade, Connection)
 - [ ] `sudo nginx -t` — ok
 - [ ] `sudo systemctl reload nginx`
+- [ ] У Backend виконано `npm run migrate` (міграції БД)
 - [ ] Backend працює на 127.0.0.1:3000
 - [ ] http://95.47.196.98 відкривається
 - [ ] Network: є ws з 101

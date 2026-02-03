@@ -65,7 +65,7 @@ const MainLayout: React.FC = () => {
     },
     {
       title: 'Відділ реалізації',
-      items: [{ to: '/realization', label: 'Заглушка', icon: <ConstructionOutlinedIcon /> }],
+      items: [{ to: '/execution/projects', label: "Об'єкти", icon: <ConstructionOutlinedIcon /> }],
     },
     {
       title: 'Відділ постачання',
@@ -86,15 +86,20 @@ const MainLayout: React.FC = () => {
     },
     {
       title: 'Кабінет виконроба',
-      items: [{ to: '/foreman', label: 'Заглушка', icon: <EngineeringOutlinedIcon /> }],
+      items: [{ to: '/foreman', label: "Мої об'єкти", icon: <EngineeringOutlinedIcon /> }],
     },
     {
       title: 'Відділ фінансів',
-      items: [{ to: '/finance', label: 'Заглушка', icon: <AccountBalanceOutlinedIcon /> }],
+      items: [{ to: '/finance', label: 'Фінанси', icon: <AccountBalanceOutlinedIcon /> }],
     },
     {
       title: 'Аналітика (для власників)',
-      items: [{ to: '/analytics', label: 'Заглушка', icon: <InsightsOutlinedIcon /> }],
+      items: [
+        { to: '/analytics', label: 'Огляд', icon: <InsightsOutlinedIcon /> },
+        { to: '/analytics/projects', label: "Об'єкти", icon: <WorkOutlineOutlinedIcon /> },
+        { to: '/analytics/finance', label: 'Фінанси', icon: <AccountBalanceOutlinedIcon /> },
+        { to: '/analytics/execution', label: 'Реалізація', icon: <ConstructionOutlinedIcon /> },
+      ],
     },
   ];
 
@@ -117,7 +122,7 @@ const MainLayout: React.FC = () => {
             aria-label="BUD Office — на головну"
             onClick={(e) => {
               e.preventDefault();
-              if (/^\/estimate\/\d+$/.test(loc.pathname)) {
+              if (/^\/estimate\/\d+$/.test(loc.pathname) || /^\/delivery\/acts\/\d+$/.test(loc.pathname) || /^\/estimate\/acts\/\d+$/.test(loc.pathname)) {
                 window.location.href = '/home';
               } else {
                 navigate('/home', { state: undefined });
@@ -216,7 +221,15 @@ const MainLayout: React.FC = () => {
             overflow: 'auto',
           }}
         >
-          {navGroups.map((group, idx) => (
+          {navGroups
+            .filter((g) => {
+              if (g.title === 'Кабінет виконроба') return can('foreman:read');
+              if (g.title === 'Відділ реалізації') return can('execution:read');
+              if (g.title === 'Відділ фінансів') return can('finance:read');
+              if (g.title === 'Аналітика (для власників)') return can('analytics:read');
+              return true;
+            })
+            .map((group, idx) => (
             <Box key={group.title} sx={{ mt: idx === 0 ? 0 : undefined }}>
               <Box component="div" className="boNavSection" sx={{ px: 2, py: 0.5 }}>
                 {group.title}
@@ -229,7 +242,7 @@ const MainLayout: React.FC = () => {
                   to={item.to}
                   className={({ isActive }) => `boNavItem ${isActive ? 'isActive' : ''}`}
                   onClick={(e) => {
-                    if (/^\/estimate\/\d+$/.test(loc.pathname)) {
+                    if (/^\/estimate\/\d+$/.test(loc.pathname) || /^\/delivery\/acts\/\d+$/.test(loc.pathname) || /^\/estimate\/acts\/\d+$/.test(loc.pathname)) {
                       e.preventDefault();
                       window.location.href = item.to;
                     }

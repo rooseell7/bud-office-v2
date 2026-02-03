@@ -243,9 +243,12 @@ export const ActsPage: React.FC = () => {
     });
   };
 
+  const openRead = (row: ActDto) => {
+    nav(`/delivery/acts/${row.id}?mode=read`, { state: { from: '/estimate/acts' } });
+  };
+
   const openEdit = (row: ActDto) => {
-    // Редагування відбувається на детальній сторінці з табличним редактором
-    nav(`/delivery/acts/${row.id}`);
+    nav(`/delivery/acts/${row.id}`, { state: { from: '/estimate/acts' } });
   };
 
   const closeDialog = () => {
@@ -444,8 +447,11 @@ export const ActsPage: React.FC = () => {
                       </td>
                       <td style={{ padding: '10px 8px', borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>
                         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                          <Button size="small" variant="outlined" onClick={() => openEdit(r)} disabled={!canRead}>
+                          <Button size="small" variant="outlined" onClick={() => openRead(r)} disabled={!canRead}>
                             Відкрити
+                          </Button>
+                          <Button size="small" variant="contained" onClick={() => openEdit(r)} disabled={!canRead}>
+                            Редагувати
                           </Button>
                           <Button size="small" variant="outlined" color="error" onClick={() => onDelete(r.id)} disabled={!canApprove}>
                             Видалити

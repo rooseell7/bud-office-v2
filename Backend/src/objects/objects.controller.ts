@@ -21,11 +21,15 @@ import { Permissions } from '../auth/decorators/permissions.decorator';
 import { ObjectsService } from './object.service';
 import { CreateObjectDto } from './dto/create-object.dto';
 import { UpdateObjectDto } from './dto/update-object.dto';
+import { UsersService } from '../users/users.service';
 
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Controller('objects')
 export class ObjectsController {
-  constructor(private readonly objectsService: ObjectsService) {}
+  constructor(
+    private readonly objectsService: ObjectsService,
+    private readonly usersService: UsersService,
+  ) {}
 
   private getUserId(req: any): any {
     return req?.user?.id;
@@ -36,6 +40,20 @@ export class ObjectsController {
   create(@Req() req: any, @Body() dto: CreateObjectDto) {
     const userId = this.getUserId(req);
     return this.objectsService.create(userId, dto);
+  }
+
+  @Permissions('objects:read')
+  @Get('foreman-candidates')
+  async getForemanCandidates() {
+    const users = await this.usersService.findAll();
+    const candidates = users
+      .filter((u) => u.isActive !== false)
+      .filter((u) => {
+        const codes = (u.roles ?? []).map((r) => (r as any).code?.toLowerCase?.());
+        return codes.includes('foreman') || codes.includes('admin');
+      })
+      .map((u) => ({ id: u.id, fullName: u.fullName || u.email || `#${u.id}` }));
+    return candidates;
   }
 
   @Permissions('objects:read')

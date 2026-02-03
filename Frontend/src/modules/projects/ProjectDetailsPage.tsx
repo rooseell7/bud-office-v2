@@ -9,6 +9,11 @@ import {
   CardContent,
   CircularProgress,
   Divider,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  Stack,
   Tab,
   Tabs,
   Table,
@@ -22,8 +27,13 @@ import {
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
 import api from '../../api/client';
+import { getForemanCandidates, updateObject, type ForemanCandidate } from '../../api/objects';
+import { useAuth } from '../auth/AuthContext';
 import { getActs, type ActDto } from '../../api/acts';
 import { listInvoices, type Invoice } from '../invoices/api/invoices.api';
+import { getProjectSummary, getTransactions, createTransactionIn, createTransactionOut, type ProjectSummaryDto, type TransactionDto } from '../../api/finance';
+import { TransactionInModal } from '../finance/components/TransactionInModal';
+import { TransactionOutModal } from '../finance/components/TransactionOutModal';
 
 import { n } from '../shared/sheet/utils';
 
@@ -34,6 +44,7 @@ type ProjectObject = {
   address?: string | null;
   status?: string | null;
   clientId?: number | null;
+  foremanId?: number | null;
 };
 
 function a11yProps(index: number) {
@@ -56,6 +67,7 @@ function calcActSum(items: any): number {
 const ProjectDetailsPage: React.FC = () => {
   const { id } = useParams();
   const nav = useNavigate();
+  const { can } = useAuth();
   const objectId = Number(id);
 
   const [tab, setTab] = useState(0);
@@ -66,6 +78,19 @@ const ProjectDetailsPage: React.FC = () => {
   const [obj, setObj] = useState<ProjectObject | null>(null);
   const [acts, setActs] = useState<ActDto[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+
+  const [foremanCandidates, setForemanCandidates] = useState<ForemanCandidate[]>([]);
+  const [foremanId, setForemanId] = useState<number | ''>('');
+  const [savingForeman, setSavingForeman] = useState(false);
+
+  const [financeSummary, setFinanceSummary] = useState<ProjectSummaryDto | null>(null);
+  const [financeTransactions, setFinanceTransactions] = useState<TransactionDto[]>([]);
+  const [financeInModal, setFinanceInModal] = useState(false);
+  const [financeOutModal, setFinanceOutModal] = useState(false);
+
+  const canWrite = can('objects:write') || can('projects:write');
+  const canFinanceRead = can('finance:read');
+  const canFinanceWrite = can('finance:write');
 
   useEffect(() => {
     if (!Number.isFinite(objectId) || objectId <= 0) {
@@ -79,7 +104,14 @@ const ProjectDetailsPage: React.FC = () => {
       try {
         // Обʼєкт
         const res = await api.get<ProjectObject>(`/objects/${objectId}`);
-        setObj(res.data ?? null);
+        const data = res.data ?? null;
+        setObj(data);
+        setForemanId(data?.foremanId ?? '');
+
+        const [candidates] = await Promise.all([
+          getForemanCandidates(),
+        ]);
+        setForemanCandidates(candidates);
 
         // Накладні по обʼєкту
         const inv = await listInvoices({ objectId });
@@ -89,6 +121,20 @@ const ProjectDetailsPage: React.FC = () => {
         const allActs = await getActs();
         const list = Array.isArray(allActs) ? allActs : [];
         setActs(list.filter((a) => Number((a as any).projectId) === objectId));
+
+        if (can('finance:read')) {
+          try {
+            const [summary, tx] = await Promise.all([
+              getProjectSummary(objectId),
+              getTransactions({ projectId: objectId, limit: 30 }),
+            ]);
+            setFinanceSummary(summary);
+            setFinanceTransactions(tx.items);
+          } catch {
+            setFinanceSummary(null);
+            setFinanceTransactions([]);
+          }
+        }
       } catch (e: any) {
         setError(e?.response?.data?.message || e?.message || 'Помилка завантаження обʼєкта');
       } finally {
@@ -97,7 +143,7 @@ const ProjectDetailsPage: React.FC = () => {
     };
 
     void run();
-  }, [objectId]);
+  }, [objectId, canFinanceRead]);
 
   const invTotal = useMemo(() => invoices.reduce((acc, x) => acc + calcInvoiceTotal(x), 0), [invoices]);
   const actTotal = useMemo(() => acts.reduce((acc, a) => acc + calcActSum((a as any).items), 0), [acts]);
@@ -138,6 +184,7 @@ const ProjectDetailsPage: React.FC = () => {
           <Tab label="Загальна" {...a11yProps(0)} />
           <Tab label={`Акти (${acts.length})`} {...a11yProps(1)} />
           <Tab label={`Накладні (${invoices.length})`} {...a11yProps(2)} />
+          {canFinanceRead && <Tab label="Фінанси" {...a11yProps(3)} />}
         </Tabs>
         <Divider />
         <CardContent>
@@ -170,6 +217,59 @@ const ProjectDetailsPage: React.FC = () => {
                       Тип
                     </Typography>
                     <Typography sx={{ fontWeight: 700 }}>{obj.type || '—'}</Typography>
+                  </Box>
+                  <Box sx={{ gridColumn: '1 / -1' }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                      Виконроб
+                    </Typography>
+                    {canWrite ? (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        <FormControl size="small" sx={{ minWidth: 220 }}>
+                          <InputLabel>Виконроб</InputLabel>
+                          <Select
+                            value={foremanId === '' ? '' : foremanId}
+                            label="Виконроб"
+                            onChange={(e) => setForemanId(e.target.value === '' ? '' : Number(e.target.value))}
+                          >
+                            <MenuItem value="">
+                              <em>Не призначено</em>
+                            </MenuItem>
+                            {foremanCandidates.map((f) => (
+                              <MenuItem key={f.id} value={f.id}>
+                                {f.fullName}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          disabled={
+                            savingForeman ||
+                            (foremanId === '' ? !(obj as any).foremanId : Number(foremanId) === Number((obj as any).foremanId))
+                          }
+                          onClick={async () => {
+                            setSavingForeman(true);
+                            try {
+                              await updateObject(objectId, { foremanId: foremanId === '' ? null : foremanId });
+                              setObj((o) => (o ? { ...o, foremanId: foremanId === '' ? null : foremanId } : null));
+                            } catch (e: any) {
+                              setError(e?.response?.data?.message || 'Помилка збереження');
+                            } finally {
+                              setSavingForeman(false);
+                            }
+                          }}
+                        >
+                          {savingForeman ? 'Збереження…' : 'Зберегти'}
+                        </Button>
+                      </Box>
+                    ) : (
+                      <Typography sx={{ fontWeight: 700 }}>
+                        {obj.foremanId
+                          ? foremanCandidates.find((f) => f.id === obj.foremanId)?.fullName ?? `#${obj.foremanId}`
+                          : '—'}
+                      </Typography>
+                    )}
                   </Box>
                   <Box>
                     <Typography variant="caption" color="text.secondary">
@@ -279,6 +379,91 @@ const ProjectDetailsPage: React.FC = () => {
                   </TableBody>
                 </Table>
               )}
+            </Box>
+          )}
+
+          {canFinanceRead && tab === 3 && (
+            <Box>
+              {financeSummary != null && (
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 2, mb: 2 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Прихід (UAH)</Typography>
+                    <Typography fontWeight={700}>{financeSummary.inUAH.toFixed(2)}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Витрата (UAH)</Typography>
+                    <Typography fontWeight={700}>{financeSummary.outUAH.toFixed(2)}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Баланс обʼєкта (UAH)</Typography>
+                    <Typography fontWeight={700}>{financeSummary.balanceUAH.toFixed(2)}</Typography>
+                  </Box>
+                </Box>
+              )}
+              {canFinanceWrite && (
+                <Stack direction="row" gap={1} sx={{ mb: 2 }}>
+                  <Button variant="contained" color="success" size="small" onClick={() => setFinanceInModal(true)}>
+                    + Отримали гроші (для цього обʼєкта)
+                  </Button>
+                  <Button variant="contained" color="error" size="small" onClick={() => setFinanceOutModal(true)}>
+                    – Оплатили (для цього обʼєкта)
+                  </Button>
+                </Stack>
+              )}
+              {financeTransactions.length === 0 ? (
+                <Typography color="text.secondary">По цьому обʼєкту фінансових операцій поки немає.</Typography>
+              ) : (
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Дата</TableCell>
+                      <TableCell>Тип</TableCell>
+                      <TableCell align="right">Сума</TableCell>
+                      <TableCell>Контрагент</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {financeTransactions.map((t) => (
+                      <TableRow key={t.id}>
+                        <TableCell>{new Date(t.date).toLocaleDateString('uk-UA')}</TableCell>
+                        <TableCell>{t.type === 'in' ? 'Прихід' : t.type === 'out' ? 'Витрата' : 'Переказ'}</TableCell>
+                        <TableCell align="right">{(t.amountUAH ?? t.amount).toFixed(2)} {t.currency}</TableCell>
+                        <TableCell>{t.counterparty || '—'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+              <TransactionInModal
+                open={financeInModal}
+                onClose={() => setFinanceInModal(false)}
+                projectId={objectId}
+                onSubmit={async (dto) => {
+                  await createTransactionIn(dto);
+                  setFinanceInModal(false);
+                  const [summary, tx] = await Promise.all([
+                    getProjectSummary(objectId),
+                    getTransactions({ projectId: objectId, limit: 30 }),
+                  ]);
+                  setFinanceSummary(summary);
+                  setFinanceTransactions(tx.items);
+                }}
+              />
+              <TransactionOutModal
+                open={financeOutModal}
+                onClose={() => setFinanceOutModal(false)}
+                projectId={objectId}
+                onSubmit={async (dto) => {
+                  await createTransactionOut(dto);
+                  setFinanceOutModal(false);
+                  const [summary, tx] = await Promise.all([
+                    getProjectSummary(objectId),
+                    getTransactions({ projectId: objectId, limit: 30 }),
+                  ]);
+                  setFinanceSummary(summary);
+                  setFinanceTransactions(tx.items);
+                }}
+              />
             </Box>
           )}
         </CardContent>

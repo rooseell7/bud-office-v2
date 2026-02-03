@@ -71,20 +71,12 @@ import {
   SHEET_GOOGLE_HEADER_BORDER,
   SHEET_HEADER_BG,
 } from '../../shared/sheet/constants';
+import { useSheetSelection } from '../../shared/sheet/engine';
 
-import { Sheet, invoiceSheetConfig, draftKey } from '../../../sheet';
-
-import {
-  type SheetRange,
-  clamp,
-  normalizeRange,
-  isInRange,
-  copyRangeToClipboard,
-  applyTsvPasteToRows,
-  forEachCellInRange,
-  handleSheetsGridKeyDown,
-  useSheetSelection,
-} from '../../shared/sheet/engine';
+import { Sheet, formatUaMoney, type SheetTotals } from '../../../sheet';
+import { invoiceMaterialsSheetConfig } from '../../../sheet/configs/invoiceMaterialsSheetConfig';
+import { M_COL } from '../../../sheet/configs/materialsSheetConfig';
+import { useInvoiceSheetAdapter } from '../../../sheet/hooks/useInvoiceSheetAdapter';
 type InvoiceItemRow = {
   id: number;
   materialId?: number;
@@ -236,7 +228,24 @@ export default function InvoiceDetailsPage() {
   const [pushToWarehouseLoading, setPushToWarehouseLoading] = useState(false);
   const [pushToWarehouseError, setPushToWarehouseError] = useState<string | null>(null);
 
-  // === Sheets-like range selection (STEP 1.6) ===
+  const [sheetTotals, setSheetTotals] = useState<SheetTotals>({ sum: 0, cost: 0, profit: 0 });
+  const adapterItems = useMemo(() => rows.map((r) => ({
+    materialId: r.materialId,
+    name: r.name,
+    unit: r.unit,
+    qty: r.qty,
+    supplierPrice: r.supplierPrice,
+    clientPrice: r.clientPrice,
+    amountSupplier: r.amountSupplier,
+    amountClient: r.amountClient,
+  })), [rows]);
+  const { adapter, initialSnapshot } = useInvoiceSheetAdapter(
+    invoice?.id ?? null,
+    adapterItems,
+    () => load(true), // silent refresh after autosave — не блокує кнопки
+  );
+
+  // === Sheets-like range selection (legacy — kept for push/export) ===
   type ColKey = 'name' | 'unit' | 'qty' | 'supplierPrice' | 'amountSupplier' | 'clientPrice' | 'amountClient';
   const COLS: ColKey[] = ['name', 'unit', 'qty', 'supplierPrice', 'amountSupplier', 'clientPrice', 'amountClient'];
 
@@ -925,13 +934,13 @@ export default function InvoiceDetailsPage() {
     }
   }
 
-  async function load() {
+  async function load(silent?: boolean) {
     if (!Number.isFinite(invoiceId) || invoiceId <= 0) {
       setError('Некоректний id накладної');
       return;
     }
 
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const inv = await getInvoice(invoiceId as Id);
@@ -973,7 +982,7 @@ export default function InvoiceDetailsPage() {
     } catch (e: any) {
       setError(e?.response?.data?.message?.join?.('\n') || e?.message || 'Помилка завантаження');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
@@ -1079,11 +1088,10 @@ export default function InvoiceDetailsPage() {
   }, [materials]);
 
   const totals = useMemo(() => {
-    const supplier = rows.reduce((acc, r) => acc + n(r.amountSupplier), 0);
-    const client = rows.reduce((acc, r) => acc + n(r.amountClient), 0);
-    const profit = client - supplier;
+    const supplier = sheetTotals.cost;
+    const client = sheetTotals.sum;
+    const profit = sheetTotals.profit;
     const marginPct = client > 0 ? (profit / client) * 100 : 0;
-
     return {
       supplier,
       client,
@@ -1094,7 +1102,7 @@ export default function InvoiceDetailsPage() {
       profitF: f2(profit),
       marginPctF: formatFixed(marginPct, 2),
     };
-  }, [rows]);
+  }, [sheetTotals]);
 
   const currentSnapshot = useMemo(() => {
     const fallbackWarehouseId = Number((invoice as any)?.warehouseId ?? 0) || null;
@@ -1255,6 +1263,7 @@ export default function InvoiceDetailsPage() {
     setSaving(true);
     setError(null);
     try {
+      const fresh = await getInvoice(invoice.id);
       const fallbackWarehouseId = Number((invoice as any)?.warehouseId ?? 0) || null;
       const warehouseId = invoiceType === 'internal' ? (invoiceWarehouse?.id ?? fallbackWarehouseId) : null;
       const dto = {
@@ -1263,7 +1272,7 @@ export default function InvoiceDetailsPage() {
         warehouseId,
         supplierName: supplierName.trim() || undefined,
         status: (String(status) as any) || undefined,
-        items: toApiItems(rows),
+        items: Array.isArray(fresh.items) ? fresh.items : [],
       };
 
       const updated = await updateInvoice(invoice.id, dto);
@@ -1715,7 +1724,7 @@ export default function InvoiceDetailsPage() {
   }, [invoice?.id]);
 
 return (
-    <Box p={3}>
+    <Box className="invoice-details" p={3}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
         <Stack>
           <Typography variant="h5" fontWeight={700}>
@@ -1786,27 +1795,6 @@ return (
           {error}
         </Alert>
       ) : null}
-
-      {invoice && invoiceId > 0 && (
-        <Box sx={{ mb: 2, p: 1, border: '1px solid #e2e8f0', borderRadius: 1 }}>
-          <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-            Таблиця (canonical Sheet)
-          </Typography>
-          <Sheet
-            config={invoiceSheetConfig}
-            adapter={{ getDraftKey: () => draftKey('invoice', invoiceId) }}
-          />
-        </Box>
-      )}
-
-      {(loading || saving) && (
-        <Box display="flex" alignItems="center" gap={2} mb={2}>
-          <CircularProgress size={20} />
-          <Typography variant="body2" color="text.secondary">
-            {saving ? 'Збереження…' : 'Завантаження…'}
-          </Typography>
-        </Box>
-      )}
 
       <Card>
         <CardContent>
@@ -2023,258 +2011,28 @@ return (
 
           <Divider sx={{ mb: 2 }} />
 
-          <Stack direction="row" spacing={1} mb={1}>
-            <Button
-              variant="outlined"
-              startIcon={<AddIcon />}
-              onClick={addRow}
-              disabled={!canEdit}
-            >
-              Додати рядок
-            </Button>
-            <Button
-              variant="outlined"
-              onClick={removeSelected}
-              disabled={!canEdit || selectedIds.length === 0}
-            >
-              Видалити вибрані
-            </Button>
-          </Stack>
-
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            <Box
-              sx={{
-                width: 58,
-                height: 32,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                bgcolor: 'background.paper',
-                fontVariantNumeric: 'tabular-nums',
-                fontSize: 12,
-              }}
-              title="Адреса активної клітинки"
-            >
-              {activeCellLabel() || '—'}
+          {invoice?.id && (
+            <Box sx={{ mb: 2 }}>
+              <Sheet
+                config={{
+                  ...invoiceMaterialsSheetConfig,
+                  autocompleteForColumn: { colIndex: 1, type: 'materials', materialIdColIndex: 9 },
+                  allowCellComments: true,
+                  allowFreeze: true,
+                }}
+                adapter={adapter ?? undefined}
+                documentId={null}
+                initialSnapshot={initialSnapshot}
+                readonly={!canEdit || isLocked}
+                totalsConfig={{ sumCol: M_COL.TOTAL, costCol: M_COL.COST_TOTAL }}
+                onTotalsChange={setSheetTotals}
+              />
             </Box>
-            <TextField
-              size="small"
-              fullWidth
-              placeholder="Рядок формул (Enter — підтвердити)"
-              value={formulaValue}
-              onFocus={() => (formulaEditingRef.current = true)}
-              onBlur={(e) => {
-                formulaEditingRef.current = false;
-                if (!activeCell) return;
-                const row = rows[activeCell.r];
-                if (!row) return;
-                const prev = String(getCellValue(row, activeCell.c) ?? '');
-                const next = String(e.target.value ?? '');
-                if (prev !== next) {
-                  pushUndo({ rowId: row.id, col: activeCell.c, prev, next });
-                  redoRef.current = [];
-                  setCellValue(row.id, activeCell.c, next);
-                }
-              }}
-              onChange={(e) => {
-                setFormulaValue(e.target.value);
-                setFormulaDirty(true);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!activeCell) return;
-                  const row = rows[activeCell.r];
-                  if (!row) return;
-                  const prev = String(getCellValue(row, activeCell.c) ?? '');
-                  const next = String(formulaValue ?? '');
-                  if (prev !== next) {
-                    pushUndo({ rowId: row.id, col: activeCell.c, prev, next });
-                    redoRef.current = [];
-                    setCellValue(row.id, activeCell.c, next);
-                  }
-                  // Move down like Sheets
-                  const nr = Math.min(rows.length - 1, activeCell.r + 1);
-                  setActiveCell({ r: nr, c: activeCell.c });
-                  setFormulaDirty(false);
-                }
-                if (e.key === 'Escape') {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!activeCell) return;
-                  const row = rows[activeCell.r];
-                  const v = row ? String(getCellValue(row, activeCell.c) ?? '') : '';
-                  setFormulaValue(v);
-                  setFormulaDirty(false);
-                  (e.target as HTMLInputElement).blur();
-                }
-              }}
-              inputProps={{
-                style: { fontVariantNumeric: 'tabular-nums' },
-              }}
-            />
-          </Box>
+          )}
 
-          <Box
-            ref={gridRef}
-            tabIndex={0}
-            onKeyDown={handleGridKeyDown}
-            onPaste={handleGridPaste}
-            sx={{ width: '100%', overflow: 'auto', maxHeight: '65vh', outline: 'none', border: `1px solid ${SHEET_GOOGLE_BORDER}`, position: 'relative' }}
-          >
-            {overlayRect && editor && (
-              <Box
-                sx={{
-                  position: 'absolute',
-                  top: overlayRect.top,
-                  left: overlayRect.left,
-                  width: overlayRect.width,
-                  height: overlayRect.height,
-                  zIndex: 20,
-                  backgroundColor: '#fff',
-                  border: '2px solid rgba(26,115,232,0.95)',
-                  boxSizing: 'border-box',
-                  display: 'flex',
-                  alignItems: 'center',
-                  px: 0.75,
-                }}
-                onMouseDown={(e) => {
-                  // не даємо таблиці зняти фокус
-                  e.stopPropagation();
-                }}
-              >
-                {editor.c === 'name' ? (
-                  <Autocomplete<MaterialDto, false, false, true>
-                    size="small"
-                    options={materials}
-                    loading={materialsLoading}
-                    getOptionLabel={(opt) => (typeof opt === 'string' ? opt : String(opt?.name ?? ''))}
-                    isOptionEqualToValue={(a, b) => Number(a?.id) === Number(b?.id)}
-                    value={(() => {
-                      const rr = rows[editor.r];
-                      if (!rr?.materialId) return null;
-                      return materialsById.get(Number(rr.materialId)) ?? null;
-                    })()}
-                    inputValue={(() => {
-                      const rr = rows[editor.r];
-                      return String(rr?.name ?? '');
-                    })()}
-                    freeSolo
-                    onInputChange={(_, value, reason) => {
-                      if (reason === 'input') {
-                        const rr = rows[editor.r];
-                        if (!rr) return;
-                        updateRow(rr.id, { name: value, materialId: undefined });
-                      }
-                    }}
-                    onChange={(_, value) => {
-                      const rr = rows[editor.r];
-                      if (!rr) return;
-                      if (!value) {
-                        updateRow(rr.id, { materialId: undefined });
-                        return;
-                      }
-                      if (typeof value === 'string') {
-                        updateRow(rr.id, { name: value, materialId: undefined });
-                        return;
-                      }
-                      updateRow(rr.id, {
-                        materialId: Number(value.id),
-                        name: value.name,
-                        unit: String(value.unit ?? ''),
-                      });
-                    }}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        variant="standard"
-                        fullWidth
-                        placeholder={materials.length ? 'Почніть вводити…' : 'Найменування'}
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            // commit as-is and move down
-                            closeEditor();
-                            const nr = Math.min(rows.length - 1, editor.r + 1);
-                            selectCell(nr, 'name');
-                          }
-                          if (e.key === 'Escape') {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            closeEditor();
-                          }
-                        }}
-                        onBlur={() => {
-                          // фіксуємо undo як зміну і виходимо
-                          closeEditor();
-                        }}
-                        disabled={!canEdit}
-                        InputProps={{
-                          ...params.InputProps,
-                          disableUnderline: true,
-                          sx: { fontSize: 13, p: 0, height: 28 },
-                        }}
-                      />
-                    )}
-                  />
-                ) : (
-                  <TextField
-                    variant="standard"
-                    fullWidth
-                    inputRef={editorInputRef}
-                    value={editorValue}
-                    onChange={(e) => setEditorValue(e.target.value)}
-                    onBlur={() => commitEditor('none')}
-                    InputProps={{ disableUnderline: true, sx: { fontSize: 13, p: 0, height: 28 } }}
-                    inputProps={{ style: { fontVariantNumeric: 'tabular-nums' } }}
-                  />
-                )}
-              </Box>
-            )}
-
-            {/* Fill-handle (Sheets-like): drag DOWN or RIGHT; Ctrl/Meta enables numeric series */}
-            {!editor && activeCell && canEdit && (() => {
-              const r = computeOverlayRect(activeCell.r, activeCell.c);
-              if (!r) return null;
-              return (
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: r.top + r.height - 6,
-                    left: r.left + r.width - 6,
-                    width: 8,
-                    height: 8,
-                    zIndex: 18,
-                    backgroundColor: 'rgba(26,115,232,0.95)',
-                    border: '1px solid #fff',
-                    cursor: 'crosshair',
-                  }}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (!activeCell) return;
-                    const row = rows[activeCell.r];
-                    if (!row) return;
-                    const baseVal = String(getCellValue(row, activeCell.c) ?? '');
-                    setIsFilling(true);
-                    fillBaseRef.current = { r: activeCell.r, c: activeCell.c, value: baseVal, series: !!(e.ctrlKey || e.metaKey) };
-                    fillTargetRef.current = { r: activeCell.r, c: activeCell.c };
-                    // підсвічуємо як сел
-                    const ci = COLS.indexOf(activeCell.c);
-                    setAnchor({ r: activeCell.r, c: ci });
-                    setSel({ r1: activeCell.r, c1: ci, r2: activeCell.r, c2: ci });
-                  }}
-                />
-              );
-            })()}
-
-            <Table size="small" stickyHeader>
+          <Divider sx={{ my: 2 }} />
+          {/* REMOVED_GRID */}
+            {false && <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
                   <TableCell
@@ -2497,10 +2255,7 @@ return (
                   </TableRow>
                 )}
               </TableBody>
-            </Table>
-          </Box>
-
-          <Divider sx={{ my: 2 }} />
+            </Table>}
 
           <Stack spacing={1}>
             <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="flex-end" spacing={2}>

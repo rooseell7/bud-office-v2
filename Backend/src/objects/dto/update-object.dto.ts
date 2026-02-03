@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Min, ValidateIf } from 'class-validator';
 
 export class UpdateObjectDto {
   @IsOptional()
@@ -23,6 +23,7 @@ export class UpdateObjectDto {
   clientId?: number | null;
 
   @IsOptional()
+  @ValidateIf((_, v) => v != null)
   @IsInt()
   @Min(1)
   foremanId?: number | null;

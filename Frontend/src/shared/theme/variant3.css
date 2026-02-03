@@ -214,6 +214,17 @@ main {
   padding: 12px;
 }
 
+/* Акт редактор та read-mode — full width */
+.boContentPanel:has(.act-editor-full),
+.boContentPanel:has(.act-read),
+/* Накладна — full width */
+.boContentPanel:has(.invoice-details) {
+  width: calc(100% - 32px);
+  max-width: none;
+  margin: 16px;
+  padding: 12px;
+}
+
 /* --- Dropdown --- */
 .boMenu {
   background: rgba(10, 10, 10, 0.92);

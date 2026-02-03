@@ -13,7 +13,7 @@ export type CellEditorWithAutocompleteProps = {
   onChange: (value: string) => void;
   onBlur?: () => void;
   onCommit?: () => void;
-  onSelectWithUnit?: (name: string, unit?: string | null) => void;
+  onSelectWithUnit?: (name: string, unit?: string | null, materialId?: number) => void;
   rowHeight: number;
   colWidth: number;
   type: 'works' | 'materials';
@@ -72,7 +72,7 @@ export const CellEditorWithAutocomplete: React.FC<CellEditorWithAutocompleteProp
     if (opt) {
       setInputValue(opt.name);
       onChange(opt.name);
-      onSelectWithUnit?.(opt.name, opt.unit ?? null);
+      onSelectWithUnit?.(opt.name, opt.unit ?? null, opt.id);
     }
   };
 
