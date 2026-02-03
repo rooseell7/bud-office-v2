@@ -60,6 +60,8 @@ run-nginx.bat
 
 (не localhost:5173 і не localhost:3000 — саме порт 80 через Nginx)
 
+**Доступ з інших ПК по IP:** див. **RUN-NGINX-BY-IP.md** (порт 80 у брандмауері: `setup-firewall.bat` від адміна).
+
 ---
 
 ### 4. Перевірка Sheet Collab (WebSocket)

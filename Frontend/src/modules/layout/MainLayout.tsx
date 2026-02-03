@@ -15,6 +15,7 @@ import {
   ListItemText,
   Divider,
   Typography,
+  Tooltip,
 } from '@mui/material';
 
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
@@ -34,10 +35,35 @@ import { BRAND } from '../../theme/muiTheme';
 
 const drawerWidth = 260;
 
+// Ініціал для аватара: перша буква displayName (або "?")
+function getInitial(displayName: string): string {
+  const s = displayName?.trim();
+  return s ? s.charAt(0).toUpperCase() : '?';
+}
+
+// Відображуване ім'я: fullName → частина email до @ → "Користувач"
+function getDisplayName(user: { fullName?: string; email?: string } | null): string {
+  if (!user) return '';
+  if (user.fullName?.trim()) return user.fullName.trim();
+  if (user.email?.trim()) return user.email.split('@')[0]?.trim() || 'Користувач';
+  return 'Користувач';
+}
+
 const MainLayout: React.FC = () => {
   const loc = useLocation();
   const navigate = useNavigate();
-  const { user, logout, can } = useAuth();
+  const { user, logout, can, isAuthLoading, roles } = useAuth();
+  const displayName = getDisplayName(user);
+  const initial = getInitial(displayName);
+
+  // З цих сторінок NavLink іноді не спрацьовує — показуємо звичайні посилання для гарантованого переходу
+  const forceFullNav =
+    /^\/estimate\/\d+$/.test(loc.pathname) ||
+    /^\/delivery\/acts\/\d+$/.test(loc.pathname) ||
+    /^\/estimate\/acts\/\d+$/.test(loc.pathname) ||
+    /^\/invoices\/[^/]+$/.test(loc.pathname) ||
+    /^\/supply\/invoices\/[^/]+$/.test(loc.pathname);
+
   useEffect(() => {
     if (!DEBUG_NAV) return;
     console.log('[RR][layout] init, DEBUG_NAV=on');
@@ -81,7 +107,6 @@ const MainLayout: React.FC = () => {
         { to: '/sales/clients', label: 'Клієнти', icon: <PeopleAltOutlinedIcon /> },
         { to: '/sales/objects', label: "Об'єкти", icon: <WorkOutlineOutlinedIcon /> },
         { to: '/sales/deals', label: 'Угоди', icon: <FactCheckOutlinedIcon /> },
-        { to: '/sales/quotes', label: 'Комерційні пропозиції', icon: <RequestQuoteOutlinedIcon /> },
       ],
     },
     {
@@ -122,7 +147,7 @@ const MainLayout: React.FC = () => {
             aria-label="BUD Office — на головну"
             onClick={(e) => {
               e.preventDefault();
-              if (/^\/estimate\/\d+$/.test(loc.pathname) || /^\/delivery\/acts\/\d+$/.test(loc.pathname) || /^\/estimate\/acts\/\d+$/.test(loc.pathname)) {
+              if (/^\/estimate\/\d+$/.test(loc.pathname) || /^\/delivery\/acts\/\d+$/.test(loc.pathname) || /^\/estimate\/acts\/\d+$/.test(loc.pathname) || /^\/invoices\/[^/]+$/.test(loc.pathname) || /^\/supply\/invoices\/[^/]+$/.test(loc.pathname)) {
                 window.location.href = '/home';
               } else {
                 navigate('/home', { state: undefined });
@@ -135,7 +160,67 @@ const MainLayout: React.FC = () => {
 
           <Box sx={{ flex: 1 }} />
 
-          {user && (
+          {isAuthLoading && (
+            <Box
+              sx={{
+                width: 30,
+                height: 30,
+                borderRadius: '50%',
+                backgroundColor: 'var(--divider)',
+                opacity: 0.6,
+              }}
+              aria-hidden
+            />
+          )}
+          {!isAuthLoading && user && (
+            <Tooltip
+              title={
+                <Box component="span" sx={{ display: 'block', fontSize: '0.8rem' }}>
+                  <strong>{displayName}</strong>
+                  {user.email && (
+                    <>
+                      <br />
+                      {user.email}
+                    </>
+                  )}
+                  {roles.length > 0 && (
+                    <>
+                      <br />
+                      {roles.join(', ')}
+                    </>
+                  )}
+                </Box>
+              }
+              placement="bottom"
+              arrow
+            >
+              <Link
+                to="/profile"
+                style={{ textDecoration: 'none', color: 'inherit' }}
+                aria-label="Перейти до профілю"
+              >
+                <Box
+                  component="span"
+                  sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 30,
+                    height: 30,
+                    borderRadius: '50%',
+                    backgroundColor: BRAND.accent ?? 'var(--primary)',
+                    color: '#fff',
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    flexShrink: 0,
+                  }}
+                >
+                  {initial}
+                </Box>
+              </Link>
+            </Tooltip>
+          )}
+          {!isAuthLoading && user && (
             <Link
               to="/profile"
               style={{
@@ -154,7 +239,7 @@ const MainLayout: React.FC = () => {
               }}
               aria-label="Перейти до профілю"
             >
-              {user.fullName}
+              {displayName}
             </Link>
           )}
           {can('users:read') && (
@@ -235,31 +320,51 @@ const MainLayout: React.FC = () => {
                 {group.title}
               </Box>
 
-              {group.items.map((item) => (
-                <ListItemButton
-                  key={item.to}
-                  component={NavLink}
-                  to={item.to}
-                  className={({ isActive }) => `boNavItem ${isActive ? 'isActive' : ''}`}
-                  onClick={(e) => {
-                    if (/^\/estimate\/\d+$/.test(loc.pathname) || /^\/delivery\/acts\/\d+$/.test(loc.pathname) || /^\/estimate\/acts\/\d+$/.test(loc.pathname)) {
-                      e.preventDefault();
-                      window.location.href = item.to;
-                    }
-                  }}
-                  sx={{
-                    borderRadius: 2,
-                    mx: 1,
-                    my: 0.5,
-                    py: 1,
-                    '& .MuiListItemIcon-root': { minWidth: 40 },
-                    '& .MuiListItemText-primary': { fontWeight: 500, fontSize: '0.875rem' },
-                  }}
-                >
-                  <ListItemIcon className="boNavIcon">{item.icon}</ListItemIcon>
-                  <ListItemText primary={item.label} />
-                </ListItemButton>
-              ))}
+              {group.items.map((item) => {
+                const isActive = loc.pathname === item.to || (item.to !== '/' && loc.pathname.startsWith(item.to + '/'));
+                if (forceFullNav) {
+                  return (
+                    <ListItemButton
+                      key={item.to}
+                      component="a"
+                      href={item.to}
+                      className={`boNavItem ${isActive ? 'isActive' : ''}`}
+                      sx={{
+                        borderRadius: 2,
+                        mx: 1,
+                        my: 0.5,
+                        py: 1,
+                        textDecoration: 'none',
+                        color: 'inherit',
+                        '& .MuiListItemIcon-root': { minWidth: 40 },
+                        '& .MuiListItemText-primary': { fontWeight: 500, fontSize: '0.875rem' },
+                      }}
+                    >
+                      <ListItemIcon className="boNavIcon">{item.icon}</ListItemIcon>
+                      <ListItemText primary={item.label} />
+                    </ListItemButton>
+                  );
+                }
+                return (
+                  <ListItemButton
+                    key={item.to}
+                    component={NavLink}
+                    to={item.to}
+                    className={({ isActive: active }) => `boNavItem ${active ? 'isActive' : ''}`}
+                    sx={{
+                      borderRadius: 2,
+                      mx: 1,
+                      my: 0.5,
+                      py: 1,
+                      '& .MuiListItemIcon-root': { minWidth: 40 },
+                      '& .MuiListItemText-primary': { fontWeight: 500, fontSize: '0.875rem' },
+                    }}
+                  >
+                    <ListItemIcon className="boNavIcon">{item.icon}</ListItemIcon>
+                    <ListItemText primary={item.label} />
+                  </ListItemButton>
+                );
+              })}
             </Box>
           ))}
 

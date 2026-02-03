@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 
 import LoginPage from './modules/auth/LoginPage';
 import { ProtectedRoute } from './modules/auth/ProtectedRoute';
@@ -74,15 +74,13 @@ const RootLayout: React.FC = () => (
   </ProtectedRoute>
 );
 
-const App: React.FC = () => {
-  const location = useLocation();
-  return (
+const App: React.FC = () => (
     <Routes>
       {/* Публічний роут */}
       <Route path="/login" element={<LoginPage />} />
 
-      {/* Основний CRM-кабінет — key примушує unmount при зміні маршруту (без location prop) */}
-      <Route path="/" element={<RootLayout key={location.key ?? location.pathname} />}>
+      {/* Основний CRM-кабінет; без key — навігація оновлює лише Outlet, інакше з деяких сторінок (накладні) не переходить */}
+      <Route path="/" element={<RootLayout />}>
         {/* ✅ Перша сторінка після логіну */}
         <Route index element={<Navigate to="/home" replace />} />
 
@@ -179,7 +177,6 @@ const App: React.FC = () => {
       {/* Фолбек */}
       <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>
-  );
-};
+);
 
 export default App;

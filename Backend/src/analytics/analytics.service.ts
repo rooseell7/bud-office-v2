@@ -98,9 +98,9 @@ export class AnalyticsService {
     const [incomeSum, expenseSum, cashflowRows, expenseByCat, revenueByProj, projectStatus, taskStatus, cashOnHand, activeProjects, overdueTasks, blockedTasks, dataQuality] = await Promise.all([
       this.txRepo.createQueryBuilder('t').select('COALESCE(SUM(COALESCE(t.amountUAH, t.amount)), 0)', 's').where('t.type = :in', { in: TransactionType.IN }).andWhere('t.date >= :from', { from: fromStr }).andWhere('t.date <= :to', { to: toStr }).getRawOne<{ s: string }>(),
       this.txRepo.createQueryBuilder('t').select('COALESCE(SUM(COALESCE(t.amountUAH, t.amount)), 0)', 's').where('t.type = :out', { out: TransactionType.OUT }).andWhere('t.date >= :from', { from: fromStr }).andWhere('t.date <= :to', { to: toStr }).getRawOne<{ s: string }>(),
-      this.txRepo.createQueryBuilder('t').select(`${dateTrunc}`, 'dateBucket').addSelect("COALESCE(SUM(CASE WHEN t.type = 'in' THEN COALESCE(t.amountUAH, t.amount) ELSE 0 END), 0)", 'incomeUAH').addSelect("COALESCE(SUM(CASE WHEN t.type = 'out' THEN COALESCE(t.amountUAH, t.amount) ELSE 0 END), 0)", 'expenseUAH').where('t.date >= :from', { from: fromStr }).andWhere('t.date <= :to', { to: toStr }).andWhere('t.type IN (:...types)', { types: [TransactionType.IN, TransactionType.OUT] }).groupBy('dateBucket').orderBy('dateBucket', 'ASC').getRawMany<{ dateBucket: string; incomeUAH: string; expenseUAH: string }>(),
+      this.txRepo.createQueryBuilder('t').select(`${dateTrunc}`, 'dateBucket').addSelect("COALESCE(SUM(CASE WHEN t.type = 'in' THEN COALESCE(t.amountUAH, t.amount) ELSE 0 END), 0)", 'incomeUAH').addSelect("COALESCE(SUM(CASE WHEN t.type = 'out' THEN COALESCE(t.amountUAH, t.amount) ELSE 0 END), 0)", 'expenseUAH').where('t.date >= :from', { from: fromStr }).andWhere('t.date <= :to', { to: toStr }).andWhere('t.type IN (:...types)', { types: [TransactionType.IN, TransactionType.OUT] }).groupBy('"dateBucket"').orderBy('"dateBucket"', 'ASC').getRawMany<{ dateBucket: string; incomeUAH: string; expenseUAH: string }>(),
       this.txRepo.createQueryBuilder('t').innerJoin(Category, 'c', 'c.id = t.categoryId').select('t.categoryId', 'categoryId').addSelect('c.name', 'categoryName').addSelect('COALESCE(SUM(COALESCE(t.amountUAH, t.amount)), 0)', 'amountUAH').where('t.type = :out', { out: TransactionType.OUT }).andWhere('t.date >= :from', { from: fromStr }).andWhere('t.date <= :to', { to: toStr }).groupBy('t.categoryId').addGroupBy('c.name').getRawMany<{ categoryId: number; categoryName: string; amountUAH: string }>(),
-      this.txRepo.createQueryBuilder('t').innerJoin(Project, 'p', 'p.id = t.projectId').select('t.projectId', 'projectId').addSelect('p.name', 'projectName').addSelect('COALESCE(SUM(COALESCE(t.amountUAH, t.amount)), 0)', 'incomeUAH').where('t.type = :in', { in: TransactionType.IN }).andWhere('t.date >= :from', { from: fromStr }).andWhere('t.date <= :to', { to: toStr }).andWhere('t.projectId IS NOT NULL').groupBy('t.projectId').addGroupBy('p.name').orderBy('incomeUAH', 'DESC').limit(10).getRawMany<{ projectId: number; projectName: string; incomeUAH: string }>(),
+      this.txRepo.createQueryBuilder('t').innerJoin(Project, 'p', 'p.id = t.projectId').select('t.projectId', 'projectId').addSelect('p.name', 'projectName').addSelect('COALESCE(SUM(COALESCE(t.amountUAH, t.amount)), 0)', 'incomeUAH').where('t.type = :in', { in: TransactionType.IN }).andWhere('t.date >= :from', { from: fromStr }).andWhere('t.date <= :to', { to: toStr }).andWhere('t.projectId IS NOT NULL').groupBy('t.projectId').addGroupBy('p.name').orderBy('"incomeUAH"', 'DESC').limit(10).getRawMany<{ projectId: number; projectName: string; incomeUAH: string }>(),
       this.projectRepo.createQueryBuilder('p').select('p.status', 'status').addSelect('COUNT(*)', 'count').groupBy('p.status').getRawMany<{ status: string; count: string }>(),
       this.taskRepo.createQueryBuilder('t').select('t.status', 'status').addSelect('COUNT(*)', 'count').where('t.status NOT IN (:...done)', { done: [ExecutionTaskStatus.DONE, ExecutionTaskStatus.CANCELED] }).groupBy('t.status').getRawMany<{ status: string; count: string }>().then((rows) => this.taskRepo.createQueryBuilder('t').select('t.status', 'status').addSelect('COUNT(*)', 'count').groupBy('t.status').getRawMany<{ status: string; count: string }>()),
       this.getCashOnHandUAH(),
@@ -205,7 +205,6 @@ export class AnalyticsService {
 
     const qb = this.projectRepo
       .createQueryBuilder('p')
-      .leftJoin('p.id', 'dummy')
       .select('p.id', 'projectId')
       .addSelect('p.name', 'projectName')
       .addSelect('p.status', 'status')
@@ -293,7 +292,7 @@ export class AnalyticsService {
     const cpQb = this.txRepo.createQueryBuilder('t').select('t.counterparty', 'counterparty').addSelect('COALESCE(SUM(COALESCE(t.amountUAH, t.amount)), 0)', 'amountUAH').addSelect('COUNT(*)', 'count').where('t.counterparty IS NOT NULL').andWhere('t.counterparty != :empty', { empty: '' }).andWhere('t.date >= :from', { from: fromStr }).andWhere('t.date <= :to', { to: toStr });
     if (walletId != null) cpQb.andWhere('t.walletId = :walletId', { walletId });
     if (projectId != null) cpQb.andWhere('t.projectId = :projectId', { projectId });
-    const topCounterparties = await cpQb.groupBy('t.counterparty').orderBy('amountUAH', 'DESC').limit(15).getRawMany<{ counterparty: string; amountUAH: string; count: string }>();
+    const topCounterparties = await cpQb.groupBy('t.counterparty').orderBy('"amountUAH"', 'DESC').limit(15).getRawMany<{ counterparty: string; amountUAH: string; count: string }>();
 
     return {
       byWallet,

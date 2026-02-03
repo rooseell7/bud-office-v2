@@ -6,5 +6,7 @@ timeout /t 3 /nobreak >nul
 echo 2. Starting Nginx...
 call run-nginx.bat
 echo.
-echo Done. Open http://localhost in browser.
+echo Done.
+echo   Local:    http://localhost
+echo   By IP:    http://YOUR_IP  (run ipconfig to see IP; allow port 80: setup-firewall.bat as Admin)
 pause

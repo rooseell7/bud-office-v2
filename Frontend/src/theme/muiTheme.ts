@@ -65,5 +65,55 @@ export const muiTheme = createTheme({
         },
       },
     },
+    // Випадаючі меню (Menu, Select, Autocomplete) — світлий фон і чорний текст для читабельності
+    MuiMenu: {
+      styleOverrides: {
+        paper: {
+          backgroundColor: '#fff',
+          color: '#1a1a1a',
+          '& .MuiListItemText-primary': { color: '#1a1a1a' },
+          '& .MuiListItemIcon-root': { color: 'rgba(0,0,0,0.54)' },
+        },
+      },
+    },
+    MuiMenuItem: {
+      styleOverrides: {
+        root: {
+          color: '#1a1a1a',
+          '&:hover': { backgroundColor: 'rgba(0,0,0,0.04)' },
+          '&.Mui-selected': { backgroundColor: 'rgba(122,200,84,0.12)', color: '#1a1a1a' },
+          '&.Mui-selected:hover': { backgroundColor: 'rgba(122,200,84,0.18)' },
+        },
+      },
+    },
+    MuiPopover: {
+      styleOverrides: {
+        paper: {
+          backgroundColor: '#fff',
+          color: '#1a1a1a',
+          '& .MuiMenuItem-root': { color: '#1a1a1a' },
+          '& .MuiListItemText-primary': { color: '#1a1a1a' },
+          '& .MuiInputBase-input': { color: '#1a1a1a' },
+        },
+      },
+    },
+    MuiList: {
+      styleOverrides: {
+        root: {
+          '& .MuiMenuItem-root': { color: '#1a1a1a' },
+          '& .MuiListItemText-primary': { color: '#1a1a1a' },
+        },
+      },
+    },
+    MuiAutocomplete: {
+      styleOverrides: {
+        paper: {
+          backgroundColor: '#fff',
+          color: '#1a1a1a',
+          '& .MuiAutocomplete-option': { color: '#1a1a1a' },
+          '& .MuiListItemText-root': { color: '#1a1a1a' },
+        },
+      },
+    },
   },
 });

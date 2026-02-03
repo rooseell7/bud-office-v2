@@ -3,11 +3,14 @@
  * Застосовує SQL-міграції з Backend/sql у строгому порядку.
  * Змінні оточення: DB_HOST, DB_PORT, DB_USER, DB_PASS, DB_NAME (або з .env у корені Backend).
  * Запуск: з папки Backend: node tools/run-migrations.mjs
+ * Опція: node tools/run-migrations.mjs --from 2026-02-03_finance.sql  — виконати лише з цього файлу (включно).
  */
 
-const fs = require('fs');
-const path = require('path');
-const { Client } = require('pg');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import pg from 'pg';
+const { Client } = pg;
 
 const MIGRATIONS_ORDER = [
   '2025-12-27_warehouse_movement_drafts.sql',
@@ -75,7 +78,17 @@ async function run() {
     process.exit(1);
   }
 
-  for (const file of MIGRATIONS_ORDER) {
+  const fromArg = process.argv.find((a) => a.startsWith('--from='));
+  const fromFile = fromArg ? fromArg.slice(7).trim() : null;
+  const startIdx = fromFile ? MIGRATIONS_ORDER.indexOf(fromFile) : 0;
+  const toRun = startIdx >= 0 ? MIGRATIONS_ORDER.slice(startIdx) : MIGRATIONS_ORDER;
+  if (fromFile && startIdx < 0) {
+    console.warn('Файл --from не знайдено в списку, виконую всі.');
+  } else if (fromFile) {
+    console.log('Виконую міграції починаючи з:', fromFile);
+  }
+
+  for (const file of toRun) {
     const filePath = path.join(sqlDir, file);
     if (!fs.existsSync(filePath)) {
       console.warn('Пропуск (файл не знайдено):', file);

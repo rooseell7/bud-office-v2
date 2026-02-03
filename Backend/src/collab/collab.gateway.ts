@@ -94,7 +94,7 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
         break;
       case 'PRESENCE':
         this.collabService.updatePresence(client.id, payload.docId, userId, payload.cursor);
-        this.broadcastPresence(payload.docId);
+        // не розсилати список онлайн — broadcastPresence вимкнено
         break;
       case 'LOCK_CELL':
         if (this.collabService.canLock(client.id, payload.docId)) {
@@ -141,9 +141,9 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
       snapshot: state?.snapshot ?? null,
       version: state?.version ?? 0,
       locks: this.collabService.getLocks(docId),
-      presence: this.collabService.getPresence(docId),
+      presence: [], // не показувати онлайн інших користувачів
     });
-    this.broadcastPresence(docId);
+    // this.broadcastPresence(docId); — вимкнено
   }
 
   private async handleApplyOp(
@@ -212,11 +212,11 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   private broadcastPresence(docId: number) {
-    const presence = this.collabService.getPresence(docId);
+    // Не показувати онлайн інших користувачів — завжди пустий масив
     this.server.to(`sheet:${docId}`).emit('collab', {
       type: 'PRESENCE_BROADCAST',
       docId,
-      presence,
+      presence: [],
     });
   }
 
