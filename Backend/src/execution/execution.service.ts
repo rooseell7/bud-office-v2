@@ -5,9 +5,11 @@ import { Project } from '../projects/project.entity';
 import { ExecutionTask, ExecutionTaskStatus, ExecutionTaskPriority } from './execution-task.entity';
 import { ExecutionTaskEvent, ExecutionTaskEventType } from './execution-task-event.entity';
 import { ForemanEvent, ForemanEventType } from '../foreman/foreman-event.entity';
+import { RealtimeService } from '../realtime/realtime.service';
 import { CreateExecutionTaskDto } from './dto/create-execution-task.dto';
 import { UpdateExecutionTaskDto } from './dto/update-execution-task.dto';
 import { TaskCommentDto } from './dto/task-comment.dto';
+import type { DomainEvent } from '../realtime/domain-event.types';
 
 export type ExecutionProjectListItem = {
   id: number;
@@ -56,6 +58,7 @@ export class ExecutionService {
     private readonly taskEventRepo: Repository<ExecutionTaskEvent>,
     @InjectRepository(ForemanEvent)
     private readonly foremanEventRepo: Repository<ForemanEvent>,
+    private readonly realtime: RealtimeService,
   ) {}
 
   private toInt(value: unknown, field: string): number {
@@ -245,6 +248,19 @@ export class ExecutionService {
       userId,
     );
 
+    const ev: DomainEvent = {
+      eventId: crypto.randomUUID(),
+      ts: new Date().toISOString(),
+      actorId: userId,
+      entity: 'task',
+      action: 'created',
+      entityId: saved.id,
+      projectId,
+      payload: { title: saved.title },
+      eventVersion: 1,
+    };
+    this.realtime.broadcast(ev, [`project:${projectId}`, 'module:execution']);
+
     return this.taskToDto(saved, null);
   }
 
@@ -285,6 +301,19 @@ export class ExecutionService {
       );
     }
 
+    const ev: DomainEvent = {
+      eventId: crypto.randomUUID(),
+      ts: new Date().toISOString(),
+      actorId: userId,
+      entity: 'task',
+      action: dto.status !== undefined && dto.status !== prevStatus ? 'status_changed' : 'updated',
+      entityId: saved.id,
+      projectId: task.projectId,
+      payload: dto.status !== undefined ? { status: dto.status } : undefined,
+      eventVersion: 1,
+    };
+    this.realtime.broadcast(ev, [`project:${task.projectId}`, 'module:execution']);
+
     return this.taskToDto(saved, null);
   }
 
@@ -311,6 +340,19 @@ export class ExecutionService {
       { taskId, comment },
       userId,
     );
+
+    const ev: DomainEvent = {
+      eventId: crypto.randomUUID(),
+      ts: new Date().toISOString(),
+      actorId: userId,
+      entity: 'task',
+      action: 'updated',
+      entityId: taskId,
+      projectId: task.projectId,
+      payload: { comment: true },
+      eventVersion: 1,
+    };
+    this.realtime.broadcast(ev, [`project:${task.projectId}`, 'module:execution']);
 
     return {
       id: saved.id,

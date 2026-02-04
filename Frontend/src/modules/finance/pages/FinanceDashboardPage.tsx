@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
+import { useRealtime } from '../../../realtime/RealtimeContext';
 import {
   Box,
   Button,
@@ -54,6 +55,7 @@ function formatDate(s: string): string {
 const FinanceDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { can } = useAuth();
+  const realtime = useRealtime();
   const [balances, setBalances] = useState<BalanceDto[]>([]);
   const [transactions, setTransactions] = useState<TransactionDto[]>([]);
   const [totalUAH, setTotalUAH] = useState(0);
@@ -100,6 +102,24 @@ const FinanceDashboardPage: React.FC = () => {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!realtime) return;
+    realtime.joinModule('finance');
+    return () => realtime.leaveModule('finance');
+  }, [realtime]);
+
+  useEffect(() => {
+    if (!realtime) return;
+    return realtime.subscribe((ev) => {
+      if (ev.entity === 'transaction' || ev.entity === 'wallet') load();
+    });
+  }, [realtime, load]);
+
+  useEffect(() => {
+    if (!realtime) return;
+    return realtime.refetchOnReconnect(load);
+  }, [realtime, load]);
 
   if (!can('finance:read')) {
     return <Navigate to="/403" replace />;

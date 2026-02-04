@@ -4,10 +4,16 @@ import {
   SubscribeMessage,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
 } from '@nestjs/websockets';
 import { Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { Server } from 'socket.io';
+import { Project } from '../projects/project.entity';
+import { PresenceService } from '../presence/presence.service';
 import { CollabService } from './collab.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 
@@ -44,10 +50,17 @@ function getUserIdFromHandshake(handshake: any, jwtService: JwtService, secret: 
   }
 }
 
+export type RealtimePayload =
+  | { type: 'JOIN_PROJECT'; projectId: number }
+  | { type: 'LEAVE_PROJECT'; projectId: number }
+  | { type: 'JOIN_MODULE'; module: 'execution' | 'finance' }
+  | { type: 'LEAVE_MODULE'; module: 'execution' | 'finance' }
+  | { type: 'PRESENCE_PING' };
+
 @WebSocketGateway({
   cors: { origin: '*' },
 })
-export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit {
   @WebSocketServer()
   server!: Server;
 
@@ -55,9 +68,17 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   constructor(
     private readonly collabService: CollabService,
+    private readonly realtimeService: RealtimeService,
+    private readonly presenceService: PresenceService,
+    @InjectRepository(Project)
+    private readonly projectRepo: Repository<Project>,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
   ) {}
+
+  afterInit(): void {
+    this.realtimeService.setServer(this.server);
+  }
 
   handleConnection(client: any) {
     const secret = this.config.get<string>('JWT_SECRET') || '';
@@ -73,6 +94,9 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.logger.warn(`Collab connect rejected: invalid token`);
       client.emit('auth_error', { reason: 'Invalid token' });
       client.disconnect(true);
+    }
+    if (userId != null) {
+      this.presenceService.seen(userId);
     }
   }
 
@@ -122,6 +146,84 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect {
       default:
         break;
     }
+  }
+
+  @SubscribeMessage('realtime')
+  async handleRealtime(client: any, payload: RealtimePayload): Promise<void> {
+    const userId = (client as any).userId ?? null;
+    switch (payload.type) {
+      case 'JOIN_PROJECT': {
+        if (userId == null) break;
+        const project = await this.projectRepo.findOne({
+          where: { id: payload.projectId, userId },
+        });
+        if (!project) {
+          this.logger.debug(`[realtime] join project:${payload.projectId} denied for user ${userId}`);
+          break;
+        }
+        const room = `project:${payload.projectId}`;
+        await client.join(room);
+        this.logger.debug(`[realtime] join room=${room} userId=${userId}`);
+        break;
+      }
+      case 'LEAVE_PROJECT': {
+        const room = `project:${payload.projectId}`;
+        client.leave(room);
+        this.logger.debug(`[realtime] leave room=${room} userId=${userId}`);
+        break;
+      }
+      case 'JOIN_MODULE': {
+        const room = `module:${payload.module}`;
+        await client.join(room);
+        this.logger.debug(`[realtime] join room=${room} userId=${userId}`);
+        break;
+      }
+      case 'LEAVE_MODULE': {
+        const room = `module:${payload.module}`;
+        client.leave(room);
+        this.logger.debug(`[realtime] leave room=${room} userId=${userId}`);
+        break;
+      }
+      case 'PRESENCE_PING':
+        if (userId != null) this.presenceService.seen(userId);
+        break;
+      default:
+        break;
+    }
+  }
+
+  @SubscribeMessage('rooms:join')
+  async handleRoomsJoin(client: any, payload: { room?: string }): Promise<void> {
+    const room = payload?.room?.trim();
+    if (!room) return;
+    const userId = (client as any).userId ?? null;
+    if (userId == null) return;
+    const ok = await this.validateRoomAccess(room, userId);
+    if (!ok) {
+      this.logger.debug(`[realtime] rooms:join denied room=${room} userId=${userId}`);
+      return;
+    }
+    await client.join(room);
+    this.logger.debug(`[realtime] rooms:join room=${room} userId=${userId}`);
+  }
+
+  @SubscribeMessage('rooms:leave')
+  handleRoomsLeave(client: any, payload: { room?: string }): void {
+    const room = payload?.room?.trim();
+    if (!room) return;
+    client.leave(room);
+    this.logger.debug(`[realtime] rooms:leave room=${room} userId=${(client as any).userId ?? null}`);
+  }
+
+  private async validateRoomAccess(room: string, userId: number): Promise<boolean> {
+    if (room.startsWith('project:')) {
+      const id = parseInt(room.slice(8), 10);
+      if (!Number.isFinite(id)) return false;
+      const project = await this.projectRepo.findOne({ where: { id, userId } });
+      return !!project;
+    }
+    if (room === 'module:execution' || room === 'module:finance') return true;
+    return false;
   }
 
   private async handleJoin(

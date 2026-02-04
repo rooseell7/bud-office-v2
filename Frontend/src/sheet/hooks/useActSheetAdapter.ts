@@ -58,19 +58,19 @@ function worksToSnapshot(works: ActItem[]): SheetSnapshot {
   };
 }
 
-/** Convert SheetSnapshot rows to Act work items */
+/** Convert SheetSnapshot rows to Act work items. Зберігає позиції рядків: порожні рядки теж зберігаються як пусті work. */
 function snapshotToWorks(snapshot: SheetSnapshot, sectionKey: string): ActItem[] {
   const raw = snapshot.rawValues ?? snapshot.values ?? [];
+  const rowCount = Math.max(snapshot.rowCount ?? raw.length, raw.length);
   const out: ActItem[] = [];
-  for (const row of raw) {
-    if (!row) continue;
-    const name = String(row[W_COL.NAME] ?? '').trim();
-    const unit = String(row[W_COL.UNIT] ?? '').trim();
-    const qty = n(row[W_COL.QTY]);
-    const price = n(row[W_COL.PRICE]);
-    const costUnit = n(row[W_COL.COST_UNIT]);
-    const note = String(row[W_COL.NOTE] ?? '').trim();
-    if (!name && !unit && qty === 0 && price === 0) continue; // skip empty
+  for (let r = 0; r < rowCount; r++) {
+    const row = raw[r];
+    const name = row ? String(row[W_COL.NAME] ?? '').trim() : '';
+    const unit = row ? String(row[W_COL.UNIT] ?? '').trim() : '';
+    const qty = row ? n(row[W_COL.QTY]) : 0;
+    const price = row ? n(row[W_COL.PRICE]) : 0;
+    const costUnit = row ? n(row[W_COL.COST_UNIT]) : 0;
+    const note = row ? String(row[W_COL.NOTE] ?? '').trim() : '';
     out.push({
       rowType: 'work',
       type: 'work',

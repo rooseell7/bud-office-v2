@@ -3,6 +3,8 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 
 import LoginPage from './modules/auth/LoginPage';
 import { ProtectedRoute } from './modules/auth/ProtectedRoute';
+import { useAuth } from './modules/auth/AuthContext';
+import { RealtimeProvider } from './realtime/RealtimeContext';
 
 // CRM layout + сторінки
 import MainLayout from './modules/layout/MainLayout';
@@ -17,6 +19,15 @@ import QuotesPage from './modules/sales/QuotesPage';
 // ✅ Накладні
 import InvoicesPage from './modules/invoices/pages/InvoicesPage';
 import InvoiceDetailsPage from './modules/invoices/pages/InvoiceDetailsPage';
+// ✅ Supply MVP: заявки, замовлення, приходи, до оплати
+import SupplyRequestsPage from './modules/supply/pages/SupplyRequestsPage';
+import SupplyRequestDetailPage from './modules/supply/pages/SupplyRequestDetailPage';
+import SupplyOrdersPage from './modules/supply/pages/SupplyOrdersPage';
+import SupplyOrderDetailPage from './modules/supply/pages/SupplyOrderDetailPage';
+import SupplyReceiptsPage from './modules/supply/pages/SupplyReceiptsPage';
+import SupplyReceiptDetailPage from './modules/supply/pages/SupplyReceiptDetailPage';
+import SupplyPayablesPage from './modules/supply/pages/SupplyPayablesPage';
+import SupplyPayableDetailPage from './modules/supply/pages/SupplyPayableDetailPage';
 
 // ✅ списки (як у тебе зараз)
 import WarehousesPage from './modules/warehouses/WarehousesPage';
@@ -68,9 +79,16 @@ import { SheetDemoPage } from './pages/sheet/SheetDemoPage';
 import { EstimateIndexPage } from './pages/estimate/EstimateIndexPage';
 import { EstimateByIdPage } from './pages/estimate/EstimateByIdPage';
 
+const RealtimeWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { accessToken } = useAuth();
+  return <RealtimeProvider token={accessToken}>{children}</RealtimeProvider>;
+};
+
 const RootLayout: React.FC = () => (
   <ProtectedRoute>
-    <MainLayout />
+    <RealtimeWrapper>
+      <MainLayout />
+    </RealtimeWrapper>
   </ProtectedRoute>
 );
 
@@ -121,8 +139,16 @@ const App: React.FC = () => (
         <Route path="estimate/invoices" element={<InvoicesPage />} />
         <Route path="estimate/:id" element={<EstimateByIdPage />} />
 
-        {/* ✅ Відділ постачання (alias routes) */}
-        <Route path="supply" element={<Navigate to="/supply/invoices" replace />} />
+        {/* ✅ Відділ постачання (Supply MVP + накладні/склади/матеріали) */}
+        <Route path="supply" element={<Navigate to="/supply/requests" replace />} />
+        <Route path="supply/requests" element={<SupplyRequestsPage />} />
+        <Route path="supply/requests/:id" element={<SupplyRequestDetailPage />} />
+        <Route path="supply/orders" element={<SupplyOrdersPage />} />
+        <Route path="supply/orders/:id" element={<SupplyOrderDetailPage />} />
+        <Route path="supply/receipts" element={<SupplyReceiptsPage />} />
+        <Route path="supply/receipts/:id" element={<SupplyReceiptDetailPage />} />
+        <Route path="supply/payables" element={<SupplyPayablesPage />} />
+        <Route path="supply/payables/:id" element={<SupplyPayableDetailPage />} />
         <Route path="supply/invoices" element={<InvoicesPage />} />
         <Route path="supply/warehouses" element={<WarehousesPage />} />
         <Route path="supply/materials" element={<MaterialsPage />} />

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams, Navigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
+import { useRealtime } from '../../../realtime/RealtimeContext';
 import {
   Box,
   Button,
@@ -64,6 +65,7 @@ const ExecutionProjectDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { can } = useAuth();
+  const realtime = useRealtime();
   const projectId = Number(id ?? 0);
 
   const [projectDetail, setProjectDetail] = useState<{ project: any; tasks: ExecutionTaskDto[] } | null>(null);
@@ -73,7 +75,6 @@ const ExecutionProjectDetailsPage: React.FC = () => {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const load = useCallback(async () => {
     if (!projectId || !Number.isFinite(projectId)) return;
     setLoading(true);
@@ -95,6 +96,26 @@ const ExecutionProjectDetailsPage: React.FC = () => {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!projectId || !Number.isFinite(projectId) || !realtime) return;
+    realtime.joinProject(projectId);
+    return () => {
+      realtime.leaveProject(projectId);
+    };
+  }, [projectId, realtime]);
+
+  useEffect(() => {
+    if (!realtime) return;
+    return realtime.subscribe((ev) => {
+      if (ev.entity === 'task' && Number(ev.projectId) === projectId) load();
+    });
+  }, [realtime, projectId, load]);
+
+  useEffect(() => {
+    if (!realtime) return;
+    return realtime.refetchOnReconnect(load);
+  }, [realtime, load]);
 
   const handleCreateTask = async (form: {
     stageId: number | null;

@@ -60,6 +60,7 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
       const client = new CollabClientClass({
         url: wsBaseUrl,
         token,
+        joinDocOnConnect: { docId: documentId, mode: 'edit' },
         onEvent: (ev: CollabEvent) => {
         if (ev.type === 'DOC_STATE') {
           const socketId = client.socketId ?? null;
@@ -126,10 +127,9 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
 
       clientRef.current = client;
       client.connect();
-      client.joinDoc(documentId, 'edit');
       setConnected(client.connected);
 
-      if (DEBUG) console.log('[collab] join doc', documentId);
+      if (DEBUG) console.log('[collab] connect initiated, joinDoc will run on connect', documentId);
     })();
 
     return () => {

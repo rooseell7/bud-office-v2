@@ -5,12 +5,15 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Document } from '../documents/document.entity';
 import { DocumentSheetOp } from '../documents/document-sheet-op.entity';
 import { SheetSnapshot } from '../documents/sheet-snapshot.entity';
+import { Project } from '../projects/project.entity';
+import { PresenceModule } from '../presence/presence.module';
 import { CollabGateway } from './collab.gateway';
 import { CollabService } from './collab.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Document, DocumentSheetOp, SheetSnapshot]),
+    TypeOrmModule.forFeature([Document, DocumentSheetOp, SheetSnapshot, Project]),
+    PresenceModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

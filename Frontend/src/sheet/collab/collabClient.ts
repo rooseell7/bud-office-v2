@@ -21,6 +21,8 @@ export type CollabClientOptions = {
   url?: string;
   token: string | null;
   onEvent?: (ev: CollabEvent) => void;
+  /** Якщо задано, після connect автоматично викликається joinDoc(docId, mode), щоб JOIN_DOC не втрачався до встановлення WS. */
+  joinDocOnConnect?: { docId: number; mode?: 'edit' | 'readonly' };
 };
 
 export class CollabClient {
@@ -35,6 +37,9 @@ export class CollabClient {
   connect(): void {
     if (this.socket?.connected) return;
     const url = this.options.url ?? wsBaseUrl;
+    if (DEV || DEBUG) {
+      console.log('[collab] connect url=', url || '(current origin)', 'path=/socket.io');
+    }
     this.socket = io(url, {
       auth: { token: this.options.token },
       path: '/socket.io',
@@ -42,7 +47,9 @@ export class CollabClient {
     });
     this.socket.on('connect', () => {
       const transport = (this.socket as any)?.io?.engine?.transport?.name ?? 'unknown';
-      console.debug('[collab] connected', { transport });
+      if (DEV || DEBUG) console.log('[collab] connected', { transport, socketId: this.socket?.id });
+      const join = this.options.joinDocOnConnect;
+      if (join) this.joinDoc(join.docId, join.mode ?? 'edit');
     });
     const engine = this.socket.io?.engine;
     if (engine) {
@@ -51,9 +58,7 @@ export class CollabClient {
       });
     }
     this.socket.on('disconnect', (reason) => {
-      if (DEV || DEBUG) {
-        console.log('[collab] disconnect reason=', reason);
-      }
+      if (DEV || DEBUG) console.log('[collab] disconnect', { reason });
       if (reason === 'io server disconnect' || /unauthorized|invalid|token/i.test(reason)) {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('user');
@@ -75,6 +80,10 @@ export class CollabClient {
       }
     });
     this.socket.on('collab', (ev: CollabEvent) => {
+      if ((DEV || DEBUG) && (ev.type === 'OP_APPLIED' || ev.type === 'DOC_STATE')) {
+        const summary = ev.type === 'OP_APPLIED' ? { docId: ev.docId, version: ev.version, opType: ev.op?.type } : { docId: ev.docId, version: (ev as any).version };
+        console.log('[collab] event', ev.type, summary);
+      }
       if (ev.type === 'OP_APPLIED' && ev.clientOpId) {
         const key = `${ev.docId}:${ev.clientOpId}`;
         const pending = this.pendingOps.get(key);
@@ -103,6 +112,8 @@ export class CollabClient {
   }
 
   joinDoc(docId: number, mode: 'edit' | 'readonly' = 'edit'): void {
+    const room = `sheet:${docId}`;
+    if (DEV || DEBUG) console.log('[collab] joinDoc', { docId, room, mode });
     this.socket?.emit('collab', { type: 'JOIN_DOC', docId, mode });
   }
 

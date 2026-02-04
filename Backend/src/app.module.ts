@@ -35,6 +35,9 @@ import { DeliveryModule } from './delivery/delivery.module';
 import { DocumentsModule } from './documents/documents.module';
 import { EstimatesModule } from './estimates/estimates.module';
 import { SheetsModule } from './sheets/sheets.module';
+import { ActivityModule } from './activity/activity.module';
+import { PresenceModule } from './presence/presence.module';
+import { RealtimeModule } from './realtime/realtime.module';
 import { CollabModule } from './collab/collab.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { AdminModule } from './admin/admin.module';
@@ -94,7 +97,9 @@ function toBool(v: unknown, def = false): boolean {
           synchronize: sync,
           migrationsRun: false,
 
-          logging: true,
+          // Логування SQL: true = кожен запит (спам у консолі), false/'error' = тільки помилки.
+          // Для діагностики можна тимчасово встановити TYPEORM_LOGGING=true в .env
+          logging: toBool(config.get('TYPEORM_LOGGING'), false) ? true : ['error'],
         };
       },
     }),
@@ -117,6 +122,9 @@ function toBool(v: unknown, def = false): boolean {
     DocumentsModule,
     EstimatesModule,
     SheetsModule,
+    ActivityModule,
+    PresenceModule,
+    RealtimeModule,
     CollabModule,
     AttachmentsModule,
     AdminModule,

@@ -1,6 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { useRealtime } from '../../realtime/RealtimeContext';
+import { getPresenceOnline } from '../../api/presence';
+import { RealtimeDebugPanel } from '../../realtime/RealtimeDebugPanel';
 import { DEBUG_NAV } from '../../shared/config/env';
 
 import {
@@ -53,6 +56,31 @@ const MainLayout: React.FC = () => {
   const loc = useLocation();
   const navigate = useNavigate();
   const { user, logout, can, isAuthLoading, roles } = useAuth();
+  const realtime = useRealtime();
+  const connectionStatus = realtime?.connectionStatus ?? 'offline';
+  const [onlineCount, setOnlineCount] = useState(0);
+
+  useEffect(() => {
+    if (connectionStatus !== 'connected') {
+      setOnlineCount(0);
+      return;
+    }
+    let cancelled = false;
+    const fetchOnline = async () => {
+      try {
+        const list = await getPresenceOnline();
+        if (!cancelled) setOnlineCount(list.length);
+      } catch {
+        if (!cancelled) setOnlineCount(0);
+      }
+    };
+    fetchOnline();
+    const t = setInterval(fetchOnline, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [connectionStatus]);
   const displayName = getDisplayName(user);
   const initial = getInitial(displayName);
 
@@ -96,6 +124,10 @@ const MainLayout: React.FC = () => {
     {
       title: 'Відділ постачання',
       items: [
+        { to: '/supply/requests', label: 'Заявки', icon: <WorkOutlineOutlinedIcon /> },
+        { to: '/supply/orders', label: 'Замовлення', icon: <ReceiptLongOutlinedIcon /> },
+        { to: '/supply/receipts', label: 'Приходи', icon: <Inventory2OutlinedIcon /> },
+        { to: '/supply/payables', label: 'До оплати', icon: <AccountBalanceOutlinedIcon /> },
         { to: '/supply/invoices', label: 'Накладні', icon: <ReceiptLongOutlinedIcon /> },
         { to: '/supply/warehouses', label: 'Склади', icon: <Inventory2OutlinedIcon /> },
         { to: '/supply/materials', label: 'Матеріали', icon: <CategoryOutlinedIcon /> },
@@ -159,6 +191,64 @@ const MainLayout: React.FC = () => {
           </Box>
 
           <Box sx={{ flex: 1 }} />
+
+          {realtime && (
+            <Tooltip
+              title={
+                connectionStatus === 'connected'
+                  ? 'Синхронізація онлайн'
+                  : connectionStatus === 'reconnecting'
+                    ? 'Повторне підключення…'
+                    : 'Офлайн'
+              }
+              placement="bottom"
+            >
+              <Box
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  px: 1,
+                  py: 0.25,
+                  borderRadius: 1,
+                  fontSize: '0.75rem',
+                  backgroundColor:
+                    connectionStatus === 'connected'
+                      ? 'rgba(76, 175, 80, 0.15)'
+                      : connectionStatus === 'reconnecting'
+                        ? 'rgba(255, 193, 7, 0.2)'
+                        : 'rgba(0,0,0,0.06)',
+                  color:
+                    connectionStatus === 'connected'
+                      ? '#4caf50'
+                      : connectionStatus === 'reconnecting'
+                        ? '#ffc107'
+                        : 'var(--text-secondary)',
+                }}
+              >
+                <Box
+                  component="span"
+                  sx={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    backgroundColor:
+                      connectionStatus === 'connected'
+                        ? '#4caf50'
+                        : connectionStatus === 'reconnecting'
+                          ? '#ffc107'
+                          : 'var(--text-secondary)',
+                    animation: connectionStatus === 'reconnecting' ? 'pulse 1.5s ease-in-out infinite' : 'none',
+                    '@keyframes pulse': { '0%, 100%': { opacity: 1 }, '50%': { opacity: 0.4 } },
+                  }}
+                />
+                {connectionStatus === 'connected' && 'Online'}
+                {connectionStatus === 'reconnecting' && 'Reconnecting…'}
+                {connectionStatus === 'offline' && 'Offline'}
+                {onlineCount > 0 && connectionStatus === 'connected' && ` · ${onlineCount} онлайн`}
+              </Box>
+            </Tooltip>
+          )}
 
           {isAuthLoading && (
             <Box
@@ -408,6 +498,7 @@ const MainLayout: React.FC = () => {
           </Box>
         </Box>
       </Box>
+      <RealtimeDebugPanel />
     </Box>
   );
 };

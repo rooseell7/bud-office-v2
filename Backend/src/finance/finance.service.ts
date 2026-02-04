@@ -4,12 +4,14 @@ import { Repository } from 'typeorm';
 import { Wallet } from './wallet.entity';
 import { Transaction, TransactionType } from './transaction.entity';
 import { Category } from './category.entity';
+import { RealtimeService } from '../realtime/realtime.service';
 import { CreateWalletDto } from './dto/create-wallet.dto';
 import { UpdateWalletDto } from './dto/update-wallet.dto';
 import { CreateTransactionInDto } from './dto/create-transaction-in.dto';
 import { CreateTransactionOutDto } from './dto/create-transaction-out.dto';
 import { CreateTransactionTransferDto } from './dto/create-transaction-transfer.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
+import type { DomainEvent } from '../realtime/domain-event.types';
 
 export type WalletDto = {
   id: number;
@@ -59,6 +61,7 @@ export class FinanceService {
     private readonly txRepo: Repository<Transaction>,
     @InjectRepository(Category)
     private readonly categoryRepo: Repository<Category>,
+    private readonly realtime: RealtimeService,
   ) {}
 
   private num(n: unknown): number {
@@ -95,6 +98,17 @@ export class FinanceService {
       details: dto.details ?? null,
     });
     const saved = await this.walletRepo.save(w);
+    const ev: DomainEvent = {
+      eventId: crypto.randomUUID(),
+      ts: new Date().toISOString(),
+      actorId: 0,
+      entity: 'wallet',
+      action: 'created',
+      entityId: saved.id,
+      payload: { name: saved.name },
+      eventVersion: 1,
+    };
+    this.realtime.broadcast(ev, ['module:finance']);
     return {
       id: saved.id,
       name: saved.name,
@@ -116,6 +130,17 @@ export class FinanceService {
     if (dto.isActive !== undefined) w.isActive = dto.isActive;
     if (dto.details !== undefined) w.details = dto.details ?? null;
     await this.walletRepo.save(w);
+    const ev: DomainEvent = {
+      eventId: crypto.randomUUID(),
+      ts: new Date().toISOString(),
+      actorId: 0,
+      entity: 'wallet',
+      action: 'updated',
+      entityId: id,
+      payload: {},
+      eventVersion: 1,
+    };
+    this.realtime.broadcast(ev, ['module:finance']);
     const list = await this.getWallets(false);
     return list.find((x) => x.id === id)!;
   }
@@ -255,6 +280,18 @@ export class FinanceService {
       createdById: userId,
     });
     const saved = await this.txRepo.save(tx);
+    const ev: DomainEvent = {
+      eventId: crypto.randomUUID(),
+      ts: new Date().toISOString(),
+      actorId: userId,
+      entity: 'transaction',
+      action: 'created',
+      entityId: saved.id,
+      projectId: dto.projectId ?? null,
+      payload: { type: 'in', amount: saved.amount },
+      eventVersion: 1,
+    };
+    this.realtime.broadcast(ev, ['module:finance', ...(dto.projectId ? [`project:${dto.projectId}`] : [])]);
     return this.toDto(saved);
   }
 
@@ -281,6 +318,18 @@ export class FinanceService {
       createdById: userId,
     });
     const saved = await this.txRepo.save(tx);
+    const ev: DomainEvent = {
+      eventId: crypto.randomUUID(),
+      ts: new Date().toISOString(),
+      actorId: userId,
+      entity: 'transaction',
+      action: 'created',
+      entityId: saved.id,
+      projectId: dto.projectId ?? null,
+      payload: { type: 'out', amount: saved.amount },
+      eventVersion: 1,
+    };
+    this.realtime.broadcast(ev, ['module:finance', ...(dto.projectId ? [`project:${dto.projectId}`] : [])]);
     return this.toDto(saved);
   }
 
@@ -309,12 +358,24 @@ export class FinanceService {
       createdById: userId,
     });
     const saved = await this.txRepo.save(tx);
+    const ev: DomainEvent = {
+      eventId: crypto.randomUUID(),
+      ts: new Date().toISOString(),
+      actorId: userId,
+      entity: 'transaction',
+      action: 'created',
+      entityId: saved.id,
+      payload: { type: 'transfer', amount: saved.amount },
+      eventVersion: 1,
+    };
+    this.realtime.broadcast(ev, ['module:finance']);
     return this.toDto(saved);
   }
 
   async updateTransaction(id: number, userId: number, dto: UpdateTransactionDto): Promise<TransactionDto> {
     const tx = await this.txRepo.findOne({ where: { id } });
     if (!tx) throw new NotFoundException('Транзакцію не знайдено');
+
     if (dto.date !== undefined) tx.date = new Date(dto.date);
     if (dto.walletId !== undefined) tx.walletId = dto.walletId;
     if (dto.amount !== undefined) tx.amount = dto.amount as any;
@@ -326,6 +387,18 @@ export class FinanceService {
     if (dto.counterparty !== undefined) tx.counterparty = dto.counterparty;
     if (dto.comment !== undefined) tx.comment = dto.comment;
     const saved = await this.txRepo.save(tx);
+    const ev: DomainEvent = {
+      eventId: crypto.randomUUID(),
+      ts: new Date().toISOString(),
+      actorId: userId,
+      entity: 'transaction',
+      action: 'updated',
+      entityId: id,
+      projectId: saved.projectId ?? undefined,
+      payload: {},
+      eventVersion: 1,
+    };
+    this.realtime.broadcast(ev, ['module:finance', ...(saved.projectId ? [`project:${saved.projectId}`] : [])]);
     return this.toDto(saved);
   }
 

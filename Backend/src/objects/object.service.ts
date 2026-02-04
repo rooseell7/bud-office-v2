@@ -3,14 +3,17 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { Project } from '../projects/project.entity';
+import { RealtimeService } from '../realtime/realtime.service';
 import { CreateObjectDto } from './dto/create-object.dto';
 import { UpdateObjectDto } from './dto/update-object.dto';
+import type { DomainEvent } from '../realtime/domain-event.types';
 
 @Injectable()
 export class ObjectsService {
   constructor(
     @InjectRepository(Project)
     private readonly repo: Repository<Project>,
+    private readonly realtime: RealtimeService,
   ) {}
 
   private toInt(value: unknown, field: string): number {
@@ -42,7 +45,20 @@ export class ObjectsService {
       supplyManagerId: dto.supplyManagerId ?? null,
     });
 
-    return await this.repo.save(obj);
+    const saved = await this.repo.save(obj);
+    const ev: DomainEvent = {
+      eventId: crypto.randomUUID(),
+      ts: new Date().toISOString(),
+      actorId: userId,
+      entity: 'project',
+      action: 'created',
+      entityId: saved.id,
+      projectId: saved.id,
+      payload: { name: saved.name },
+      eventVersion: 1,
+    };
+    this.realtime.broadcast(ev, [`project:${saved.id}`]);
+    return saved;
   }
 
   async findAll(userIdRaw: unknown, clientIdRaw?: unknown): Promise<Project[]> {
@@ -83,7 +99,20 @@ export class ObjectsService {
     if (dto.estimatorId !== undefined) obj.estimatorId = dto.estimatorId ?? null;
     if (dto.supplyManagerId !== undefined) obj.supplyManagerId = dto.supplyManagerId ?? null;
 
-    return await this.repo.save(obj);
+    const saved = await this.repo.save(obj);
+    const ev: DomainEvent = {
+      eventId: crypto.randomUUID(),
+      ts: new Date().toISOString(),
+      actorId: this.toInt(userIdRaw, 'userId'),
+      entity: 'project',
+      action: dto.status !== undefined ? 'status_changed' : 'updated',
+      entityId: saved.id,
+      projectId: saved.id,
+      payload: dto.status !== undefined ? { status: saved.status } : {},
+      eventVersion: 1,
+    };
+    this.realtime.broadcast(ev, [`project:${saved.id}`]);
+    return saved;
   }
 
   async remove(idRaw: unknown, userIdRaw: unknown): Promise<void> {

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
+import { useRealtime } from '../../../realtime/RealtimeContext';
 import {
   Box,
   Card,
@@ -29,6 +30,7 @@ const statusLabels: Record<string, string> = {
 const ExecutionProjectsPage: React.FC = () => {
   const navigate = useNavigate();
   const { can } = useAuth();
+  const realtime = useRealtime();
   const [list, setList] = useState<ExecutionProjectListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +59,24 @@ const ExecutionProjectsPage: React.FC = () => {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!realtime) return;
+    realtime.joinModule('execution');
+    return () => realtime.leaveModule('execution');
+  }, [realtime]);
+
+  useEffect(() => {
+    if (!realtime) return;
+    return realtime.subscribe((ev) => {
+      if (ev.entity === 'task') load();
+    });
+  }, [realtime, load]);
+
+  useEffect(() => {
+    if (!realtime) return;
+    return realtime.refetchOnReconnect(load);
+  }, [realtime, load]);
 
   useEffect(() => {
     let cancelled = false;

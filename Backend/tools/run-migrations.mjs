@@ -25,6 +25,8 @@ const MIGRATIONS_ORDER = [
   '2026-01-30_sheet_snapshots.sql',
   '2026-02-03_finance.sql',
   '2026-02-03_execution_tasks.sql',
+  '2026-02-04_activity_log.sql',
+  '2026-02-05_supply_mvp_audit.sql',
 ];
 
 function loadEnv() {
