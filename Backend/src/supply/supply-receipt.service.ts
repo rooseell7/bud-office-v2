@@ -3,19 +3,26 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SupplyReceipt } from './entities/supply-receipt.entity';
 import { SupplyReceiptItem } from './entities/supply-receipt-item.entity';
+import { SupplyOrderItem } from './entities/supply-order-item.entity';
 import { Payable } from './entities/payable.entity';
+import { Material } from './material.entity';
 import { SupplyAuditService } from './audit.service';
 import { SupplyPurchaseService } from './supply-purchase.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { SupplyOrderService } from './supply-order.service';
 import { UpdateSupplyReceiptDto } from './dto/supply-receipt.dto';
+import { SetSubstitutionDto } from './dto/set-substitution.dto';
+
+const SUBSTITUTION_ALLOWED_STATUSES = ['draft', 'received'];
 
 @Injectable()
 export class SupplyReceiptService {
   constructor(
     @InjectRepository(SupplyReceipt) private readonly receiptRepo: Repository<SupplyReceipt>,
     @InjectRepository(SupplyReceiptItem) private readonly itemRepo: Repository<SupplyReceiptItem>,
+    @InjectRepository(SupplyOrderItem) private readonly orderItemRepo: Repository<SupplyOrderItem>,
     @InjectRepository(Payable) private readonly payableRepo: Repository<Payable>,
+    @InjectRepository(Material) private readonly materialRepo: Repository<Material>,
     private readonly audit: SupplyAuditService,
     private readonly purchaseService: SupplyPurchaseService,
     private readonly attachmentsService: AttachmentsService,
@@ -164,6 +171,117 @@ export class SupplyReceiptService {
       actorId: userId,
     });
     return this.findOne(userId, id);
+  }
+
+  async setSubstitution(userId: number, receiptId: number, itemId: number, dto: SetSubstitutionDto) {
+    const r = await this.receiptRepo.findOne({ where: { id: receiptId }, relations: ['items'] });
+    if (!r) throw new NotFoundException('Supply receipt not found');
+    if (!SUBSTITUTION_ALLOWED_STATUSES.includes(r.status)) {
+      throw new BadRequestException('Зміну заміни дозволено лише для приходу в статусі чернетка або отримано.');
+    }
+    const item = r.items?.find((i) => i.id === itemId);
+    if (!item) throw new NotFoundException('Receipt item not found');
+    if (item.receiptId !== receiptId) throw new BadRequestException('Item does not belong to this receipt');
+
+    if (!dto.isSubstitution) {
+      return this.clearSubstitution(userId, receiptId, itemId);
+    }
+
+    const hasSubstitute = (dto.substituteMaterialId != null) || (dto.substituteCustomName != null && String(dto.substituteCustomName).trim() !== '');
+    if (!hasSubstitute) throw new BadRequestException('Вкажіть матеріал або найменування заміни (substituteMaterialId або substituteCustomName).');
+
+    let orderItem: SupplyOrderItem | null = null;
+    if (item.sourceOrderItemId) {
+      orderItem = await this.orderItemRepo.findOne({ where: { id: item.sourceOrderItemId } });
+      if (!orderItem) throw new BadRequestException('Order item not found');
+      if (orderItem.materialId != null) {
+        item.originalMaterialId = orderItem.materialId;
+        item.originalCustomName = orderItem.customName;
+      } else {
+        item.originalMaterialId = null;
+        item.originalCustomName = orderItem.customName;
+      }
+    } else {
+      item.originalMaterialId = item.materialId;
+      item.originalCustomName = item.customName;
+    }
+
+    const orderUnit = orderItem ? orderItem.unit : item.unit;
+    if (dto.substituteMaterialId != null) {
+      const mat = await this.materialRepo.findOne({ where: { id: dto.substituteMaterialId } });
+      if (!mat) throw new NotFoundException('Material not found');
+      if (mat.unit != null && orderUnit != null && mat.unit !== orderUnit) {
+        throw new BadRequestException(`Одиниця виміру матеріалу (${mat.unit}) не збігається з позицією замовлення (${orderUnit}). Заміна з іншою одиницею заборонена.`);
+      }
+      item.substituteMaterialId = dto.substituteMaterialId;
+      item.substituteCustomName = null;
+      item.materialId = dto.substituteMaterialId;
+      item.customName = mat.name;
+    } else {
+      item.substituteMaterialId = null;
+      item.substituteCustomName = dto.substituteCustomName?.trim() || null;
+      item.materialId = null;
+      item.customName = item.substituteCustomName;
+    }
+    item.isSubstitution = true;
+    item.substitutionReason = dto.substitutionReason?.trim() || null;
+    await this.itemRepo.save(item);
+
+    const originalName = item.originalCustomName || (item.originalMaterialId ? `Матеріал #${item.originalMaterialId}` : '—');
+    const substituteName = item.substituteCustomName || (item.substituteMaterialId ? `Матеріал #${item.substituteMaterialId}` : '—');
+    await this.audit.log({
+      entityType: 'supply_receipt',
+      entityId: receiptId,
+      action: 'substitution',
+      message: `Заміна: ${originalName} → ${substituteName} (qty ${item.qtyReceived})`,
+      meta: {
+        receiptItemId: itemId,
+        sourceOrderItemId: item.sourceOrderItemId,
+        originalMaterialId: item.originalMaterialId,
+        originalCustomName: item.originalCustomName,
+        substituteMaterialId: item.substituteMaterialId,
+        substituteCustomName: item.substituteCustomName,
+        reason: item.substitutionReason,
+      },
+      actorId: userId,
+    });
+    return this.findOne(userId, receiptId);
+  }
+
+  async clearSubstitution(userId: number, receiptId: number, itemId: number) {
+    const r = await this.receiptRepo.findOne({ where: { id: receiptId }, relations: ['items'] });
+    if (!r) throw new NotFoundException('Supply receipt not found');
+    if (!SUBSTITUTION_ALLOWED_STATUSES.includes(r.status)) {
+      throw new BadRequestException('Зміну заміни дозволено лише для приходу в статусі чернетка або отримано.');
+    }
+    const item = r.items?.find((i) => i.id === itemId);
+    if (!item) throw new NotFoundException('Receipt item not found');
+    if (item.receiptId !== receiptId) throw new BadRequestException('Item does not belong to this receipt');
+
+    if (item.sourceOrderItemId) {
+      const orderItem = await this.orderItemRepo.findOne({ where: { id: item.sourceOrderItemId } });
+      if (orderItem) {
+        item.materialId = orderItem.materialId;
+        item.customName = orderItem.customName;
+      }
+    }
+    item.isSubstitution = false;
+    item.originalMaterialId = null;
+    item.originalCustomName = null;
+    item.substituteMaterialId = null;
+    item.substituteCustomName = null;
+    item.substitutionReason = null;
+    await this.itemRepo.save(item);
+
+    await this.audit.log({
+      entityType: 'supply_receipt',
+      entityId: receiptId,
+      action: 'substitution',
+      message: 'Заміну знято з позиції',
+      meta: { receiptItemId: itemId },
+      actorId: userId,
+    });
+    return this.findOne(userId, receiptId);
   }
 
   async fillPricesFromLast(userId: number, receiptId: number) {

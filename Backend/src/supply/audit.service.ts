@@ -25,7 +25,9 @@ export type AuditAction =
   | 'add_payment'
   | 'apply_last_prices'
   | 'move_items'
-  | 'merge';
+  | 'merge'
+  | 'substitution'
+  | 'export';
 
 @Injectable()
 export class SupplyAuditService {

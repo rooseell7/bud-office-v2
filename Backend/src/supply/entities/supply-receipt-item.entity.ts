@@ -40,6 +40,24 @@ export class SupplyReceiptItem {
   @Column({ type: 'text', nullable: true })
   note: string | null;
 
+  @Column({ type: 'boolean', default: false })
+  isSubstitution: boolean;
+
+  @Column({ type: 'int', nullable: true })
+  originalMaterialId: number | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  originalCustomName: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  substituteMaterialId: number | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  substituteCustomName: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  substitutionReason: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { Document } from '../documents/document.entity';
 import { Material } from './material.entity';
 import { Invoice } from './invoice.entity';
 import { MaterialsService } from './materials.service';
@@ -31,13 +32,17 @@ import { SupplyOrdersController } from './supply-orders.controller';
 import { SupplyReceiptsController } from './supply-receipts.controller';
 import { SupplyPayablesController } from './supply-payables.controller';
 import { SupplyPurchaseController } from './supply-purchase.controller';
+import { SupplyQuotesController } from './supply-quotes.controller';
 import { SupplyAuditController } from './audit.controller';
 import { AttachmentsModule } from '../attachments/attachments.module';
 import { SupplyPurchaseService } from './supply-purchase.service';
+import { QuoteReadService } from './quote-read.service';
+import { QuoteNeedService } from './quote-need.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
+      Document,
       Material,
       Invoice,
       SupplyRequest,
@@ -63,9 +68,12 @@ import { SupplyPurchaseService } from './supply-purchase.service';
     SupplyReceiptsController,
     SupplyPayablesController,
     SupplyPurchaseController,
+    SupplyQuotesController,
     SupplyAuditController,
   ],
   providers: [
+    QuoteReadService,
+    QuoteNeedService,
     MaterialsService,
     InvoicesService,
     SupplyAuditService,

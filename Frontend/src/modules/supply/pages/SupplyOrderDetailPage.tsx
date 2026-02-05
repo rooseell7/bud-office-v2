@@ -2,19 +2,20 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box, Button, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
-  Select, MenuItem, FormControl, InputLabel, Snackbar, Checkbox, Dialog, DialogTitle, DialogContent, FormControlLabel,
+  Select, MenuItem, FormControl, InputLabel, Snackbar, Checkbox, Dialog, DialogTitle, DialogContent, FormControlLabel, Chip,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import PriceCheckIcon from '@mui/icons-material/PriceCheck';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import {
   getSupplyOrder, setSupplyOrderStatus, createReceiptFromOrder, createReceiptQuickFromOrder, fillOrderPricesFromLast, updateSupplyOrder,
-  getLastPurchasesBatch, getSupplyOrders, moveOrderItems, mergeOrder,
+  getLastPurchasesBatch, getSupplyOrders, moveOrderItems, mergeOrder, getOrderSubstitutions,
 } from '../../../api/supply';
 import { AuditBlock } from '../components/AuditBlock';
 import { LinksBlockOrder } from '../components/LinksBlock';
-import type { SupplyOrderDto, LastPurchaseResult } from '../../../api/supply';
+import type { SupplyOrderDto, LastPurchaseResult, OrderSubstitutionDto } from '../../../api/supply';
 
 const statusOptions = ['draft', 'sent', 'confirmed', 'partially_delivered', 'delivered', 'closed', 'cancelled'];
 
@@ -43,6 +44,8 @@ export default function SupplyOrderDetailPage() {
   const [moveError, setMoveError] = useState('');
   const [mergeError, setMergeError] = useState('');
   const [toastMessage, setToastMessage] = useState('');
+  const [substitutionsModalOpen, setSubstitutionsModalOpen] = useState(false);
+  const [substitutionsList, setSubstitutionsList] = useState<OrderSubstitutionDto[]>([]);
 
   const load = async () => {
     if (!id) return;
@@ -200,6 +203,15 @@ export default function SupplyOrderDetailPage() {
   const mergeTargetOrder = mergeTargetOrderId !== '' ? targetOrderList.find((o) => o.id === mergeTargetOrderId) : null;
   const differentSupplierWarning = (data?.supplierId != null && mergeTargetOrder?.supplierId != null && data.supplierId !== mergeTargetOrder.supplierId);
 
+  const openSubstitutionsModal = async () => {
+    if (!id) return;
+    const list = await getOrderSubstitutions(Number(id));
+    setSubstitutionsList(list);
+    setSubstitutionsModalOpen(true);
+  };
+
+  const substitutionsCount = data?.substitutionsCount ?? 0;
+
   if (!id || loading || !data) return <Box sx={{ p: 2 }}>Завантаження…</Box>;
 
   return (
@@ -216,7 +228,15 @@ export default function SupplyOrderDetailPage() {
         </FormControl>
       </Box>
       <LinksBlockOrder sourceRequest={data.sourceRequest ?? null} linkedReceipts={data.linkedReceipts} />
-      <Typography variant="body2" color="text.secondary">Постачальник ID: {data.supplierId ?? '—'} • Доставка: {data.deliveryType} • Планова дата: {data.deliveryDatePlanned ?? '—'} {data.totalPlan != null && `• Сума (план): ${data.totalPlan} грн`}</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}>
+        <Typography variant="body2" color="text.secondary">Постачальник ID: {data.supplierId ?? '—'} • Доставка: {data.deliveryType} • Планова дата: {data.deliveryDatePlanned ?? '—'} {data.totalPlan != null && `• Сума (план): ${data.totalPlan} грн`}</Typography>
+        {substitutionsCount > 0 && (
+          <>
+            <Chip size="small" icon={<WarningAmberIcon />} label="Є заміни" color="warning" />
+            <Button size="small" variant="outlined" onClick={openSubstitutionsModal}>Показати відхилення</Button>
+          </>
+        )}
+      </Box>
       <TableContainer component={Paper} sx={{ my: 2 }}>
         <Table size="small">
           <TableHead>
@@ -330,6 +350,43 @@ export default function SupplyOrderDetailPage() {
           <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
             <Button onClick={() => setMergeModalOpen(false)}>Скасувати</Button>
             <Button variant="contained" disabled={busy || mergeTargetOrderId === ''} onClick={handleMergeOrder}>Злити</Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={substitutionsModalOpen} onClose={() => setSubstitutionsModalOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Відхилення (заміни)</DialogTitle>
+        <DialogContent>
+          {substitutionsList.length === 0 ? (
+            <Typography color="text.secondary">Немає замін по цьому замовленню.</Typography>
+          ) : (
+            <TableContainer sx={{ mt: 1 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Прихід / дата</TableCell>
+                    <TableCell>Було</TableCell>
+                    <TableCell>Стало</TableCell>
+                    <TableCell>К-ть</TableCell>
+                    <TableCell>Причина</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {substitutionsList.map((s) => (
+                    <TableRow key={s.receiptItemId}>
+                      <TableCell>№{s.receiptId} {s.receiptReceivedAt ? new Date(s.receiptReceivedAt).toLocaleDateString('uk-UA') : '—'}</TableCell>
+                      <TableCell>{s.originalName}</TableCell>
+                      <TableCell>{s.substituteName}</TableCell>
+                      <TableCell>{s.qty}</TableCell>
+                      <TableCell>{s.reason ?? '—'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+          <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button onClick={() => setSubstitutionsModalOpen(false)}>Закрити</Button>
           </Box>
         </DialogContent>
       </Dialog>

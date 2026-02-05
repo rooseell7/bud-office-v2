@@ -2,12 +2,19 @@ import api from './api';
 
 // --- Types (align with backend) ---
 export interface SupplyRequestItemDto {
+  id?: number;
   materialId?: number | null;
   customName?: string | null;
   unit: string;
   qty: number;
   note?: string | null;
   priority?: string;
+  sourceType?: string;
+  sourceQuoteId?: number | null;
+  sourceStageId?: string | null;
+  sourceQuoteRowId?: string | null;
+  sourceMaterialFingerprint?: string | null;
+  sourceStageName?: string | null;
 }
 
 export interface SupplyRequestDto {
@@ -41,7 +48,36 @@ export interface SupplyOrderDto {
   sourceRequest?: { id: number } | null;
   linkedReceipts?: { id: number; status: string; total?: string | null; receivedAt?: string | null }[];
   totalPlan?: number;
+  substitutionsCount?: number;
   audit?: AuditEventDto[];
+}
+
+export interface OrderSubstitutionDto {
+  receiptItemId: number;
+  receiptId: number;
+  receiptReceivedAt: string | null;
+  sourceOrderItemId: number | null;
+  originalName: string;
+  substituteName: string;
+  qty: string;
+  reason: string | null;
+}
+
+export interface SupplyReceiptItemDto {
+  id: number;
+  receiptId: number;
+  sourceOrderItemId?: number | null;
+  materialId: number | null;
+  customName: string | null;
+  unit: string;
+  qtyReceived: string;
+  unitPrice: string | null;
+  isSubstitution?: boolean;
+  originalMaterialId?: number | null;
+  originalCustomName?: string | null;
+  substituteMaterialId?: number | null;
+  substituteCustomName?: string | null;
+  substitutionReason?: string | null;
 }
 
 export interface SupplyReceiptDto {
@@ -58,7 +94,7 @@ export interface SupplyReceiptDto {
   createdById: number;
   createdAt: string;
   updatedAt: string;
-  items?: { id: number; receiptId: number; sourceOrderItemId?: number | null; materialId: number | null; customName: string | null; unit: string; qtyReceived: string; unitPrice: string | null }[];
+  items?: SupplyReceiptItemDto[];
   attachments?: { id: number; originalName: string }[];
   sourceOrder?: { id: number };
   linkedPayable?: { id: number; status?: string } | null;
@@ -110,6 +146,130 @@ export async function getSupplyRequests(params?: { projectId?: number; status?: 
 
 export async function getSupplyRequest(id: number): Promise<SupplyRequestDto> {
   const { data } = await api.get<SupplyRequestDto>(`/supply/requests/${id}`);
+  return data;
+}
+
+// --- Quote stages (read-only, for adding materials to request) ---
+export interface QuoteStageInfo {
+  stageId: string;
+  stageName: string;
+}
+
+export interface QuoteStagesResponse {
+  quoteId: number;
+  stages: QuoteStageInfo[];
+}
+
+export interface QuoteStageMaterialItem {
+  materialId: number | null;
+  materialName: string;
+  unit: string;
+  qtySuggested: number;
+  quoteId: number;
+  quoteRowId: string | null;
+  fingerprint: string;
+}
+
+export interface QuoteStageMaterialsGroup {
+  stageId: string;
+  stageName: string;
+  items: QuoteStageMaterialItem[];
+}
+
+/** Stage materials with need analytics (requested, ordered, received, remaining). */
+export interface QuoteStageMaterialNeedItem extends QuoteStageMaterialItem {
+  qtyFromQuote: number;
+  qtyRequested: number;
+  qtyOrdered: number;
+  qtyReceived: number;
+  qtyRemainingNeed: number;
+}
+
+export interface QuoteStageMaterialsNeedGroup {
+  stageId: string;
+  stageName: string;
+  items: QuoteStageMaterialNeedItem[];
+}
+
+export async function getQuoteStages(projectId: number): Promise<QuoteStagesResponse> {
+  const { data } = await api.get<QuoteStagesResponse>(`/supply/quotes/${projectId}/stages`);
+  return data;
+}
+
+export async function getQuoteStageMaterials(projectId: number, quoteId: number, stageIds: string[]): Promise<QuoteStageMaterialsGroup[]> {
+  const { data } = await api.get<QuoteStageMaterialsGroup[]>(`/supply/quotes/${projectId}/stage-materials`, {
+    params: { quoteId, stageIds: stageIds.join(',') },
+  });
+  return Array.isArray(data) ? data : [];
+}
+
+export async function getQuoteStageMaterialsNeed(
+  projectId: number,
+  quoteId: number,
+  stageIds: string[],
+  mode?: string
+): Promise<QuoteStageMaterialsNeedGroup[]> {
+  const { data } = await api.get<QuoteStageMaterialsNeedGroup[]>(`/supply/quotes/${projectId}/stage-materials-need`, {
+    params: { quoteId, stageIds: stageIds.join(','), ...(mode ? { mode } : {}) },
+  });
+  return Array.isArray(data) ? data : [];
+}
+
+export interface AddQuoteMaterialsPreviewConflict {
+  selectionKey: string;
+  existingRequestItemId: number;
+  existingQty: number;
+  incomingQty: number;
+  materialName: string;
+  unit: string;
+  reason: 'same_quote_row' | 'same_fingerprint';
+}
+
+export interface AddQuoteMaterialsPreviewNewItem {
+  selectionKey: string;
+  incomingQty: number;
+  materialName: string;
+  unit: string;
+}
+
+export interface AddQuoteMaterialsPreviewResult {
+  canAdd: number;
+  conflicts: AddQuoteMaterialsPreviewConflict[];
+  newItems: AddQuoteMaterialsPreviewNewItem[];
+}
+
+export async function previewAddQuoteMaterials(
+  requestId: number,
+  body: { quoteId: number; selections: { stageId: string; stageName?: string; quoteRowId?: string; materialId?: number; customName?: string; unit: string; qty: number; fingerprint?: string }[] }
+): Promise<AddQuoteMaterialsPreviewResult> {
+  const { data } = await api.post<AddQuoteMaterialsPreviewResult>(`/supply/requests/${requestId}/add-quote-materials/preview`, body);
+  return data;
+}
+
+export type AddQuoteMaterialsMode = 'add_missing_only' | 'add_separate' | 'merge_qty';
+
+export async function addQuoteMaterialsToRequest(
+  requestId: number,
+  body: {
+    quoteId: number;
+    selections: { stageId: string; stageName?: string; quoteRowId?: string; materialId?: number; customName?: string; unit: string; qty: number; fingerprint?: string }[];
+    mode?: AddQuoteMaterialsMode;
+    filterMode?: 'remaining';
+  }
+): Promise<{ added: number; merged: number; skipped: number }> {
+  const { data } = await api.post<{ added: number; merged: number; skipped: number }>(`/supply/requests/${requestId}/add-quote-materials`, body);
+  return data;
+}
+
+export async function exportSupplyRequest(
+  requestId: number,
+  format: 'pdf' | 'xlsx',
+  groupBy: 'stage' | 'none' = 'none'
+): Promise<Blob> {
+  const { data } = await api.get<Blob>(`/supply/requests/${requestId}/export`, {
+    params: { format, groupBy },
+    responseType: 'blob',
+  });
   return data;
 }
 
@@ -215,6 +375,24 @@ export async function createRequestFromTemplate(templateId: number, body: { proj
   return data;
 }
 
+// --- Materials (for substitution dropdown) ---
+export interface SupplyMaterialDto {
+  id: number;
+  name: string;
+  unit: string | null;
+  category?: string | null;
+  isActive?: boolean;
+}
+
+export async function getSupplyMaterials(): Promise<SupplyMaterialDto[]> {
+  try {
+    const { data } = await api.get<SupplyMaterialDto[]>('/supply/materials');
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
 // --- Last purchase / recent suppliers (batch to avoid N+1) ---
 export interface LastPurchaseResult {
   unitPrice: string;
@@ -249,6 +427,11 @@ export async function getSupplyOrders(params?: { projectId?: number; status?: st
 export async function getSupplyOrder(id: number): Promise<SupplyOrderDto> {
   const { data } = await api.get<SupplyOrderDto>(`/supply/orders/${id}`);
   return data;
+}
+
+export async function getOrderSubstitutions(orderId: number): Promise<OrderSubstitutionDto[]> {
+  const { data } = await api.get<OrderSubstitutionDto[]>(`/supply/orders/${orderId}/substitutions`);
+  return Array.isArray(data) ? data : [];
 }
 
 export async function createSupplyOrder(body: Record<string, unknown>): Promise<SupplyOrderDto> {
@@ -329,6 +512,16 @@ export async function fillReceiptPricesFromLast(receiptId: number): Promise<{ re
 
 export async function refillReceiptFromRemaining(receiptId: number): Promise<SupplyReceiptDto> {
   const { data } = await api.post<SupplyReceiptDto>(`/supply/receipts/${receiptId}/refill-from-remaining`);
+  return data;
+}
+
+export async function setReceiptSubstitution(receiptId: number, itemId: number, body: { isSubstitution: boolean; substituteMaterialId?: number | null; substituteCustomName?: string | null; substitutionReason?: string | null }): Promise<SupplyReceiptDto> {
+  const { data } = await api.post<SupplyReceiptDto>(`/supply/receipts/${receiptId}/items/${itemId}/set-substitution`, body);
+  return data;
+}
+
+export async function clearReceiptSubstitution(receiptId: number, itemId: number): Promise<SupplyReceiptDto> {
+  const { data } = await api.post<SupplyReceiptDto>(`/supply/receipts/${receiptId}/items/${itemId}/clear-substitution`);
   return data;
 }
 

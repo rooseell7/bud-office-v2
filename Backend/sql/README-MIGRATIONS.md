@@ -20,6 +20,10 @@
 | 10 | `2026-01-30_sheet_snapshots.sql` | Знімки листів |
 | 11 | `2026-02-03_finance.sql` | Фінанси: гаманці, категорії, транзакції |
 | 12 | `2026-02-03_execution_tasks.sql` | Відділ реалізації: задачі + події по задачах |
+| 13 | `2026-02-04_activity_log.sql` | Журнал активності (audit) |
+| 14 | `2026-02-05_supply_mvp_audit.sql` | Supply MVP: audit-таблиця, замовлення, приходи, payables |
+| 15 | `2026-02-05_supply_request_templates.sql` | Шаблони заявок на постачання (supply_request_templates, supply_request_template_items) |
+| 16 | `2026-02-05_supply_receipt_substitutions.sql` | Заміни матеріалів у приходах (isSubstitution, original*, substitute*, substitutionReason) |
 
 Після додавання **нового** SQL-файлу — допишіть його в цю таблицю в кінець і збережіть порядок при наступному запуску міграцій.
 

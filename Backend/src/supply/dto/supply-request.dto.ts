@@ -8,6 +8,12 @@ export class SupplyRequestItemDto {
   @IsNumber() @Min(0, { message: 'Кількість не може бути від\'ємною' }) qty: number;
   @IsOptional() @IsString() note?: string | null;
   @IsOptional() @IsString() priority?: string;
+  @IsOptional() @IsString() sourceType?: string;
+  @IsOptional() @IsInt() sourceQuoteId?: number | null;
+  @IsOptional() @IsString() sourceStageId?: string | null;
+  @IsOptional() @IsString() sourceQuoteRowId?: string | null;
+  @IsOptional() @IsString() sourceMaterialFingerprint?: string | null;
+  @IsOptional() @IsString() sourceStageName?: string | null;
 }
 
 export class CreateSupplyRequestDto {

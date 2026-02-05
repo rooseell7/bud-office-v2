@@ -3,6 +3,7 @@ import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SupplyReceiptService } from './supply-receipt.service';
 import { UpdateSupplyReceiptDto } from './dto/supply-receipt.dto';
+import { SetSubstitutionDto } from './dto/set-substitution.dto';
 
 type AuthReq = Request & { user: { id: number } };
 
@@ -56,5 +57,15 @@ export class SupplyReceiptsController {
   @Post(':id/refill-from-remaining')
   refillFromRemaining(@Req() req: AuthReq, @Param('id') id: string) {
     return this.service.refillFromRemaining(req.user.id, Number(id));
+  }
+
+  @Post(':receiptId/items/:itemId/set-substitution')
+  setSubstitution(@Req() req: AuthReq, @Param('receiptId') receiptId: string, @Param('itemId') itemId: string, @Body() dto: SetSubstitutionDto) {
+    return this.service.setSubstitution(req.user.id, Number(receiptId), Number(itemId), dto);
+  }
+
+  @Post(':receiptId/items/:itemId/clear-substitution')
+  clearSubstitution(@Req() req: AuthReq, @Param('receiptId') receiptId: string, @Param('itemId') itemId: string) {
+    return this.service.clearSubstitution(req.user.id, Number(receiptId), Number(itemId));
   }
 }

@@ -27,6 +27,9 @@ const MIGRATIONS_ORDER = [
   '2026-02-03_execution_tasks.sql',
   '2026-02-04_activity_log.sql',
   '2026-02-05_supply_mvp_audit.sql',
+  '2026-02-05_supply_request_templates.sql',
+  '2026-02-05_supply_receipt_substitutions.sql',
+  '2026-02-06_supply_request_quote_source.sql',
 ];
 
 function loadEnv() {

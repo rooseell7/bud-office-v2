@@ -31,6 +31,11 @@ export class SupplyOrdersController {
     return this.service.create(req.user.id, dto);
   }
 
+  @Get(':id/substitutions')
+  getSubstitutions(@Req() req: AuthReq, @Param('id') id: string) {
+    return this.service.getSubstitutions(req.user.id, Number(id));
+  }
+
   @Get(':id')
   findOne(@Req() req: AuthReq, @Param('id') id: string) {
     return this.service.findOne(req.user.id, Number(id));

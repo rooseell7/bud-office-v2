@@ -118,7 +118,46 @@ export class SupplyOrderService {
       total: r.total,
       receivedAt: r.receivedAt,
     }));
-    return { ...o, items, totalPlan: Math.round(totalPlan * 100) / 100, sourceRequest, linkedReceipts, audit };
+    const substitutionsCount = await this.getSubstitutionsCount(id);
+    return { ...o, items, totalPlan: Math.round(totalPlan * 100) / 100, sourceRequest, linkedReceipts, substitutionsCount, audit };
+  }
+
+  async getSubstitutionsCount(orderId: number): Promise<number> {
+    const r = await this.receiptItemRepo
+      .createQueryBuilder('ri')
+      .innerJoin('ri.receipt', 'r', 'r.id = ri.receiptId')
+      .where('r.sourceOrderId = :orderId', { orderId })
+      .andWhere('ri.isSubstitution = :flag', { flag: true })
+      .getCount();
+    return r;
+  }
+
+  async getSubstitutions(userId: number, orderId: number) {
+    const order = await this.orderRepo.findOne({ where: { id: orderId }, relations: ['items'] });
+    if (!order) throw new NotFoundException('Supply order not found');
+    const items = await this.receiptItemRepo.find({
+      where: { receipt: { sourceOrderId: orderId }, isSubstitution: true },
+      relations: ['receipt'],
+      order: { id: 'ASC' },
+    });
+    const orderItems = order.items ?? [];
+    const orderItemMap = Object.fromEntries(orderItems.map((i) => [i.id, i]));
+    return items.map((ri) => {
+      const oi = ri.sourceOrderItemId != null ? orderItemMap[ri.sourceOrderItemId] : null;
+      const originalName = ri.originalCustomName || (ri.originalMaterialId != null ? `Матеріал #${ri.originalMaterialId}` : (oi ? (oi.customName || `Матеріал #${oi.materialId}`) : '—'));
+      const substituteName = ri.substituteCustomName || (ri.substituteMaterialId != null ? `Матеріал #${ri.substituteMaterialId}` : '—');
+      const rec = ri.receipt as SupplyReceipt;
+      return {
+        receiptItemId: ri.id,
+        receiptId: ri.receiptId,
+        receiptReceivedAt: rec?.receivedAt ?? null,
+        sourceOrderItemId: ri.sourceOrderItemId,
+        originalName,
+        substituteName,
+        qty: ri.qtyReceived,
+        reason: ri.substitutionReason,
+      };
+    });
   }
 
   async create(userId: number, dto: CreateSupplyOrderDto) {

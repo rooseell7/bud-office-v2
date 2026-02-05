@@ -19,6 +19,24 @@ export class SupplyRequestItem {
   @Column({ type: 'int' })
   requestId: number;
 
+  @Column({ type: 'varchar', length: 32, default: 'manual' })
+  sourceType: string;
+
+  @Column({ type: 'int', nullable: true })
+  sourceQuoteId: number | null;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  sourceStageId: string | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  sourceQuoteRowId: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  sourceMaterialFingerprint: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  sourceStageName: string | null;
+
   @Column({ type: 'int', nullable: true })
   materialId: number | null;
 

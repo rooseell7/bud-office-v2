@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Box, Button, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TextField } from '@mui/material';
+import { Box, Button, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TextField, Dialog, DialogTitle, DialogContent, MenuItem, Select, FormControl, InputLabel, Chip } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import PriceCheckIcon from '@mui/icons-material/PriceCheck';
-import { getSupplyReceipt, receiveSupplyReceipt, verifySupplyReceipt, sendReceiptToPay, fillReceiptPricesFromLast, getLastPurchasesBatch, updateSupplyReceipt, refillReceiptFromRemaining } from '../../../api/supply';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import { getSupplyReceipt, receiveSupplyReceipt, verifySupplyReceipt, sendReceiptToPay, fillReceiptPricesFromLast, getLastPurchasesBatch, updateSupplyReceipt, refillReceiptFromRemaining, setReceiptSubstitution, clearReceiptSubstitution, getSupplyMaterials } from '../../../api/supply';
 import { AuditBlock } from '../components/AuditBlock';
 import { LinksBlockReceipt } from '../components/LinksBlock';
-import type { SupplyReceiptDto, LastPurchaseResult } from '../../../api/supply';
+import type { SupplyReceiptDto, SupplyReceiptItemDto, LastPurchaseResult, SupplyMaterialDto } from '../../../api/supply';
 
 function formatLastPurchaseReceipt(last: LastPurchaseResult): string {
   const date = last.receivedAt ? new Date(last.receivedAt).toLocaleDateString('uk-UA') : '';
@@ -25,6 +26,14 @@ export default function SupplyReceiptDetailPage() {
   const [busy, setBusy] = useState(false);
   const [lastPurchases, setLastPurchases] = useState<Record<number, LastPurchaseResult>>({});
   const [itemsLocal, setItemsLocal] = useState<ItemEdit[]>([]);
+  const [substitutionModalOpen, setSubstitutionModalOpen] = useState(false);
+  const [substitutionItem, setSubstitutionItem] = useState<SupplyReceiptItemDto | null>(null);
+  const [substituteMaterialId, setSubstituteMaterialId] = useState<number | ''>('');
+  const [substituteCustomName, setSubstituteCustomName] = useState('');
+  const [substitutionReason, setSubstitutionReason] = useState('');
+  const [materials, setMaterials] = useState<SupplyMaterialDto[]>([]);
+  const [substitutionError, setSubstitutionError] = useState('');
+  const substitutionAllowed = data?.status === 'draft' || data?.status === 'received';
 
   const load = async () => {
     if (!id) return;
@@ -166,6 +175,68 @@ export default function SupplyReceiptDetailPage() {
     }
   };
 
+  const openSubstitutionModal = (row: SupplyReceiptItemDto) => {
+    setSubstitutionItem(row);
+    setSubstituteMaterialId(row.substituteMaterialId ?? '');
+    setSubstituteCustomName(row.substituteCustomName ?? '');
+    setSubstitutionReason(row.substitutionReason ?? '');
+    setSubstitutionError('');
+    setSubstitutionModalOpen(true);
+    getSupplyMaterials().then(setMaterials);
+  };
+
+  const handleSaveSubstitution = async () => {
+    if (!id || !substitutionItem) return;
+    const hasSubstitute = substituteMaterialId !== '' || (substituteCustomName != null && String(substituteCustomName).trim() !== '');
+    if (!hasSubstitute) {
+      setSubstitutionError('Вкажіть матеріал або найменування заміни.');
+      return;
+    }
+    setBusy(true);
+    setSubstitutionError('');
+    try {
+      const updated = await setReceiptSubstitution(Number(id), substitutionItem.id, {
+        isSubstitution: true,
+        substituteMaterialId: substituteMaterialId === '' ? null : substituteMaterialId,
+        substituteCustomName: substituteCustomName.trim() || null,
+        substitutionReason: substitutionReason.trim() || null,
+      });
+      setData(updated);
+      setSubstitutionModalOpen(false);
+      load();
+    } catch (e: any) {
+      setSubstitutionError(e?.response?.data?.message || 'Помилка збереження заміни');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleClearSubstitution = async (itemId: number) => {
+    if (!id) return;
+    setBusy(true);
+    try {
+      const updated = await clearReceiptSubstitution(Number(id), itemId);
+      setData(updated);
+      load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const originalNameForRow = (row: SupplyReceiptItemDto) => {
+    if (row.isSubstitution && (row.originalCustomName || row.originalMaterialId != null)) {
+      return row.originalCustomName || `Матеріал #${row.originalMaterialId}`;
+    }
+    return row.customName ?? `Матеріал ${row.materialId ?? '—'}`;
+  };
+
+  const substituteNameForRow = (row: SupplyReceiptItemDto) => {
+    if (row.isSubstitution && (row.substituteCustomName || row.substituteMaterialId != null)) {
+      return row.substituteCustomName || `Матеріал #${row.substituteMaterialId}`;
+    }
+    return null;
+  };
+
   if (!id || loading || !data) return <Box sx={{ p: 2 }}>Завантаження…</Box>;
 
   const hasAttachments = (data.attachments?.length ?? 0) > 0;
@@ -194,18 +265,30 @@ export default function SupplyReceiptDetailPage() {
               <TableCell>Од.</TableCell>
               <TableCell>К-ть</TableCell>
               <TableCell>Ціна</TableCell>
+              {substitutionAllowed && <TableCell>Заміна</TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
             {(data.status === 'draft' && itemsLocal.length > 0 ? itemsLocal : (data.items ?? [])).map((row) => {
+              const fullRow = (data.items ?? []).find((i) => i.id === row.id) || (row as SupplyReceiptItemDto);
               const last = row.materialId != null ? lastPurchases[row.materialId] : null;
               const isDraft = data.status === 'draft';
-              const qtyVal = (row as ItemEdit).qtyReceived ?? (row as { qtyReceived: string }).qtyReceived;
+              const qtyVal = (row as ItemEdit).qtyReceived ?? (row as SupplyReceiptItemDto).qtyReceived;
+              const isSub = fullRow.isSubstitution === true;
+              const subName = substituteNameForRow(fullRow);
               return (
                 <TableRow key={row.id}>
                   <TableCell>
-                    <Typography variant="body2">{row.customName ?? `Матеріал ${row.materialId ?? '—'}`}</Typography>
-                    {last && <Typography variant="caption" display="block" color="text.secondary">{formatLastPurchaseReceipt(last)}</Typography>}
+                    <Typography variant="body2">{fullRow.customName ?? `Матеріал ${fullRow.materialId ?? '—'}`}</Typography>
+                    {isSub && (
+                      <>
+                        <Chip size="small" label="Заміна" color="warning" sx={{ mt: 0.5 }} />
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          Було: {originalNameForRow(fullRow)} → Стало: {subName ?? '—'}
+                        </Typography>
+                      </>
+                    )}
+                    {last && !isSub && <Typography variant="caption" display="block" color="text.secondary">{formatLastPurchaseReceipt(last)}</Typography>}
                   </TableCell>
                   <TableCell>{row.unit}</TableCell>
                   <TableCell>
@@ -223,6 +306,15 @@ export default function SupplyReceiptDetailPage() {
                     )}
                   </TableCell>
                   <TableCell>{row.unitPrice ?? '—'}</TableCell>
+                  {substitutionAllowed && (
+                    <TableCell>
+                      {isSub ? (
+                        <Button size="small" onClick={() => handleClearSubstitution(row.id)} disabled={busy}>Зняти заміну</Button>
+                      ) : (
+                        <Button size="small" startIcon={<SwapHorizIcon />} onClick={() => openSubstitutionModal(fullRow)} disabled={busy}>Заміна</Button>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
               );
             })}
@@ -259,6 +351,39 @@ export default function SupplyReceiptDetailPage() {
           <Button variant="contained" disabled={busy} onClick={handleSendToPay}>Відправити на оплату</Button>
         )}
       </Box>
+      <Dialog open={substitutionModalOpen} onClose={() => setSubstitutionModalOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Заміна матеріалу</DialogTitle>
+        <DialogContent>
+          {substitutionItem && (
+            <>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 1 }}>
+                Було (із замовлення): {originalNameForRow(substitutionItem)}
+              </Typography>
+              <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                <InputLabel>Матеріал (стало)</InputLabel>
+                <Select
+                  value={substituteMaterialId}
+                  label="Матеріал (стало)"
+                  onChange={(e) => { setSubstituteMaterialId(e.target.value === '' ? '' : (e.target.value as number)); setSubstituteCustomName(''); }}
+                >
+                  <MenuItem value="">— Свій текст нижче —</MenuItem>
+                  {materials.map((m) => (
+                    <MenuItem key={m.id} value={m.id}>{m.name} {m.unit ? `(${m.unit})` : ''}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField fullWidth size="small" label="Або своє найменування (стало)" value={substituteCustomName} onChange={(e) => setSubstituteCustomName(e.target.value)} sx={{ mb: 2 }} placeholder="Якщо не обрано матеріал зі списку" />
+              <TextField fullWidth size="small" label="Причина заміни" multiline minRows={2} value={substitutionReason} onChange={(e) => setSubstitutionReason(e.target.value)} sx={{ mb: 2 }} />
+              {substitutionError && <Typography color="error" sx={{ mb: 1 }}>{substitutionError}</Typography>}
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                <Button onClick={() => setSubstitutionModalOpen(false)}>Скасувати</Button>
+                <Button variant="contained" disabled={busy} onClick={handleSaveSubstitution}>Зберегти</Button>
+              </Box>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <AuditBlock events={data.audit ?? []} />
     </Box>
   );

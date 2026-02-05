@@ -22,14 +22,19 @@ import {
   DialogContent,
   FormControlLabel,
   Checkbox,
+  Radio,
+  RadioGroup,
   Snackbar,
   Alert,
+  Menu,
+  ListItemText,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SaveAsIcon from '@mui/icons-material/SaveAs';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import {
   getSupplyRequest,
   submitSupplyRequest,
@@ -41,8 +46,20 @@ import {
   saveRequestAsTemplate,
   getPurchasePlan,
   createOrdersByPlan,
+  getQuoteStages,
+  getQuoteStageMaterialsNeed,
+  previewAddQuoteMaterials,
+  addQuoteMaterialsToRequest,
+  exportSupplyRequest,
 } from '../../../api/supply';
-import type { PurchasePlan } from '../../../api/supply';
+import type {
+  PurchasePlan,
+  QuoteStagesResponse,
+  QuoteStageMaterialsNeedGroup,
+  QuoteStageMaterialNeedItem,
+  AddQuoteMaterialsPreviewResult,
+  AddQuoteMaterialsMode,
+} from '../../../api/supply';
 import { AuditBlock } from '../components/AuditBlock';
 import { LinksBlockRequest } from '../components/LinksBlock';
 import type { SupplyRequestDto, SupplyRequestItemDto } from '../../../api/supply';
@@ -50,7 +67,23 @@ import type { SupplyRequestDto, SupplyRequestItemDto } from '../../../api/supply
 const statusLabels: Record<string, string> = { draft: 'Чернетка', submitted: 'Передано', closed: 'Закрито', cancelled: 'Скасовано' };
 const priorityLabels: Record<string, string> = { low: 'Низький', normal: 'Звичайний', high: 'Високий' };
 
-type ItemRow = { customName: string; unit: string; qty: number; note: string; priority: string };
+type ItemRow = {
+  customName: string;
+  unit: string;
+  qty: number;
+  note: string;
+  priority: string;
+  id?: number;
+  sourceType?: string;
+  sourceQuoteId?: number | null;
+  sourceStageId?: string | null;
+  sourceQuoteRowId?: string | null;
+  sourceMaterialFingerprint?: string | null;
+  sourceStageName?: string | null;
+  materialId?: number | null;
+};
+
+type QuoteSelectionRow = QuoteStageMaterialNeedItem & { stageId: string; stageName: string; qtyToAdd: number; selected: boolean };
 
 export default function SupplyRequestDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -312,6 +345,14 @@ export default function SupplyRequestDetailPage() {
         qty: typeof row.qty === 'number' ? row.qty : parseFloat(String(row.qty)) || 0,
         note: row.note ?? '',
         priority: row.priority ?? 'normal',
+        id: row.id,
+        sourceType: row.sourceType,
+        sourceQuoteId: row.sourceQuoteId,
+        sourceStageId: row.sourceStageId,
+        sourceQuoteRowId: row.sourceQuoteRowId,
+        sourceMaterialFingerprint: row.sourceMaterialFingerprint,
+        sourceStageName: row.sourceStageName,
+        materialId: row.materialId,
       })));
       setEditDirty(false);
     }
@@ -321,7 +362,21 @@ export default function SupplyRequestDetailPage() {
     if (!data || data.status !== 'draft') return;
     const validItems: SupplyRequestItemDto[] = editItems
       .filter((r) => r.customName.trim() !== '' && r.qty > 0)
-      .map((r) => ({ customName: r.customName.trim(), unit: r.unit || 'шт', qty: Number(r.qty), note: r.note || null, priority: r.priority || 'normal' }));
+      .map((r) => ({
+        id: r.id,
+        materialId: r.materialId ?? undefined,
+        customName: r.customName.trim(),
+        unit: r.unit || 'шт',
+        qty: Number(r.qty),
+        note: r.note || null,
+        priority: r.priority || 'normal',
+        sourceType: r.sourceType,
+        sourceQuoteId: r.sourceQuoteId ?? undefined,
+        sourceStageId: r.sourceStageId ?? undefined,
+        sourceQuoteRowId: r.sourceQuoteRowId ?? undefined,
+        sourceMaterialFingerprint: r.sourceMaterialFingerprint ?? undefined,
+        sourceStageName: r.sourceStageName ?? undefined,
+      }));
     setBusy(true);
     try {
       await updateSupplyRequest(data.id, { neededAt: editNeededAt || undefined, comment: editComment || undefined, items: validItems });
@@ -337,6 +392,160 @@ export default function SupplyRequestDetailPage() {
   const updateEditItem = (idx: number, field: keyof ItemRow, value: string | number) => {
     setEditItems((prev) => prev.map((row, i) => (i === idx ? { ...row, [field]: value } : row)));
     setEditDirty(true);
+  };
+
+  // ----- Quote stages: add materials from KP (read-only, no sheet writes) -----
+  const [quoteStagesData, setQuoteStagesData] = useState<QuoteStagesResponse | null>(null);
+  const [quoteStagesLoading, setQuoteStagesLoading] = useState(false);
+  const [selectedStageIds, setSelectedStageIds] = useState<string[]>([]);
+  const [selectionRows, setSelectionRows] = useState<QuoteSelectionRow[]>([]);
+  const [stageMaterialsLoading, setStageMaterialsLoading] = useState(false);
+  const [addQuoteBusy, setAddQuoteBusy] = useState(false);
+  const [addQuoteSnack, setAddQuoteSnack] = useState<{ open: boolean; added: number; merged: number; skipped: number }>({ open: false, added: 0, merged: 0, skipped: 0 });
+  const [conflictModalOpen, setConflictModalOpen] = useState(false);
+  const [conflictPreview, setConflictPreview] = useState<AddQuoteMaterialsPreviewResult | null>(null);
+  const [conflictMode, setConflictMode] = useState<AddQuoteMaterialsMode>('merge_qty');
+  const [pendingAddPayload, setPendingAddPayload] = useState<{ quoteId: number; selections: Parameters<typeof addQuoteMaterialsToRequest>[1]['selections'] } | null>(null);
+
+  const [exportMenuAnchor, setExportMenuAnchor] = useState<null | HTMLElement>(null);
+  const [exportGroupByStage, setExportGroupByStage] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  const handleExport = async (format: 'pdf' | 'xlsx') => {
+    if (!data) return;
+    setExportBusy(true);
+    try {
+      const blob = await exportSupplyRequest(data.id, format, exportGroupByStage ? 'stage' : 'none');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `request-${data.id}.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setExportMenuAnchor(null);
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!data?.projectId || data.status !== 'draft') return;
+    setQuoteStagesLoading(true);
+    getQuoteStages(data.projectId)
+      .then(setQuoteStagesData)
+      .catch(() => setQuoteStagesData(null))
+      .finally(() => setQuoteStagesLoading(false));
+  }, [data?.projectId, data?.status]);
+
+  useEffect(() => {
+    if (!data?.projectId || !quoteStagesData?.quoteId || selectedStageIds.length === 0) {
+      setSelectionRows([]);
+      return;
+    }
+    setStageMaterialsLoading(true);
+    getQuoteStageMaterialsNeed(data.projectId, quoteStagesData.quoteId, selectedStageIds, 'received_based')
+      .then((groups: QuoteStageMaterialsNeedGroup[]) => {
+        const rows: QuoteSelectionRow[] = [];
+        groups.forEach((g) => {
+          g.items.forEach((it) => {
+            rows.push({
+              ...it,
+              stageId: g.stageId,
+              stageName: g.stageName,
+              qtyToAdd: it.qtyRemainingNeed,
+              selected: it.qtyRemainingNeed > 0,
+            });
+          });
+        });
+        setSelectionRows(rows);
+      })
+      .catch(() => setSelectionRows([]))
+      .finally(() => setStageMaterialsLoading(false));
+  }, [data?.projectId, quoteStagesData?.quoteId, selectedStageIds.join(',')]);
+
+  const toggleStageSelection = (stageId: string) => {
+    setSelectedStageIds((prev) =>
+      prev.includes(stageId) ? prev.filter((id) => id !== stageId) : [...prev, stageId]
+    );
+  };
+  const selectAllStages = () => {
+    if (quoteStagesData?.stages) setSelectedStageIds(quoteStagesData.stages.map((s) => s.stageId));
+  };
+  const clearStages = () => setSelectedStageIds([]);
+
+  const setSelectionRowSelected = (idx: number, selected: boolean) => {
+    setSelectionRows((prev) => prev.map((r, i) => (i === idx ? { ...r, selected } : r)));
+  };
+  const setSelectionRowQty = (idx: number, qty: number) => {
+    setSelectionRows((prev) => prev.map((r, i) => (i === idx ? { ...r, qtyToAdd: qty } : r)));
+  };
+  const selectAllMaterials = () => setSelectionRows((prev) => prev.map((r) => ({ ...r, selected: true })));
+  const clearMaterials = () => setSelectionRows((prev) => prev.map((r) => ({ ...r, selected: false })));
+  const selectAllRemaining = () =>
+    setSelectionRows((prev) => prev.map((r) => ({ ...r, selected: r.qtyRemainingNeed > 0 })));
+
+  const [showOnlyRemaining, setShowOnlyRemaining] = useState(true);
+  const displayRows = selectionRows.flatMap((r, i) =>
+    showOnlyRemaining && r.qtyRemainingNeed <= 0 ? [] : [{ ...r, _idx: i }]
+  );
+
+  const selectedCount = selectionRows.filter((r) => r.selected).length;
+  const buildSelections = () => {
+    const toAdd = selectionRows.filter((r) => r.selected);
+    return toAdd.map((r) => ({
+      stageId: r.stageId,
+      stageName: r.stageName,
+      quoteRowId: r.quoteRowId ?? undefined,
+      materialId: r.materialId ?? undefined,
+      customName: r.materialName || undefined,
+      unit: r.unit,
+      qty: r.qtyToAdd,
+      fingerprint: r.fingerprint,
+    }));
+  };
+
+  const handleAddQuoteMaterials = async () => {
+    if (!data || selectedCount === 0 || !quoteStagesData?.quoteId) return;
+    const selections = buildSelections();
+    const payload = { quoteId: quoteStagesData.quoteId, selections };
+    setAddQuoteBusy(true);
+    try {
+      const preview = await previewAddQuoteMaterials(data.id, payload);
+      if (preview.conflicts.length === 0) {
+        const res = await addQuoteMaterialsToRequest(data.id, {
+          ...payload,
+          mode: 'add_missing_only',
+          filterMode: 'remaining',
+        });
+        setAddQuoteSnack({ open: true, added: res.added, merged: res.merged, skipped: res.skipped });
+        await load();
+        return;
+      }
+      setConflictPreview(preview);
+      setPendingAddPayload(payload);
+      setConflictMode('merge_qty');
+      setConflictModalOpen(true);
+    } finally {
+      setAddQuoteBusy(false);
+    }
+  };
+
+  const handleApplyConflictModal = async () => {
+    if (!data || !pendingAddPayload) return;
+    setAddQuoteBusy(true);
+    try {
+      const res = await addQuoteMaterialsToRequest(data.id, {
+        ...pendingAddPayload,
+        mode: conflictMode,
+        filterMode: 'remaining',
+      });
+      setConflictModalOpen(false);
+      setConflictPreview(null);
+      setPendingAddPayload(null);
+      setAddQuoteSnack({ open: true, added: res.added, merged: res.merged, skipped: res.skipped });
+      await load();
+    } finally {
+      setAddQuoteBusy(false);
+    }
   };
 
   if (loading || !data) {
@@ -358,6 +567,124 @@ export default function SupplyRequestDetailPage() {
         <>
           <TextField fullWidth size="small" label="Дата потреби" type="date" value={editNeededAt} onChange={(e) => { setEditNeededAt(e.target.value); setEditDirty(true); }} sx={{ mb: 2 }} InputLabelProps={{ shrink: true }} />
           <TextField fullWidth size="small" label="Коментар" multiline value={editComment} onChange={(e) => { setEditComment(e.target.value); setEditDirty(true); }} sx={{ mb: 2 }} />
+          {data.projectId && (
+            <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>Етапи КП (додати матеріали в заявку)</Typography>
+              {quoteStagesLoading && <Typography color="text.secondary">Завантаження етапів…</Typography>}
+              {!quoteStagesLoading && quoteStagesData && (
+                <>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">Оберіть етапи</Typography>
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
+                      <Button size="small" variant="outlined" onClick={selectAllStages}>Select all</Button>
+                      <Button size="small" variant="outlined" onClick={clearStages}>Clear</Button>
+                      {quoteStagesData.stages.map((s) => (
+                        <FormControlLabel
+                          key={s.stageId}
+                          control={
+                            <Checkbox
+                              checked={selectedStageIds.includes(s.stageId)}
+                              onChange={() => toggleStageSelection(s.stageId)}
+                            />
+                          }
+                          label={s.stageName}
+                        />
+                      ))}
+                    </Box>
+                  </Box>
+                  {selectedStageIds.length > 0 && (
+                    <>
+                      {stageMaterialsLoading && <Typography color="text.secondary" sx={{ mb: 1 }}>Завантаження матеріалів…</Typography>}
+                      {!stageMaterialsLoading && selectionRows.length > 0 && (
+                        <>
+                          <FormControlLabel
+                            control={
+                              <Checkbox
+                                checked={showOnlyRemaining}
+                                onChange={(e) => setShowOnlyRemaining(e.target.checked)}
+                              />
+                            }
+                            label="Показувати тільки залишок (не отримано)"
+                            sx={{ mb: 1, display: 'block' }}
+                          />
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                            <Button size="small" variant="outlined" onClick={selectAllMaterials}>Select all</Button>
+                            <Button size="small" variant="outlined" onClick={selectAllRemaining}>Select all remaining</Button>
+                            <Button size="small" variant="outlined" onClick={clearMaterials}>Clear</Button>
+                            <Button
+                              variant="contained"
+                              size="small"
+                              disabled={addQuoteBusy || selectedCount === 0}
+                              onClick={handleAddQuoteMaterials}
+                            >
+                              Додати вибране в заявку ({selectedCount})
+                            </Button>
+                          </Box>
+                          <TableContainer sx={{ maxHeight: 320, mb: 1 }}>
+                            <Table size="small" stickyHeader>
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell padding="checkbox" />
+                                  <TableCell>Матеріал</TableCell>
+                                  <TableCell>Од.</TableCell>
+                                  <TableCell>КП</TableCell>
+                                  <TableCell>Отримано</TableCell>
+                                  <TableCell>Залишок</TableCell>
+                                  <TableCell>Qty до додавання</TableCell>
+                                  <TableCell>Етап</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {displayRows.map((row) => (
+                                  <TableRow key={row._idx}>
+                                    <TableCell padding="checkbox">
+                                      <Checkbox
+                                        checked={row.selected}
+                                        onChange={(e) => setSelectionRowSelected(row._idx, e.target.checked)}
+                                      />
+                                    </TableCell>
+                                    <TableCell title={row.qtyRequested > 0 || row.qtyOrdered > 0 ? `Запитано: ${row.qtyRequested}, Замовлено: ${row.qtyOrdered}` : undefined}>
+                                      {row.materialName}
+                                    </TableCell>
+                                    <TableCell>{row.unit}</TableCell>
+                                    <TableCell>{row.qtyFromQuote}</TableCell>
+                                    <TableCell>{row.qtyReceived}</TableCell>
+                                    <TableCell>{row.qtyRemainingNeed}</TableCell>
+                                    <TableCell>
+                                      <TextField
+                                        size="small"
+                                        type="number"
+                                        inputProps={{ min: 0, step: 0.01 }}
+                                        value={row.qtyToAdd}
+                                        onChange={(e) => setSelectionRowQty(row._idx, e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                                        sx={{ width: 90 }}
+                                      />
+                                    </TableCell>
+                                    <TableCell>{row.stageName}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        </>
+                      )}
+                      {!stageMaterialsLoading && selectedStageIds.length > 0 && selectionRows.length === 0 && (
+                        <Typography color="text.secondary">По обраних етапах матеріалів не знайдено.</Typography>
+                      )}
+                      {!stageMaterialsLoading && selectionRows.length > 0 && displayRows.length === 0 && (
+                        <Typography color="text.secondary" sx={{ mt: 1 }}>
+                          Усі позиції вже отримано (залишок = 0). Вимкніть фільтр «Показувати тільки залишок», щоб переглянути всі.
+                        </Typography>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+              {!quoteStagesLoading && !quoteStagesData && data.projectId && (
+                <Typography color="text.secondary">КП для об'єкта не знайдено або немає етапів.</Typography>
+              )}
+            </Paper>
+          )}
           <Typography variant="subtitle2" sx={{ mb: 1 }}>Позиції</Typography>
           <TableContainer component={Paper} sx={{ mb: 2 }}>
             <Table size="small">
@@ -374,7 +701,12 @@ export default function SupplyRequestDetailPage() {
               <TableBody>
                 {editItems.map((row, idx) => (
                   <TableRow key={idx}>
-                    <TableCell><TextField size="small" fullWidth value={row.customName} onChange={(e) => updateEditItem(idx, 'customName', e.target.value)} /></TableCell>
+                    <TableCell>
+                      <TextField size="small" fullWidth value={row.customName} onChange={(e) => updateEditItem(idx, 'customName', e.target.value)} />
+                      {row.sourceStageName && (
+                        <Typography variant="caption" color="text.secondary" display="block">КП: {row.sourceStageName}</Typography>
+                      )}
+                    </TableCell>
                     <TableCell><TextField size="small" value={row.unit} onChange={(e) => updateEditItem(idx, 'unit', e.target.value)} sx={{ width: 80 }} /></TableCell>
                     <TableCell><TextField size="small" type="number" inputProps={{ min: 0 }} value={row.qty || ''} onChange={(e) => updateEditItem(idx, 'qty', e.target.value === '' ? 0 : parseFloat(e.target.value))} sx={{ width: 90 }} /></TableCell>
                     <TableCell>
@@ -422,6 +754,20 @@ export default function SupplyRequestDetailPage() {
       )}
       <LinksBlockRequest linkedOrders={data.linkedOrders} />
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+        {(data.items?.length ?? 0) > 0 && (
+          <Button variant="outlined" size="small" startIcon={<FileDownloadIcon />} disabled={exportBusy} onClick={(e) => setExportMenuAnchor(e.currentTarget)}>
+            Експорт
+          </Button>
+        )}
+        <Menu anchorEl={exportMenuAnchor} open={Boolean(exportMenuAnchor)} onClose={() => setExportMenuAnchor(null)}>
+          <FormControlLabel
+            sx={{ px: 2, py: 1 }}
+            control={<Checkbox size="small" checked={exportGroupByStage} onChange={(e) => setExportGroupByStage(e.target.checked)} />}
+            label="Групувати по етапах КП"
+          />
+          <MenuItem onClick={() => handleExport('pdf')}>PDF</MenuItem>
+          <MenuItem onClick={() => handleExport('xlsx')}>Excel</MenuItem>
+        </Menu>
         {(data.status === 'draft' || data.status === 'submitted') && (data.items?.length ?? 0) > 0 && (
           <Button variant="outlined" size="small" startIcon={<SaveAsIcon />} disabled={busy} onClick={() => { setTemplateName(''); setTemplateProjectScoped(true); setSaveAsTemplateOpen(true); }}>
             Зберегти як шаблон
@@ -542,6 +888,54 @@ export default function SupplyRequestDetailPage() {
           )}
         </Alert>
       </Snackbar>
+
+      <Snackbar open={addQuoteSnack.open} autoHideDuration={6000} onClose={() => setAddQuoteSnack((p) => ({ ...p, open: false }))}>
+        <Alert severity="success" onClose={() => setAddQuoteSnack((p) => ({ ...p, open: false }))}>
+          Додано {addQuoteSnack.added}, об'єднано {addQuoteSnack.merged}, пропущено {addQuoteSnack.skipped}.
+        </Alert>
+      </Snackbar>
+
+      <Dialog open={conflictModalOpen} onClose={() => { setConflictModalOpen(false); setPendingAddPayload(null); }} maxWidth="sm" fullWidth>
+        <DialogTitle>Знайдено дублікати</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ mb: 2 }}>Деякі позиції вже є в заявці. Що робимо?</Typography>
+          {conflictPreview && conflictPreview.conflicts.length > 0 && (
+            <>
+              <TableContainer component={Paper} variant="outlined" sx={{ mb: 2, maxHeight: 240 }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Матеріал, од.</TableCell>
+                      <TableCell>Було qty</TableCell>
+                      <TableCell>Додаємо qty</TableCell>
+                      <TableCell>Після об'єднання</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {conflictPreview.conflicts.map((c) => (
+                      <TableRow key={c.selectionKey}>
+                        <TableCell>{c.materialName}, {c.unit}</TableCell>
+                        <TableCell>{c.existingQty}</TableCell>
+                        <TableCell>{c.incomingQty}</TableCell>
+                        <TableCell>{c.existingQty + c.incomingQty}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <RadioGroup value={conflictMode} onChange={(e) => setConflictMode(e.target.value as AddQuoteMaterialsMode)} sx={{ mb: 2 }}>
+                <FormControlLabel value="merge_qty" control={<Radio />} label="Об'єднати кількості (рекомендовано)" />
+                <FormControlLabel value="add_missing_only" control={<Radio />} label="Пропустити дублікати" />
+                <FormControlLabel value="add_separate" control={<Radio />} label="Додати окремими рядками (для КП-позицій дублі не створюються — будуть пропущені)" />
+              </RadioGroup>
+            </>
+          )}
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+            <Button onClick={() => { setConflictModalOpen(false); setPendingAddPayload(null); }}>Скасувати</Button>
+            <Button variant="contained" disabled={addQuoteBusy} onClick={handleApplyConflictModal}>Застосувати</Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
 
       <AuditBlock events={data.audit ?? []} />
     </Box>
