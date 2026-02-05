@@ -4,6 +4,7 @@ import { Box, Button, Typography, Table, TableBody, TableCell, TableContainer, T
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { getPayable, addPayment } from '../../../api/supply';
 import { AuditBlock } from '../components/AuditBlock';
+import { LinksBlockPayable } from '../components/LinksBlock';
 import type { PayableDto } from '../../../api/supply';
 
 export default function SupplyPayableDetailPage() {
@@ -55,12 +56,12 @@ export default function SupplyPayableDetailPage() {
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexWrap: 'wrap' }}>
         <Button size="small" startIcon={<ArrowBackIcon />} onClick={() => navigate('/supply/payables')}>Назад</Button>
         <Typography variant="h6">До оплати №{data.id}</Typography>
-        <Typography color="text.secondary">Сума: {data.amount} • Оплачено: {data.paidAmount} • Статус: {data.status}</Typography>
+        <Typography color="text.secondary">Сума: {data.amount} грн • Оплачено: {data.paidAmount} грн • Статус: {data.status}</Typography>
         <Button variant="contained" disabled={busy || data.status === 'paid' || data.status === 'cancelled'} onClick={() => setPaymentOpen(true)}>
           Додати оплату
         </Button>
-        <Button size="small" onClick={() => navigate(`/supply/receipts/${data.sourceReceiptId}`)}>Прихід №{data.sourceReceiptId}</Button>
       </Box>
+      <LinksBlockPayable sourceReceipt={data.sourceReceipt ?? { id: data.sourceReceiptId }} />
       <Typography variant="body2">Проєкт: {data.projectId} • Постачальник: {data.supplierId ?? '—'}</Typography>
       <TableContainer component={Paper} sx={{ my: 2 }}>
         <Table size="small">

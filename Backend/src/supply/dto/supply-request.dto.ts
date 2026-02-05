@@ -5,7 +5,7 @@ export class SupplyRequestItemDto {
   @IsOptional() @IsInt() materialId?: number | null;
   @IsOptional() @IsString() customName?: string | null;
   @IsString() unit: string;
-  @IsNumber() @Min(0) qty: number;
+  @IsNumber() @Min(0, { message: 'Кількість не може бути від\'ємною' }) qty: number;
   @IsOptional() @IsString() note?: string | null;
   @IsOptional() @IsString() priority?: string;
 }

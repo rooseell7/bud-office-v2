@@ -47,4 +47,14 @@ export class SupplyReceiptsController {
   sendToPay(@Req() req: AuthReq, @Param('id') id: string) {
     return this.service.sendToPay(req.user.id, Number(id));
   }
+
+  @Post(':id/fill-prices-from-last')
+  fillPricesFromLast(@Req() req: AuthReq, @Param('id') id: string) {
+    return this.service.fillPricesFromLast(req.user.id, Number(id));
+  }
+
+  @Post(':id/refill-from-remaining')
+  refillFromRemaining(@Req() req: AuthReq, @Param('id') id: string) {
+    return this.service.refillFromRemaining(req.user.id, Number(id));
+  }
 }

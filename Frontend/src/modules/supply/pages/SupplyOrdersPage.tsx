@@ -50,21 +50,28 @@ export default function SupplyOrdersPage() {
               <TableCell>№</TableCell>
               <TableCell>Об'єкт</TableCell>
               <TableCell>Статус</TableCell>
+              <TableCell>Сума (план)</TableCell>
               <TableCell>Приходів</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={4}>Завантаження…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5}>Завантаження…</TableCell></TableRow>
             ) : list.length === 0 ? (
-              <TableRow><TableCell colSpan={4}>Немає замовлень</TableCell></TableRow>
+              <>
+                <TableRow><TableCell colSpan={5}>Немає замовлень</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} sx={{ py: 2, color: 'text.secondary', fontSize: '0.875rem' }}>
+                  Замовлення створюються з заявок: відкрийте заявку зі статусом «Передано» і натисніть «Створити замовлення».
+                </TableCell></TableRow>
+              </>
             ) : (
               list.map((o) => (
                 <TableRow key={o.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/supply/orders/${o.id}`)}>
                   <TableCell>{o.id}</TableCell>
                   <TableCell>Проєкт {o.projectId}</TableCell>
                   <TableCell>{statusLabels[o.status] ?? o.status}</TableCell>
-                  <TableCell>{(o as any).receiptsCount ?? 0}</TableCell>
+                  <TableCell>{(o as { totalPlan?: number }).totalPlan != null ? `${(o as { totalPlan?: number }).totalPlan} грн` : '—'}</TableCell>
+                  <TableCell>{(o as { receiptsCount?: number }).receiptsCount ?? 0}</TableCell>
                 </TableRow>
               ))
             )}

@@ -17,10 +17,19 @@ import {
   Select,
   MenuItem,
   IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  FormControlLabel,
+  Checkbox,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import SaveAsIcon from '@mui/icons-material/SaveAs';
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import {
   getSupplyRequest,
   submitSupplyRequest,
@@ -29,8 +38,13 @@ import {
   createSupplyRequest,
   updateSupplyRequest,
   getSupplyProjectOptions,
+  saveRequestAsTemplate,
+  getPurchasePlan,
+  createOrdersByPlan,
 } from '../../../api/supply';
+import type { PurchasePlan } from '../../../api/supply';
 import { AuditBlock } from '../components/AuditBlock';
+import { LinksBlockRequest } from '../components/LinksBlock';
 import type { SupplyRequestDto, SupplyRequestItemDto } from '../../../api/supply';
 
 const statusLabels: Record<string, string> = { draft: 'Чернетка', submitted: 'Передано', closed: 'Закрито', cancelled: 'Скасовано' };
@@ -92,6 +106,80 @@ export default function SupplyRequestDetailPage() {
       setBusy(false);
     }
   };
+
+  const [saveAsTemplateOpen, setSaveAsTemplateOpen] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [templateProjectScoped, setTemplateProjectScoped] = useState(true);
+  const handleSaveAsTemplate = async () => {
+    if (!data || !templateName.trim()) return;
+    setBusy(true);
+    try {
+      await saveRequestAsTemplate(data.id, { name: templateName.trim(), projectScoped: templateProjectScoped });
+      setSaveAsTemplateOpen(false);
+      setTemplateName('');
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const [planModalOpen, setPlanModalOpen] = useState(false);
+  const [plan, setPlan] = useState<PurchasePlan | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [includeUnassigned, setIncludeUnassigned] = useState(true);
+  const [createPlanBusy, setCreatePlanBusy] = useState(false);
+  const [planError, setPlanError] = useState('');
+  const [createdOrderIds, setCreatedOrderIds] = useState<number[]>([]);
+  const [conflictOrders, setConflictOrders] = useState<{ id: number }[]>([]);
+  const [snackOpen, setSnackOpen] = useState(false);
+
+  const openPlanModal = async () => {
+    if (!data) return;
+    setPlanModalOpen(true);
+    setPlan(null);
+    setPlanError('');
+    setConflictOrders([]);
+    setPlanLoading(true);
+    try {
+      const p = await getPurchasePlan(data.id, data.projectId);
+      setPlan(p);
+    } catch (e: any) {
+      setPlanError(e?.response?.data?.message || 'Не вдалося завантажити план');
+    } finally {
+      setPlanLoading(false);
+    }
+  };
+
+  const handleCreateOrdersByPlan = async () => {
+    if (!data) return;
+    setCreatePlanBusy(true);
+    setPlanError('');
+    setConflictOrders([]);
+    try {
+      const res = await createOrdersByPlan(data.id, { includeUnassigned, mode: 'use_last_purchase', unassignedStrategy: 'single_order_no_supplier' });
+      setCreatedOrderIds(res.createdOrderIds);
+      setPlanModalOpen(false);
+      setSnackOpen(true);
+      await load();
+    } catch (e: any) {
+      if (e?.response?.status === 409) {
+        setPlanError(e?.response?.data?.message || 'Для цієї заявки вже створені замовлення.');
+        try {
+          const refreshed = await getSupplyRequest(data.id);
+          setConflictOrders(refreshed.linkedOrders ?? []);
+          if (refreshed.linkedOrders?.length) setData((prev) => (prev ? { ...prev, linkedOrders: refreshed.linkedOrders } : null));
+        } catch {
+          setConflictOrders(data.linkedOrders ?? []);
+        }
+      } else {
+        setPlanError(e?.response?.data?.message || 'Помилка створення замовлень');
+      }
+    } finally {
+      setCreatePlanBusy(false);
+    }
+  };
+
+  const ordersToCreate = plan ? (includeUnassigned ? plan.groups.length : plan.groups.filter((g) => g.key !== 'UNASSIGNED').length) : 0;
 
   // ----- Create form (id === 'new') -----
   const [projects, setProjects] = useState<{ id: number; name: string }[]>([]);
@@ -332,20 +420,129 @@ export default function SupplyRequestDetailPage() {
           </TableContainer>
         </>
       )}
-      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+      <LinksBlockRequest linkedOrders={data.linkedOrders} />
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+        {(data.status === 'draft' || data.status === 'submitted') && (data.items?.length ?? 0) > 0 && (
+          <Button variant="outlined" size="small" startIcon={<SaveAsIcon />} disabled={busy} onClick={() => { setTemplateName(''); setTemplateProjectScoped(true); setSaveAsTemplateOpen(true); }}>
+            Зберегти як шаблон
+          </Button>
+        )}
         {isDraft && (
           <>
             <Button variant="contained" disabled={busy || !editDirty} onClick={handleSaveDraft}>Зберегти</Button>
             <Button variant="contained" disabled={busy} onClick={handleSubmit}>Передати в постачання</Button>
+            <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+              Після цього зʼявиться кнопка «Створити замовлення» — тоді замовлення потрапить у розділ Замовлення.
+            </Typography>
           </>
         )}
         {data.status === 'submitted' && (
           <>
             <Button variant="contained" disabled={busy} onClick={handleCreateOrder}>Створити замовлення</Button>
+            <Button variant="outlined" disabled={busy} onClick={openPlanModal} startIcon={<AccountTreeIcon />}>Авто-розбиття в замовлення</Button>
             <Button variant="outlined" disabled={busy} onClick={handleClose}>Закрити</Button>
           </>
         )}
       </Box>
+      <Dialog open={saveAsTemplateOpen} onClose={() => setSaveAsTemplateOpen(false)}>
+        <DialogTitle>Зберегти заявку як шаблон</DialogTitle>
+        <DialogContent>
+          <TextField fullWidth size="small" label="Назва шаблону" value={templateName} onChange={(e) => setTemplateName(e.target.value)} sx={{ mt: 1, mb: 2 }} />
+          <FormControlLabel control={<Checkbox checked={templateProjectScoped} onChange={(e) => setTemplateProjectScoped(e.target.checked)} />} label="Прив'язати до поточного об'єкта" />
+          <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+            <Button onClick={() => setSaveAsTemplateOpen(false)}>Скасувати</Button>
+            <Button variant="contained" disabled={busy || !templateName.trim()} onClick={handleSaveAsTemplate}>Зберегти</Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={planModalOpen} onClose={() => setPlanModalOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>План закупівлі</DialogTitle>
+        <DialogContent>
+          {planLoading && <Typography color="text.secondary">Завантаження…</Typography>}
+          {!planLoading && plan && (
+            <>
+              {plan.groups.map((group) => (
+                <Box key={group.key} sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" fontWeight="bold">
+                    {group.supplierId != null ? (group.supplierName ?? `Постачальник #${group.supplierId}`) : 'Без постачальника'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Позицій: {group.totals.itemsCount}, сума (за підказаними цінами): {group.totals.sumSuggested.toFixed(2)} грн
+                  </Typography>
+                  <TableContainer component={Paper} variant="outlined" sx={{ mt: 1 }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Матеріал / Найменування</TableCell>
+                          <TableCell>Од.</TableCell>
+                          <TableCell>К-ть</TableCell>
+                          <TableCell>Ціна</TableCell>
+                          <TableCell>Сума</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {group.items.map((it) => {
+                          const qty = Number(it.qty) || 0;
+                          const price = it.suggestedUnitPrice ?? 0;
+                          const lineSum = Math.round(qty * price * 100) / 100;
+                          return (
+                            <TableRow key={it.requestItemId}>
+                              <TableCell>{it.customName ?? `Матеріал #${it.materialId ?? '—'}`}</TableCell>
+                              <TableCell>{it.unit}</TableCell>
+                              <TableCell>{it.qty}</TableCell>
+                              <TableCell>{it.suggestedUnitPrice != null ? `${it.suggestedUnitPrice} грн` : '—'}</TableCell>
+                              <TableCell>{lineSum.toFixed(2)} грн</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              ))}
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Всього груп: {plan.totals.groupsCount}, позицій: {plan.totals.itemsCount}, сума: {plan.totals.sumSuggested.toFixed(2)} грн
+              </Typography>
+              <FormControlLabel
+                control={<Checkbox checked={includeUnassigned} onChange={(e) => setIncludeUnassigned(e.target.checked)} />}
+                label='Створювати замовлення для "Без постачальника"'
+              />
+              {planError && <Typography color="error" sx={{ mt: 1 }}>{planError}</Typography>}
+              {conflictOrders.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="body2" color="text.secondary">Існуючі замовлення:</Typography>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
+                    {conflictOrders.map((o) => (
+                      <Button key={o.id} size="small" variant="outlined" onClick={() => { navigate(`/supply/orders/${o.id}`); setPlanModalOpen(false); }}>Замовлення №{o.id}</Button>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+              <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                <Button onClick={() => setPlanModalOpen(false)}>Скасувати</Button>
+                <Button variant="contained" disabled={createPlanBusy || ordersToCreate === 0} onClick={handleCreateOrdersByPlan}>
+                  Створити замовлення ({ordersToCreate})
+                </Button>
+              </Box>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Snackbar open={snackOpen} autoHideDuration={6000} onClose={() => setSnackOpen(false)}>
+        <Alert severity="success" onClose={() => setSnackOpen(false)}>
+          Створено {createdOrderIds.length} замовлень.
+          {createdOrderIds.length > 0 && (
+            <Box component="span" sx={{ ml: 1 }}>
+              {createdOrderIds.map((oid) => (
+                <Button key={oid} size="small" onClick={() => { navigate(`/supply/orders/${oid}`); setSnackOpen(false); }}>№{oid}</Button>
+              ))}
+            </Box>
+          )}
+        </Alert>
+      </Snackbar>
+
       <AuditBlock events={data.audit ?? []} />
     </Box>
   );

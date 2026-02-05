@@ -20,6 +20,7 @@ export interface SupplyRequestDto {
   createdAt: string;
   updatedAt: string;
   items?: SupplyRequestItemDto[];
+  linkedOrders?: { id: number; status?: string }[];
   audit?: AuditEventDto[];
 }
 
@@ -36,8 +37,10 @@ export interface SupplyOrderDto {
   createdById: number;
   createdAt: string;
   updatedAt: string;
-  items?: { id: number; orderId: number; materialId: number | null; customName: string | null; unit: string; qtyPlanned: string; unitPrice: string | null; note: string | null }[];
-  linkedReceipts?: { id: number; status: string; total: string | null }[];
+  items?: { id: number; orderId: number; materialId: number | null; customName: string | null; unit: string; qtyPlanned: string; unitPrice: string | null; note: string | null; receivedQtyTotal?: number; remainingQty?: number }[];
+  sourceRequest?: { id: number } | null;
+  linkedReceipts?: { id: number; status: string; total?: string | null; receivedAt?: string | null }[];
+  totalPlan?: number;
   audit?: AuditEventDto[];
 }
 
@@ -55,8 +58,10 @@ export interface SupplyReceiptDto {
   createdById: number;
   createdAt: string;
   updatedAt: string;
-  items?: { id: number; receiptId: number; materialId: number | null; customName: string | null; unit: string; qtyReceived: string; unitPrice: string | null }[];
+  items?: { id: number; receiptId: number; sourceOrderItemId?: number | null; materialId: number | null; customName: string | null; unit: string; qtyReceived: string; unitPrice: string | null }[];
   attachments?: { id: number; originalName: string }[];
+  sourceOrder?: { id: number };
+  linkedPayable?: { id: number; status?: string } | null;
   payable?: { id: number; status: string; amount: string; paidAmount: string } | null;
   audit?: AuditEventDto[];
 }
@@ -73,6 +78,8 @@ export interface PayableDto {
   createdById: number;
   createdAt: string;
   updatedAt: string;
+  sourceReceipt?: { id: number };
+  balance?: number;
   payments?: { id: number; amount: string; paidAt: string; method: string; comment: string | null }[];
   audit?: AuditEventDto[];
 }
@@ -131,6 +138,108 @@ export async function createOrderFromRequest(requestId: number): Promise<{ order
   return data;
 }
 
+export async function saveRequestAsTemplate(requestId: number, body: { name: string; projectScoped?: boolean }): Promise<{ templateId: number }> {
+  const { data } = await api.post<{ templateId: number }>(`/supply/requests/${requestId}/save-as-template`, body);
+  return data;
+}
+
+// --- Purchase plan (auto-split) ---
+export interface PurchasePlanItem {
+  requestItemId: number;
+  materialId: number | null;
+  customName: string | null;
+  unit: string;
+  qty: string;
+  suggestedUnitPrice: number | null;
+  suggestedSupplierId: number | null;
+}
+
+export interface PurchasePlanGroup {
+  key: string;
+  supplierId: number | null;
+  supplierName?: string;
+  items: PurchasePlanItem[];
+  totals: { itemsCount: number; sumSuggested: number };
+}
+
+export interface PurchasePlan {
+  requestId: number;
+  groups: PurchasePlanGroup[];
+  totals: { groupsCount: number; itemsCount: number; sumSuggested: number };
+}
+
+export async function getPurchasePlan(requestId: number, projectId?: number): Promise<PurchasePlan> {
+  const params = projectId != null ? { projectId } : {};
+  const { data } = await api.get<PurchasePlan>(`/supply/requests/${requestId}/purchase-plan`, { params });
+  return data;
+}
+
+export async function createOrdersByPlan(requestId: number, body: { mode?: string; includeUnassigned?: boolean; unassignedStrategy?: string }): Promise<{ createdOrderIds: number[] }> {
+  const { data } = await api.post<{ createdOrderIds: number[] }>(`/supply/requests/${requestId}/create-orders-by-plan`, body);
+  return data;
+}
+
+// --- Templates ---
+export interface SupplyRequestTemplateItemDto {
+  id?: number;
+  materialId?: number | null;
+  customName?: string | null;
+  unit: string;
+  qtyDefault: number;
+  note?: string | null;
+  priority?: string;
+}
+
+export interface SupplyRequestTemplateDto {
+  id: number;
+  name: string;
+  projectId: number | null;
+  createdById: number;
+  isActive: boolean;
+  items?: SupplyRequestTemplateItemDto[];
+}
+
+export async function getSupplyTemplates(projectId?: number): Promise<SupplyRequestTemplateDto[]> {
+  const params = projectId != null ? { projectId } : {};
+  const { data } = await api.get<SupplyRequestTemplateDto[]>('/supply/templates', { params });
+  return Array.isArray(data) ? data : [];
+}
+
+export async function getSupplyTemplate(id: number): Promise<SupplyRequestTemplateDto> {
+  const { data } = await api.get<SupplyRequestTemplateDto>(`/supply/templates/${id}`);
+  return data;
+}
+
+export async function createRequestFromTemplate(templateId: number, body: { projectId: number; neededAt?: string; comment?: string }): Promise<{ requestId: number }> {
+  const { data } = await api.post<{ requestId: number }>(`/supply/templates/${templateId}/create-request`, body);
+  return data;
+}
+
+// --- Last purchase / recent suppliers (batch to avoid N+1) ---
+export interface LastPurchaseResult {
+  unitPrice: string;
+  supplierId: number | null;
+  receivedAt: string;
+  receiptId: number;
+}
+
+export interface RecentSupplierResult {
+  supplierId: number;
+  supplierName: string;
+  lastPrice: string;
+  lastDate: string;
+}
+
+export async function getLastPurchasesBatch(body: { materialIds: number[]; projectId?: number }): Promise<Record<number, LastPurchaseResult>> {
+  const { data } = await api.post<Record<number, LastPurchaseResult>>('/supply/materials/last-purchases', body);
+  return data ?? {};
+}
+
+export async function getRecentSuppliersBatch(body: { materialIds: number[]; projectId?: number; limit?: number }): Promise<Record<number, RecentSupplierResult[]>> {
+  const { data } = await api.post<Record<number, RecentSupplierResult[]>>('/supply/materials/recent-suppliers', body);
+  return data ?? {};
+}
+
 // --- Orders ---
 export async function getSupplyOrders(params?: { projectId?: number; status?: string; supplierId?: number }): Promise<SupplyOrderDto[]> {
   const { data } = await api.get<SupplyOrderDto[]>('/supply/orders', { params });
@@ -162,6 +271,26 @@ export async function createReceiptFromOrder(orderId: number): Promise<{ receipt
   return data;
 }
 
+export async function createReceiptQuickFromOrder(orderId: number, body?: { mode?: 'remaining'; includeZeroLines?: boolean }): Promise<{ receiptId: number }> {
+  const { data } = await api.post<{ receiptId: number }>(`/supply/orders/${orderId}/create-receipt-quick`, body ?? { mode: 'remaining', includeZeroLines: false });
+  return data;
+}
+
+export async function moveOrderItems(fromOrderId: number, body: { toOrderId: number; itemIds: number[]; mergeDuplicates?: boolean }): Promise<{ movedCount: number; fromOrder: SupplyOrderDto; toOrder: SupplyOrderDto }> {
+  const { data } = await api.post<{ movedCount: number; fromOrder: SupplyOrderDto; toOrder: SupplyOrderDto }>(`/supply/orders/${fromOrderId}/move-items`, body);
+  return data;
+}
+
+export async function mergeOrder(orderId: number, body: { targetOrderId: number; strategy?: string; mergeDuplicates?: boolean; cancelSourceOrder?: boolean }): Promise<{ movedCount: number; sourceOrder: SupplyOrderDto; toOrder: SupplyOrderDto }> {
+  const { data } = await api.post<{ movedCount: number; sourceOrder: SupplyOrderDto; toOrder: SupplyOrderDto }>(`/supply/orders/${orderId}/merge`, body);
+  return data;
+}
+
+export async function fillOrderPricesFromLast(orderId: number): Promise<{ order: SupplyOrderDto; filledCount: number; suggestedSupplierId?: number }> {
+  const { data } = await api.post<{ order: SupplyOrderDto; filledCount: number; suggestedSupplierId?: number }>(`/supply/orders/${orderId}/fill-prices-from-last`);
+  return data;
+}
+
 // --- Receipts ---
 export async function getSupplyReceipts(params?: { projectId?: number; status?: string; supplierId?: number }): Promise<SupplyReceiptDto[]> {
   const { data } = await api.get<SupplyReceiptDto[]>('/supply/receipts', { params });
@@ -190,6 +319,16 @@ export async function verifySupplyReceipt(id: number): Promise<SupplyReceiptDto>
 
 export async function sendReceiptToPay(id: number): Promise<SupplyReceiptDto> {
   const { data } = await api.post<SupplyReceiptDto>(`/supply/receipts/${id}/send-to-pay`);
+  return data;
+}
+
+export async function fillReceiptPricesFromLast(receiptId: number): Promise<{ receipt: SupplyReceiptDto; filledCount: number }> {
+  const { data } = await api.post<{ receipt: SupplyReceiptDto; filledCount: number }>(`/supply/receipts/${receiptId}/fill-prices-from-last`);
+  return data;
+}
+
+export async function refillReceiptFromRemaining(receiptId: number): Promise<SupplyReceiptDto> {
+  const { data } = await api.post<SupplyReceiptDto>(`/supply/receipts/${receiptId}/refill-from-remaining`);
   return data;
 }
 

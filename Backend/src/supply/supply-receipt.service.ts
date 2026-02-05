@@ -5,7 +5,9 @@ import { SupplyReceipt } from './entities/supply-receipt.entity';
 import { SupplyReceiptItem } from './entities/supply-receipt-item.entity';
 import { Payable } from './entities/payable.entity';
 import { SupplyAuditService } from './audit.service';
+import { SupplyPurchaseService } from './supply-purchase.service';
 import { AttachmentsService } from '../attachments/attachments.service';
+import { SupplyOrderService } from './supply-order.service';
 import { UpdateSupplyReceiptDto } from './dto/supply-receipt.dto';
 
 @Injectable()
@@ -15,7 +17,9 @@ export class SupplyReceiptService {
     @InjectRepository(SupplyReceiptItem) private readonly itemRepo: Repository<SupplyReceiptItem>,
     @InjectRepository(Payable) private readonly payableRepo: Repository<Payable>,
     private readonly audit: SupplyAuditService,
+    private readonly purchaseService: SupplyPurchaseService,
     private readonly attachmentsService: AttachmentsService,
+    private readonly orderService: SupplyOrderService,
   ) {}
 
   async findAll(userId: number, projectId?: number, status?: string, supplierId?: number) {
@@ -36,7 +40,9 @@ export class SupplyReceiptService {
     const attachments = await this.attachmentsService.findAll({ entityType: 'supply_receipt', entityId: id });
     const payable = await this.payableRepo.findOne({ where: { sourceReceiptId: id } }).catch(() => null);
     const audit = await this.audit.getByEntity('supply_receipt', id);
-    return { ...r, attachments, payable: payable ? { id: payable.id, status: payable.status, amount: payable.amount, paidAmount: payable.paidAmount } : null, audit };
+    const sourceOrder = { id: r.sourceOrderId };
+    const linkedPayable = payable ? { id: payable.id, status: payable.status } : null;
+    return { ...r, attachments, sourceOrder, linkedPayable, payable: payable ? { id: payable.id, status: payable.status, amount: payable.amount, paidAmount: payable.paidAmount } : null, audit };
   }
 
   async update(userId: number, id: number, dto: UpdateSupplyReceiptDto) {
@@ -46,20 +52,28 @@ export class SupplyReceiptService {
     if (dto.docNumber !== undefined) r.docNumber = dto.docNumber ?? null;
     if (dto.comment !== undefined) r.comment = dto.comment ?? null;
     if (dto.items !== undefined) {
+      for (const row of dto.items) {
+        const hasMaterial = row.materialId != null;
+        const hasName = row.customName != null && String(row.customName).trim() !== '';
+        if (!hasMaterial && !hasName) {
+          throw new BadRequestException('У кожної позиції має бути матеріал (materialId) або найменування (customName).');
+        }
+      }
       await this.itemRepo.delete({ receiptId: id });
       let total = 0;
       for (const row of dto.items) {
-        const price = row.unitPrice ?? 0;
-        total += price * row.qtyReceived;
+        const price = row.unitPrice != null ? Number(row.unitPrice) : 0;
+        const qty = Number(row.qtyReceived) >= 0 ? Number(row.qtyReceived) : 0;
+        total += price * qty;
         await this.itemRepo.save(
           this.itemRepo.create({
             receiptId: id,
-            sourceOrderItemId: null,
+            sourceOrderItemId: row.sourceOrderItemId ?? null,
             materialId: row.materialId ?? null,
             customName: row.customName ?? null,
             unit: row.unit,
-            qtyReceived: String(row.qtyReceived),
-            unitPrice: row.unitPrice != null ? String(row.unitPrice) : null,
+            qtyReceived: String(Math.max(0, Number(row.qtyReceived))),
+            unitPrice: row.unitPrice != null ? String(Math.max(0, Number(row.unitPrice))) : null,
             note: row.note ?? null,
           }),
         );
@@ -67,31 +81,39 @@ export class SupplyReceiptService {
       r.total = String(total.toFixed(2));
     }
     await this.receiptRepo.save(r);
+    await this.orderService.recalculateOrderStatusFromReceipts(r.sourceOrderId, userId);
     await this.audit.log({
       entityType: 'supply_receipt',
       entityId: id,
       action: 'update',
-      message: 'Прихід оновлено',
+      message: 'Оновлено позиції (к-сть/ціна)',
       actorId: userId,
     });
     return this.findOne(userId, id);
   }
 
   async receive(userId: number, id: number) {
-    const r = await this.receiptRepo.findOne({ where: { id } });
+    const r = await this.receiptRepo.findOne({ where: { id }, relations: ['items'] });
     if (!r) throw new NotFoundException('Supply receipt not found');
     if (r.status !== 'draft') throw new BadRequestException('Статус не draft');
     const attachments = await this.attachmentsService.findAll({ entityType: 'supply_receipt', entityId: id });
-    if (!attachments?.length) throw new BadRequestException('Потрібно хоча б одне фото (attachment)');
+    if (!attachments?.length) throw new BadRequestException('Додайте фото накладної перед підтвердженням приймання.');
+    let total = 0;
+    for (const item of r.items ?? []) {
+      const price = item.unitPrice != null ? Number(item.unitPrice) : 0;
+      total += price * Number(item.qtyReceived || 0);
+    }
+    r.total = String(total.toFixed(2));
     r.status = 'received';
     r.receivedAt = new Date();
     r.receivedById = userId;
     await this.receiptRepo.save(r);
+    await this.orderService.recalculateOrderStatusFromReceipts(r.sourceOrderId, userId);
     await this.audit.log({
       entityType: 'supply_receipt',
       entityId: id,
       action: 'status_change',
-      message: 'Підтверджено приймання',
+      message: 'Статус: draft → received (підтверджено приймання)',
       meta: { prev: 'draft', next: 'received' },
       actorId: userId,
     });
@@ -105,6 +127,7 @@ export class SupplyReceiptService {
     const prev = r.status;
     r.status = 'verified';
     await this.receiptRepo.save(r);
+    await this.orderService.recalculateOrderStatusFromReceipts(r.sourceOrderId, userId);
     await this.audit.log({
       entityType: 'supply_receipt',
       entityId: id,
@@ -114,6 +137,72 @@ export class SupplyReceiptService {
       actorId: userId,
     });
     return this.findOne(userId, id);
+  }
+
+  async refillFromRemaining(userId: number, id: number) {
+    const r = await this.receiptRepo.findOne({ where: { id }, relations: ['items'] });
+    if (!r) throw new NotFoundException('Supply receipt not found');
+    if (r.status !== 'draft') throw new BadRequestException('Можна оновлювати лише чернетку приходу');
+    const remainingByOrderItem = await this.orderService.getRemainingByOrderItem(r.sourceOrderId);
+    let total = 0;
+    for (const item of r.items ?? []) {
+      const remaining = item.sourceOrderItemId != null ? (remainingByOrderItem[item.sourceOrderItemId] ?? 0) : 0;
+      const qty = Math.round(remaining * 10000) / 10000;
+      item.qtyReceived = String(qty);
+      await this.itemRepo.save(item);
+      const price = item.unitPrice != null ? Number(item.unitPrice) : 0;
+      total += price * qty;
+    }
+    r.total = String(total.toFixed(2));
+    await this.receiptRepo.save(r);
+    await this.audit.log({
+      entityType: 'supply_receipt',
+      entityId: id,
+      action: 'refill_from_remaining',
+      message: 'Кількості оновлено по залишку з замовлення',
+      meta: {},
+      actorId: userId,
+    });
+    return this.findOne(userId, id);
+  }
+
+  async fillPricesFromLast(userId: number, receiptId: number) {
+    const r = await this.receiptRepo.findOne({ where: { id: receiptId }, relations: ['items'] });
+    if (!r) throw new NotFoundException('Supply receipt not found');
+    if (r.status !== 'draft') throw new BadRequestException('Можна заповнювати ціни лише в чернетці приходу');
+    const materialIds = (r.items ?? []).map((i) => i.materialId).filter((id): id is number => id != null);
+    if (materialIds.length === 0) return { filledCount: 0 };
+    const lastMap = await this.purchaseService.getLastPurchasesBatch(materialIds, r.projectId);
+    let filledCount = 0;
+    for (const item of r.items ?? []) {
+      if (item.materialId == null) continue;
+      const last = lastMap[item.materialId];
+      if (!last) continue;
+      const currentPrice = item.unitPrice != null ? Number(item.unitPrice) : 0;
+      if (currentPrice > 0) continue;
+      item.unitPrice = last.unitPrice;
+      await this.itemRepo.save(item);
+      filledCount++;
+    }
+    let total = 0;
+    for (const item of r.items ?? []) {
+      const price = item.unitPrice != null ? Number(item.unitPrice) : 0;
+      total += price * Number(item.qtyReceived || 0);
+    }
+    r.total = String(Math.round(total * 100) / 100);
+    await this.receiptRepo.save(r);
+    if (filledCount > 0) {
+      await this.audit.log({
+        entityType: 'supply_receipt',
+        entityId: receiptId,
+        action: 'apply_last_prices',
+        message: `Заповнено ціни з останніх покупок (${filledCount} позицій)`,
+        meta: { filledCount },
+        actorId: userId,
+      });
+    }
+    const receipt = await this.findOne(userId, receiptId);
+    return { receipt, filledCount };
   }
 
   async sendToPay(userId: number, id: number) {
@@ -136,6 +225,7 @@ export class SupplyReceiptService {
     const prevStatus = r.status;
     r.status = 'sent_to_pay';
     await this.receiptRepo.save(r);
+    await this.orderService.recalculateOrderStatusFromReceipts(r.sourceOrderId, userId);
     await this.audit.log({
       entityType: 'supply_receipt',
       entityId: id,

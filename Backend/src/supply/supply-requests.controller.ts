@@ -3,6 +3,8 @@ import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SupplyRequestService } from './supply-request.service';
 import { CreateSupplyRequestDto, UpdateSupplyRequestDto } from './dto/supply-request.dto';
+import { SaveRequestAsTemplateDto } from './dto/supply-template.dto';
+import { CreateOrdersByPlanDto } from './dto/create-orders-by-plan.dto';
 
 type AuthReq = Request & { user: { id: number } };
 
@@ -20,6 +22,12 @@ export class SupplyRequestsController {
   @Post()
   create(@Req() req: AuthReq, @Body() dto: CreateSupplyRequestDto) {
     return this.service.create(req.user.id, dto);
+  }
+
+  @Get(':id/purchase-plan')
+  getPurchasePlan(@Req() req: AuthReq, @Param('id') id: string, @Query('projectId') projectId?: string) {
+    const pid = projectId ? Number(projectId) : undefined;
+    return this.service.getPurchasePlan(req.user.id, Number(id), pid);
   }
 
   @Get(':id')
@@ -45,5 +53,15 @@ export class SupplyRequestsController {
   @Post(':id/create-order')
   createOrder(@Req() req: AuthReq, @Param('id') id: string) {
     return this.service.createOrder(req.user.id, Number(id));
+  }
+
+  @Post(':id/create-orders-by-plan')
+  createOrdersByPlan(@Req() req: AuthReq, @Param('id') id: string, @Body() dto: CreateOrdersByPlanDto) {
+    return this.service.createOrdersByPlan(req.user.id, Number(id), dto);
+  }
+
+  @Post(':id/save-as-template')
+  saveAsTemplate(@Req() req: AuthReq, @Param('id') id: string, @Body() dto: SaveRequestAsTemplateDto) {
+    return this.service.saveAsTemplate(req.user.id, Number(id), dto);
   }
 }

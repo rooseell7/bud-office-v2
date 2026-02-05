@@ -124,7 +124,6 @@ const MainLayout: React.FC = () => {
     {
       title: 'Відділ постачання',
       items: [
-        { to: '/supply/requests', label: 'Заявки', icon: <WorkOutlineOutlinedIcon /> },
         { to: '/supply/orders', label: 'Замовлення', icon: <ReceiptLongOutlinedIcon /> },
         { to: '/supply/receipts', label: 'Приходи', icon: <Inventory2OutlinedIcon /> },
         { to: '/supply/payables', label: 'До оплати', icon: <AccountBalanceOutlinedIcon /> },
@@ -143,7 +142,10 @@ const MainLayout: React.FC = () => {
     },
     {
       title: 'Кабінет виконроба',
-      items: [{ to: '/foreman', label: "Мої об'єкти", icon: <EngineeringOutlinedIcon /> }],
+      items: [
+        { to: '/foreman', label: "Мої об'єкти", icon: <EngineeringOutlinedIcon /> },
+        { to: '/supply/requests', label: 'Заявки', icon: <WorkOutlineOutlinedIcon /> },
+      ],
     },
     {
       title: 'Відділ фінансів',

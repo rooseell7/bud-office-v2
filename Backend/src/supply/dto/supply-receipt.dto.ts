@@ -6,8 +6,8 @@ export class SupplyReceiptItemDto {
   @IsOptional() @IsInt() materialId?: number | null;
   @IsOptional() @IsString() customName?: string | null;
   @IsString() unit: string;
-  @IsNumber() @Min(0) qtyReceived: number;
-  @IsOptional() @IsNumber() unitPrice?: number | null;
+  @IsNumber() @Min(0, { message: 'Кількість не може бути від\'ємною' }) qtyReceived: number;
+  @IsOptional() @IsNumber() @Min(0, { message: 'Ціна не може бути від\'ємною' }) unitPrice?: number | null;
   @IsOptional() @IsString() note?: string | null;
 }
 

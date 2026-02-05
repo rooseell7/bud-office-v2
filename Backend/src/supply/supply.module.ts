@@ -9,6 +9,8 @@ import { InvoicesController } from './invoices.controller';
 
 import { SupplyRequest } from './entities/supply-request.entity';
 import { SupplyRequestItem } from './entities/supply-request-item.entity';
+import { SupplyRequestTemplate } from './entities/supply-request-template.entity';
+import { SupplyRequestTemplateItem } from './entities/supply-request-template-item.entity';
 import { SupplyOrder } from './entities/supply-order.entity';
 import { SupplyOrderItem } from './entities/supply-order-item.entity';
 import { SupplyReceipt } from './entities/supply-receipt.entity';
@@ -19,15 +21,19 @@ import { AuditEvent } from './entities/audit-event.entity';
 
 import { SupplyAuditService } from './audit.service';
 import { SupplyRequestService } from './supply-request.service';
+import { SupplyTemplatesService } from './supply-templates.service';
 import { SupplyOrderService } from './supply-order.service';
 import { SupplyReceiptService } from './supply-receipt.service';
 import { SupplyPayableService } from './supply-payable.service';
 import { SupplyRequestsController } from './supply-requests.controller';
+import { SupplyTemplatesController } from './supply-templates.controller';
 import { SupplyOrdersController } from './supply-orders.controller';
 import { SupplyReceiptsController } from './supply-receipts.controller';
 import { SupplyPayablesController } from './supply-payables.controller';
+import { SupplyPurchaseController } from './supply-purchase.controller';
 import { SupplyAuditController } from './audit.controller';
 import { AttachmentsModule } from '../attachments/attachments.module';
+import { SupplyPurchaseService } from './supply-purchase.service';
 
 @Module({
   imports: [
@@ -36,6 +42,8 @@ import { AttachmentsModule } from '../attachments/attachments.module';
       Invoice,
       SupplyRequest,
       SupplyRequestItem,
+      SupplyRequestTemplate,
+      SupplyRequestTemplateItem,
       SupplyOrder,
       SupplyOrderItem,
       SupplyReceipt,
@@ -50,9 +58,11 @@ import { AttachmentsModule } from '../attachments/attachments.module';
     MaterialsController,
     InvoicesController,
     SupplyRequestsController,
+    SupplyTemplatesController,
     SupplyOrdersController,
     SupplyReceiptsController,
     SupplyPayablesController,
+    SupplyPurchaseController,
     SupplyAuditController,
   ],
   providers: [
@@ -60,6 +70,8 @@ import { AttachmentsModule } from '../attachments/attachments.module';
     InvoicesService,
     SupplyAuditService,
     SupplyRequestService,
+    SupplyTemplatesService,
+    SupplyPurchaseService,
     SupplyOrderService,
     SupplyReceiptService,
     SupplyPayableService,

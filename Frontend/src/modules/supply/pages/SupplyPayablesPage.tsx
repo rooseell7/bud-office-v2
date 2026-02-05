@@ -45,21 +45,23 @@ export default function SupplyPayablesPage() {
               <TableCell>Об'єкт</TableCell>
               <TableCell>Сума</TableCell>
               <TableCell>Оплачено</TableCell>
+              <TableCell>Залишок</TableCell>
               <TableCell>Статус</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={5}>Завантаження…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6}>Завантаження…</TableCell></TableRow>
             ) : list.length === 0 ? (
-              <TableRow><TableCell colSpan={5}>Немає записів</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6}>Немає записів</TableCell></TableRow>
             ) : (
               list.map((p) => (
                 <TableRow key={p.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/supply/payables/${p.id}`)}>
                   <TableCell>{p.id}</TableCell>
                   <TableCell>Проєкт {p.projectId}</TableCell>
-                  <TableCell>{p.amount}</TableCell>
-                  <TableCell>{p.paidAmount}</TableCell>
+                  <TableCell>{p.amount} грн</TableCell>
+                  <TableCell>{p.paidAmount} грн</TableCell>
+                  <TableCell>{(p as { balance?: number }).balance != null ? `${(p as { balance?: number }).balance} грн` : '—'}</TableCell>
                   <TableCell>{statusLabels[p.status] ?? p.status}</TableCell>
                 </TableRow>
               ))

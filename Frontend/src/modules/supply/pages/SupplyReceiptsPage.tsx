@@ -60,7 +60,7 @@ export default function SupplyReceiptsPage() {
                   <TableCell>{r.id}</TableCell>
                   <TableCell>Замовлення №{r.sourceOrderId}</TableCell>
                   <TableCell>{statusLabels[r.status] ?? r.status}</TableCell>
-                  <TableCell>{r.total ?? '—'}</TableCell>
+                  <TableCell>{r.total != null ? `${r.total} грн` : '—'}</TableCell>
                 </TableRow>
               ))
             )}

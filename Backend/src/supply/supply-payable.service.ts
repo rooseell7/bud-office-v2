@@ -21,7 +21,13 @@ export class SupplyPayableService {
     if (projectId != null) qb.andWhere('p.projectId = :projectId', { projectId });
     if (status) qb.andWhere('p.status = :status', { status });
     if (supplierId != null) qb.andWhere('p.supplierId = :supplierId', { supplierId });
-    return qb.getMany();
+    const list = await qb.getMany();
+    return list.map((p) => {
+      const amount = Number(p.amount) || 0;
+      const paidAmount = Number(p.paidAmount) || 0;
+      const balance = Math.round((amount - paidAmount) * 100) / 100;
+      return { ...p, balance };
+    });
   }
 
   async findOne(userId: number, id: number) {
@@ -32,7 +38,8 @@ export class SupplyPayableService {
     });
     if (!p) throw new NotFoundException('Payable not found');
     const audit = await this.audit.getByEntity('payable', id);
-    return { ...p, audit };
+    const sourceReceipt = { id: p.sourceReceiptId };
+    return { ...p, sourceReceipt, audit };
   }
 
   async addPayment(userId: number, payableId: number, dto: AddPaymentDto) {
@@ -72,11 +79,12 @@ export class SupplyPayableService {
       p.status = 'partially_paid';
     }
     await this.payableRepo.save(p);
+    const method = dto.method ?? 'bank';
     await this.audit.log({
       entityType: 'payable',
       entityId: p.id,
       action: 'add_payment',
-      message: `Додано оплату ${amount}, всього оплачено ${p.paidAmount}`,
+      message: `Додано оплату: ${amount} грн (${method})`,
       meta: { paymentId: payment.id, amount, paidBefore, paidAfter, newStatus: p.status },
       actorId: userId,
     });
@@ -84,7 +92,7 @@ export class SupplyPayableService {
       entityType: 'payment',
       entityId: payment.id,
       action: 'create',
-      message: `Оплата ${amount} (${dto.paidAt})`,
+      message: `Оплата ${amount} грн (${dto.paidAt})`,
       meta: { payableId: p.id },
       actorId: userId,
     });

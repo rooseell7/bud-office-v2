@@ -7,6 +7,7 @@ export type AuditEntityType =
   | 'supply_request'
   | 'supply_order'
   | 'supply_receipt'
+  | 'supply_request_template'
   | 'payable'
   | 'payment';
 
@@ -15,10 +16,16 @@ export type AuditAction =
   | 'update'
   | 'status_change'
   | 'create_from'
+  | 'create_receipt_quick'
+  | 'refill_from_remaining'
+  | 'create_orders_by_plan'
   | 'add_item'
   | 'remove_item'
   | 'add_attachment'
-  | 'add_payment';
+  | 'add_payment'
+  | 'apply_last_prices'
+  | 'move_items'
+  | 'merge';
 
 @Injectable()
 export class SupplyAuditService {
