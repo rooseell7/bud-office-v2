@@ -136,14 +136,16 @@ export default function SupplyRequestsPage() {
           <TextField fullWidth size="small" label="Дата потреби" type="date" value={createNeededAt} onChange={(e) => setCreateNeededAt(e.target.value)} sx={{ mb: 2 }} InputLabelProps={{ shrink: true }} />
           <TextField fullWidth size="small" label="Коментар" multiline value={createComment} onChange={(e) => setCreateComment(e.target.value)} sx={{ mb: 2 }} />
           {selectedTemplate?.items && selectedTemplate.items.length > 0 && (
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>Прев'ю позицій ({selectedTemplate.items.length})</Typography>
-            <List dense sx={{ maxHeight: 200, overflow: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-              {selectedTemplate.items.map((row, idx) => (
-                <ListItem key={idx}>
-                  <ListItemText primary={row.customName || `Матеріал #${row.materialId}`} secondary={`${row.qtyDefault} ${row.unit}`} />
-                </ListItem>
-              ))}
-            </List>
+            <>
+              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>Прев'ю позицій ({selectedTemplate.items.length})</Typography>
+              <List dense sx={{ maxHeight: 200, overflow: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                {selectedTemplate.items.map((row, idx) => (
+                  <ListItem key={idx}>
+                    <ListItemText primary={row.customName || `Матеріал #${row.materialId}`} secondary={`${row.qtyDefault} ${row.unit}`} />
+                  </ListItem>
+                ))}
+              </List>
+            </>
           )}
           {createError && <Typography color="error" sx={{ mt: 1 }}>{createError}</Typography>}
           <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
