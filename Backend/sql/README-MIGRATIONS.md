@@ -24,6 +24,7 @@
 | 14 | `2026-02-05_supply_mvp_audit.sql` | Supply MVP: audit-таблиця, замовлення, приходи, payables |
 | 15 | `2026-02-05_supply_request_templates.sql` | Шаблони заявок на постачання (supply_request_templates, supply_request_template_items) |
 | 16 | `2026-02-05_supply_receipt_substitutions.sql` | Заміни матеріалів у приходах (isSubstitution, original*, substitute*, substitutionReason) |
+| 17 | `2026-02-06_objects_v1_profile_contacts_attachments.sql` | Objects v1: project profile (city, area_m2, tags, access_info, notes), attachments.tag, project_contacts |
 
 Після додавання **нового** SQL-файлу — допишіть його в цю таблицю в кінець і збережіть порядок при наступному запуску міграцій.
 

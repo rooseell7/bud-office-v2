@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SupplyOrderService } from './supply-order.service';
@@ -7,7 +7,7 @@ import { MoveItemsDto } from './dto/move-items.dto';
 import { MergeOrdersDto } from './dto/merge-orders.dto';
 import { CreateReceiptQuickDto } from './dto/create-receipt-quick.dto';
 
-type AuthReq = Request & { user: { id: number } };
+type AuthReq = Request & { user: { id: number; roles?: string[] } };
 
 @UseGuards(JwtAuthGuard)
 @Controller('supply/orders')
@@ -74,5 +74,11 @@ export class SupplyOrdersController {
   @Post(':id/merge')
   mergeOrder(@Req() req: AuthReq, @Param('id') id: string, @Body() dto: MergeOrdersDto) {
     return this.service.mergeOrder(req.user.id, Number(id), dto);
+  }
+
+  @Delete(':id')
+  remove(@Req() req: AuthReq, @Param('id') id: string) {
+    const isAdmin = Array.isArray(req.user.roles) && req.user.roles.includes('admin');
+    return this.service.remove(req.user.id, Number(id), { isAdmin });
   }
 }

@@ -34,6 +34,7 @@ import { WarehousesModule } from './warehouses/warehouses.module';
 import { DeliveryModule } from './delivery/delivery.module';
 import { DocumentsModule } from './documents/documents.module';
 import { EstimatesModule } from './estimates/estimates.module';
+import { SalesModule } from './sales/sales.module';
 import { SheetsModule } from './sheets/sheets.module';
 import { ActivityModule } from './activity/activity.module';
 import { PresenceModule } from './presence/presence.module';
@@ -121,6 +122,7 @@ function toBool(v: unknown, def = false): boolean {
     DeliveryModule,
     DocumentsModule,
     EstimatesModule,
+    SalesModule,
     SheetsModule,
     ActivityModule,
     PresenceModule,

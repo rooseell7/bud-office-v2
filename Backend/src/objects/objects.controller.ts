@@ -35,7 +35,8 @@ export class ObjectsController {
     return req?.user?.id;
   }
 
-  @Permissions('objects:write')
+  /** Створювати об'єкт може тільки відділ продажів (objects:create). */
+  @Permissions('objects:create')
   @Post()
   create(@Req() req: any, @Body() dto: CreateObjectDto) {
     const userId = this.getUserId(req);
@@ -77,7 +78,8 @@ export class ObjectsController {
     return this.objectsService.update(id, userId, dto);
   }
 
-  @Permissions('objects:write')
+  /** Видалення об'єкта — тільки адмін (system:manage). */
+  @Permissions('system:manage')
   @Delete(':id')
   remove(@Req() req: any, @Param('id') id: string) {
     const userId = this.getUserId(req);

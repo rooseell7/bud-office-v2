@@ -83,6 +83,7 @@ export function useSaveOrchestrator(options: UseSaveOrchestratorOptions) {
   useEffect(() => {
     if (typeof serverVersion === 'number' && serverVersion >= 0) {
       ackedRevRef.current = Math.max(ackedRevRef.current, serverVersion);
+      localRevRef.current = Math.max(localRevRef.current, serverVersion);
     }
   }, [serverVersion]);
 
@@ -240,8 +241,10 @@ export function useSaveOrchestrator(options: UseSaveOrchestratorOptions) {
     getUiState,
     uiState,
     setLastSavedSnapshot: (_: SheetSnapshot | null) => {},
+    /** Call when server snapshot loaded (initial or resync). Keep localRev in sync so next edit triggers save. */
     setRevision: (v: number) => {
       ackedRevRef.current = Math.max(ackedRevRef.current, v);
+      localRevRef.current = Math.max(localRevRef.current, v);
     },
   };
 }

@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -37,8 +38,8 @@ export class ClientController {
 
   @Permissions('sales:read')
   @Get()
-  findAll(@Req() req: AuthedRequest) {
-    return this.clientService.findAll(req.user.id);
+  findAll(@Req() req: AuthedRequest, @Query('search') search?: string) {
+    return this.clientService.findAll(req.user.id, search?.trim());
   }
 
   @Permissions('sales:read')

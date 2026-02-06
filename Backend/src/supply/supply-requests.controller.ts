@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { StreamableFile } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -8,7 +8,7 @@ import { SaveRequestAsTemplateDto } from './dto/supply-template.dto';
 import { CreateOrdersByPlanDto } from './dto/create-orders-by-plan.dto';
 import { AddQuoteMaterialsDto } from './dto/add-quote-materials.dto';
 
-type AuthReq = Request & { user: { id: number } };
+type AuthReq = Request & { user: { id: number; roles?: string[] } };
 
 @UseGuards(JwtAuthGuard)
 @Controller('supply/requests')
@@ -93,5 +93,11 @@ export class SupplyRequestsController {
   @Post(':id/save-as-template')
   saveAsTemplate(@Req() req: AuthReq, @Param('id') id: string, @Body() dto: SaveRequestAsTemplateDto) {
     return this.service.saveAsTemplate(req.user.id, Number(id), dto);
+  }
+
+  @Delete(':id')
+  remove(@Req() req: AuthReq, @Param('id') id: string) {
+    const isAdmin = Array.isArray(req.user.roles) && req.user.roles.includes('admin');
+    return this.service.remove(req.user.id, Number(id), { isAdmin });
   }
 }

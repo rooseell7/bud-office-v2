@@ -51,6 +51,7 @@ export const PERMISSIONS = [
 
   'objects:read',
   'objects:write',
+  'objects:create', // тільки відділ продажів може створювати нові об'єкти
   'objects:approve',
 
   // ===== Delivery =====
@@ -232,6 +233,7 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
     'suppliers:read',
     'projects:read',
     'objects:read',
+    'objects:create', // тільки відділ продажів створює об'єкти
 
     // approve for reference / directories
     'warehouse:approve',
@@ -258,6 +260,7 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
     'suppliers:read',
     'projects:read',
     'objects:read',
+    'objects:create',
 
     'documents:read',
     'sheet:read',

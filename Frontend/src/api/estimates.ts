@@ -27,6 +27,62 @@ export type EstimateItem = {
 
 export type RecentEstimateItem = EstimateItem;
 
+export interface EstimatesProjectItem {
+  projectId: number;
+  name: string;
+  address: string | null;
+  client: { id: number | string; name: string } | null;
+  quote: {
+    lastQuoteId: number | null;
+    status: string | null;
+    total: string | null;
+    updatedAt: string | null;
+  };
+  acts: { count: number; lastActAt: string | null };
+  invoices: { count: number; unpaidCount: number; lastInvoiceAt: string | null };
+  lastActivityAt: string | null;
+}
+
+export async function getEstimatesProjectDashboard(
+  projectId: number,
+): Promise<EstimatesProjectItem> {
+  const { data } = await api.get<EstimatesProjectItem>(
+    `/estimates/projects/${projectId}/dashboard`,
+  );
+  return data;
+}
+
+export interface EstimatesProjectsResponse {
+  items: EstimatesProjectItem[];
+  total: number;
+}
+
+export interface EstimatesProjectsQuery {
+  q?: string;
+  quoteStatus?: string;
+  hasUnpaidInvoices?: boolean;
+  activeFrom?: string;
+  activeTo?: string;
+  page?: number;
+  limit?: number;
+}
+
+export async function getEstimatesProjects(
+  query?: EstimatesProjectsQuery,
+): Promise<EstimatesProjectsResponse> {
+  const params = new URLSearchParams();
+  if (query?.q != null && query.q !== '') params.set('q', query.q);
+  if (query?.quoteStatus != null && query.quoteStatus !== '') params.set('quoteStatus', query.quoteStatus);
+  if (query?.hasUnpaidInvoices === true) params.set('hasUnpaidInvoices', 'true');
+  if (query?.activeFrom) params.set('activeFrom', query.activeFrom);
+  if (query?.activeTo) params.set('activeTo', query.activeTo);
+  if (query?.page != null && query.page > 0) params.set('page', String(query.page));
+  if (query?.limit != null && query.limit > 0) params.set('limit', String(query.limit));
+  const url = '/estimates/projects' + (params.toString() ? `?${params.toString()}` : '');
+  const res = await api.get<EstimatesProjectsResponse>(url);
+  return res.data;
+}
+
 export function buildDocKey(estimateId: number, stageId: string, sheetType: 'works' | 'materials'): string {
   return `estimate:${estimateId}:stage:${stageId}:${sheetType}`;
 }

@@ -67,6 +67,12 @@ import AdminRolesPage from './modules/admin/AdminRolesPage';
 
 // ✅ Деталі обʼєкта (вкладки: Інфо / Акти / Накладні)
 import ProjectDetailsPage from './modules/projects/ProjectDetailsPage';
+import SalesProjectPage from './modules/projects/SalesProjectPage';
+import EstimatesProjectPage from './modules/projects/EstimatesProjectPage';
+import EstimatesProjectsListPage from './modules/projects/EstimatesProjectsListPage';
+import SalesProjectsListPage from './modules/projects/SalesProjectsListPage';
+import ProjectCreatePage from './modules/projects/ProjectCreatePage';
+import ObjectCreatePage from './modules/projects/ObjectCreatePage';
 
 // ✅ Home (після логіну)
 import HomePage from './pages/home/HomePage';
@@ -133,6 +139,8 @@ const App: React.FC = () => (
         <Route path="estimate" element={<EstimateIndexPage />} />
         <Route path="estimate/objects" element={<ProjectsPage />} />
         <Route path="estimate/objects/:id" element={<ProjectDetailsPage />} />
+        <Route path="estimates/projects" element={<EstimatesProjectsListPage />} />
+        <Route path="estimates/projects/:id" element={<EstimatesProjectPage />} />
         <Route path="estimate/acts" element={<ActsPage />} />
         <Route path="estimate/acts/:id" element={<ActByIdPage />} />
         <Route path="estimate/quotes" element={<QuotesPage />} />
@@ -157,7 +165,11 @@ const App: React.FC = () => (
         <Route path="sales" element={<Navigate to="/sales/clients" replace />} />
         <Route path="sales/clients" element={<ClientsPage />} />
         <Route path="sales/objects" element={<ProjectsPage />} />
+        <Route path="sales/objects/new" element={<ObjectCreatePage />} />
         <Route path="sales/objects/:id" element={<ProjectDetailsPage />} />
+        <Route path="sales/projects" element={<SalesProjectsListPage />} />
+        <Route path="sales/projects/new" element={<ProjectCreatePage />} />
+        <Route path="sales/projects/:id" element={<SalesProjectPage />} />
         <Route path="sales/deals" element={<DealsPage />} />
         {/* sales/quotes вже є як основний */}
         <Route path="deals" element={<DealsPage />} />

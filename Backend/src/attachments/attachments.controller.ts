@@ -73,6 +73,7 @@ export class AttachmentsController {
       entityType: body.entityType,
       entityId: body.entityId,
       file,
+      tag: body.tag ?? null,
       uploadedByUserId: typeof (req as any).user?.id === 'number' ? (req as any).user.id : ((req as any).user?.id ? Number((req as any).user.id) : null),
     });
   }

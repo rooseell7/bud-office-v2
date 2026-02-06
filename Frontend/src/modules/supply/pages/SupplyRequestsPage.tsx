@@ -3,16 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import {
   Box, Button, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Select, MenuItem, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, TextField, List, ListItem, ListItemText,
+  IconButton, DialogActions,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import { getSupplyRequests, getSupplyProjectOptions, getSupplyTemplates, createRequestFromTemplate } from '../../../api/supply';
+import DeleteIcon from '@mui/icons-material/Delete';
+import { getSupplyRequests, getSupplyProjectOptions, getSupplyTemplates, createRequestFromTemplate, deleteSupplyRequest } from '../../../api/supply';
 import type { SupplyRequestDto, SupplyRequestTemplateDto } from '../../../api/supply';
+import { useAuth } from '../../auth/AuthContext';
 
 const statusLabels: Record<string, string> = { draft: 'Чернетка', submitted: 'Передано', closed: 'Закрито', cancelled: 'Скасовано' };
 
 export default function SupplyRequestsPage() {
   const navigate = useNavigate();
+  const { roles } = useAuth();
+  const isAdmin = Array.isArray(roles) && roles.map((r) => String(r).toLowerCase()).includes('admin');
   const [list, setList] = useState<SupplyRequestDto[]>([]);
   const [projects, setProjects] = useState<{ id: number; name: string }[]>([]);
   const [projectId, setProjectId] = useState<number | ''>('');
@@ -27,6 +32,10 @@ export default function SupplyRequestsPage() {
   const [createComment, setCreateComment] = useState('');
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState('');
+
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => { getSupplyProjectOptions().then(setProjects).catch(() => setProjects([])); }, []);
 
@@ -87,6 +96,20 @@ export default function SupplyRequestsPage() {
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
 
   const projectMap = Object.fromEntries(projects.map((p) => [p.id, p.name]));
+
+  const handleDeleteRequest = async (requestId: number) => {
+    setDeleteBusy(true);
+    setDeleteError('');
+    try {
+      await deleteSupplyRequest(requestId);
+      setDeleteConfirmId(null);
+      load();
+    } catch (e: any) {
+      setDeleteError(e?.response?.data?.message || 'Помилка видалення');
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
 
   return (
     <Box sx={{ p: 2 }}>
@@ -156,6 +179,19 @@ export default function SupplyRequestsPage() {
           </Box>
         </DialogContent>
       </Dialog>
+      <Dialog open={deleteConfirmId != null} onClose={() => !deleteBusy && setDeleteConfirmId(null)}>
+        <DialogTitle>Видалити заявку?</DialogTitle>
+        <DialogContent>
+          {deleteError && <Typography color="error" sx={{ mt: 1 }}>{deleteError}</Typography>}
+          <Typography>Заявку №{deleteConfirmId} буде видалено безповоротно.</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmId(null)} disabled={deleteBusy}>Скасувати</Button>
+          <Button color="error" variant="contained" onClick={() => deleteConfirmId != null && handleDeleteRequest(deleteConfirmId)} disabled={deleteBusy}>
+            {deleteBusy ? 'Видалення…' : 'Видалити'}
+          </Button>
+        </DialogActions>
+      </Dialog>
       <TableContainer component={Paper}>
         <Table size="small">
           <TableHead>
@@ -165,13 +201,14 @@ export default function SupplyRequestsPage() {
               <TableCell>Дата потреби</TableCell>
               <TableCell>Статус</TableCell>
               <TableCell>Позицій</TableCell>
+              <TableCell width={56} />
             </TableRow>
           </TableHead>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={5}>Завантаження…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6}>Завантаження…</TableCell></TableRow>
             ) : list.length === 0 ? (
-              <TableRow><TableCell colSpan={5}>Немає заявок</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6}>Немає заявок</TableCell></TableRow>
             ) : (
               list.map((r) => (
                 <TableRow key={r.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/supply/requests/${r.id}`)}>
@@ -180,6 +217,13 @@ export default function SupplyRequestsPage() {
                   <TableCell>{r.neededAt ?? '—'}</TableCell>
                   <TableCell>{statusLabels[r.status] ?? r.status}</TableCell>
                   <TableCell>{r.items?.length ?? 0}</TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    {(r.status === 'draft' || isAdmin) && (
+                      <IconButton size="small" color="error" aria-label="Видалити" onClick={() => setDeleteConfirmId(r.id)}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))
             )}

@@ -70,3 +70,7 @@ export async function downloadInvoicePdf(id: Id, view: 'client' | 'internal' = '
   const res = await api.get(`/invoices/${id}/pdf`, { responseType: 'blob', params: { view } });
   return res.data as Blob;
 }
+
+export async function deleteInvoice(id: Id) {
+  await api.delete(`/invoices/${id}`);
+}

@@ -30,6 +30,10 @@ const MIGRATIONS_ORDER = [
   '2026-02-05_supply_request_templates.sql',
   '2026-02-05_supply_receipt_substitutions.sql',
   '2026-02-06_supply_request_quote_source.sql',
+  '2026-02-06_sales_next_action.sql',
+  '2026-02-06_sales_stage_canonical.sql',
+  '2026-02-06_project_next_actions.sql',
+  '2026-02-06_objects_v1_profile_contacts_attachments.sql',
 ];
 
 function loadEnv() {

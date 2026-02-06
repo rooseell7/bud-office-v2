@@ -1,14 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
-import { getForemanCandidates, type ForemanCandidate } from '../../api/objects';
+import { getForemanCandidates, deleteObject, type ForemanCandidate } from '../../api/objects';
+import { useAuth } from '../auth/AuthContext';
+import { Button } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
 
 /* ====== Типи ====== */
-
-interface Client {
-  id: number;
-  name: string;
-}
 
 interface ProjectObject {
   id: number;
@@ -40,23 +38,17 @@ const statusLabels: Record<ProjectObject['status'], string> = {
 
 const ProjectsPage: React.FC = () => {
   const nav = useNavigate();
+  const { roles, can } = useAuth();
+  const isAdmin = Array.isArray(roles) && roles.map((r) => String(r).toLowerCase()).includes('admin');
+  const canCreateObject = can('objects:create');
   const [objects, setObjects] = useState<ProjectObject[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  /* ====== Форма створення ====== */
-  const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
-  const [type, setType] = useState<ProjectObject['type']>('apartment');
-  const [status, setStatus] = useState<ProjectObject['status']>('planned');
-  // clientId може бути необов'язковим: обʼєкт можна створити без привʼязки до клієнта.
-  // Якщо клієнта вибрано — передаємо тільки валідний int >= 1.
-  const [clientId, setClientId] = useState<number | ''>('');
-  const [foremanId, setForemanId] = useState<number | ''>('');
   const [foremanCandidates, setForemanCandidates] = useState<ForemanCandidate[]>([]);
-  const [creating, setCreating] = useState(false);
 
   /* ====== Завантаження ====== */
 
@@ -82,73 +74,23 @@ const ProjectsPage: React.FC = () => {
     }
   };
 
-  const loadClients = async () => {
-    try {
-      const res = await api.get<any>('/clients');
-      const data = res.data;
-      // бек може повертати або масив, або пагінований формат { items, meta }
-      const list: Client[] = Array.isArray(data)
-        ? data
-        : Array.isArray(data?.items)
-          ? data.items
-          : [];
-      setClients(list);
-    } catch {
-      // тут мовчки — без клієнтів обʼєкт все одно не створиться
-    }
-  };
-
   useEffect(() => {
     loadObjects();
-    loadClients();
     loadForemanCandidates();
   }, []);
 
-  /* ====== Створення ====== */
-
-  const createObject = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const cidRaw =
-      typeof clientId === 'number'
-        ? String(clientId)
-        : String(clientId ?? '').trim();
-
-    const cid = cidRaw ? Number.parseInt(cidRaw, 10) : NaN;
-    const hasValidClient = Number.isFinite(cid) && cid >= 1;
-
-    if (!name.trim()) {
-      alert('Заповніть назву');
-      return;
-    }
-
-    setCreating(true);
+  const handleDelete = async () => {
+    if (deleteId == null) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
     try {
-      const payload: any = {
-        name: name.trim(),
-        address: address?.trim() || undefined,
-        type,
-        status,
-      };
-
-      if (hasValidClient) payload.clientId = cid;
-      if (foremanId !== '' && Number.isFinite(Number(foremanId))) payload.foremanId = Number(foremanId);
-
-      const res = await api.post<ProjectObject>('/objects', payload);
-
-      setObjects((prev) => [res.data, ...prev]);
-
-      // очистка форми
-      setName('');
-      setAddress('');
-      setType('apartment');
-      setStatus('planned');
-      setClientId('');
-      setForemanId('');
+      await deleteObject(deleteId);
+      setDeleteId(null);
+      await loadObjects();
     } catch (e: any) {
-      alert(e?.response?.data?.message || 'Не вдалося створити обʼєкт');
+      setDeleteError(e?.response?.data?.message || e?.message || 'Помилка видалення');
     } finally {
-      setCreating(false);
+      setDeleteBusy(false);
     }
   };
 
@@ -156,76 +98,18 @@ const ProjectsPage: React.FC = () => {
 
   return (
     <div>
-      <h1>Обʼєкти</h1>
-
-      {/* ====== Форма створення ====== */}
-      <form onSubmit={createObject} className="card" style={{ marginBottom: 20 }}>
-        <h3>Додати обʼєкт</h3>
-
-        <div className="form-grid">
-          <input
-            placeholder="Назва обʼєкта *"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-
-          <input
-            placeholder="Адреса"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-          />
-
-          <select value={type} onChange={(e) => setType(e.target.value as any)}>
-            {Object.entries(typeLabels).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
-
-          <select value={status} onChange={(e) => setStatus(e.target.value as any)}>
-            {Object.entries(statusLabels).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={clientId === '' ? '' : String(clientId)}
-            onChange={(e) => {
-              const v = (e.target.value ?? '').toString();
-              setClientId(v ? Number(v) : '');
-            }}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+        <h1 style={{ margin: 0 }}>Обʼєкти</h1>
+        {canCreateObject && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => nav('/sales/objects/new')}
           >
-            <option value="">— Виберіть клієнта *</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={foremanId === '' ? '' : String(foremanId)}
-            onChange={(e) => {
-              const v = (e.target.value ?? '').toString();
-              setForemanId(v ? Number(v) : '');
-            }}
-          >
-            <option value="">— Виконроб (не обовʼязково)</option>
-            {foremanCandidates.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.fullName}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <button type="submit" disabled={creating}>
-          {creating ? 'Створення…' : 'Створити обʼєкт'}
-        </button>
-      </form>
+            Додати обʼєкт
+          </Button>
+        )}
+      </div>
 
       {/* ====== Список ====== */}
       {error && <div className="error">{error}</div>}
@@ -235,6 +119,7 @@ const ProjectsPage: React.FC = () => {
       ) : objects.length === 0 ? (
         <p>Поки немає обʼєктів</p>
       ) : (
+        <>
         <table className="list-table">
           <thead>
             <tr>
@@ -243,6 +128,7 @@ const ProjectsPage: React.FC = () => {
               <th>Адреса</th>
               <th>Статус</th>
               <th>Виконроб</th>
+              {isAdmin && <th style={{ width: 100, textAlign: 'right' }}>Дії</th>}
             </tr>
           </thead>
           <tbody>
@@ -262,10 +148,47 @@ const ProjectsPage: React.FC = () => {
                     ? foremanCandidates.find((f) => f.id === o.foremanId)?.fullName ?? `#${o.foremanId}`
                     : '—'}
                 </td>
+                {isAdmin && (
+                  <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={() => setDeleteId(o.id)}
+                      title="Видалити обʼєкт"
+                    >
+                      Видалити
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
+        {isAdmin && deleteId != null && (
+          <div className="modal show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} role="dialog">
+            <div className="modal-dialog">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">Видалити обʼєкт?</h5>
+                  <button type="button" className="btn-close" onClick={() => !deleteBusy && setDeleteId(null)} aria-label="Close" />
+                </div>
+                <div className="modal-body">
+                  {deleteError && <div className="alert alert-danger">{deleteError}</div>}
+                  <p>Обʼєкт буде видалено безповоротно. Продовжити?</p>
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => setDeleteId(null)} disabled={deleteBusy}>
+                    Скасувати
+                  </button>
+                  <button type="button" className="btn btn-danger" onClick={() => void handleDelete()} disabled={deleteBusy}>
+                    {deleteBusy ? 'Видалення…' : 'Видалити'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        </>
       )}
     </div>
   );

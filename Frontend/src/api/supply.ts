@@ -149,6 +149,10 @@ export async function getSupplyRequest(id: number): Promise<SupplyRequestDto> {
   return data;
 }
 
+export async function deleteSupplyRequest(id: number): Promise<void> {
+  await api.delete(`/supply/requests/${id}`);
+}
+
 // --- Quote stages (read-only, for adding materials to request) ---
 export interface QuoteStageInfo {
   stageId: string;
@@ -427,6 +431,10 @@ export async function getSupplyOrders(params?: { projectId?: number; status?: st
 export async function getSupplyOrder(id: number): Promise<SupplyOrderDto> {
   const { data } = await api.get<SupplyOrderDto>(`/supply/orders/${id}`);
   return data;
+}
+
+export async function deleteSupplyOrder(id: number): Promise<void> {
+  await api.delete(`/supply/orders/${id}`);
 }
 
 export async function getOrderSubstitutions(orderId: number): Promise<OrderSubstitutionDto[]> {

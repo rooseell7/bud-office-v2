@@ -5,6 +5,7 @@ import { SupplyOrder } from './entities/supply-order.entity';
 import { SupplyOrderItem } from './entities/supply-order-item.entity';
 import { SupplyReceipt } from './entities/supply-receipt.entity';
 import { SupplyReceiptItem } from './entities/supply-receipt-item.entity';
+import { Payable } from './entities/payable.entity';
 import { SupplyAuditService } from './audit.service';
 import { SupplyPurchaseService } from './supply-purchase.service';
 import { CreateSupplyOrderDto, UpdateSupplyOrderDto } from './dto/supply-order.dto';
@@ -19,6 +20,7 @@ export class SupplyOrderService {
     @InjectRepository(SupplyOrderItem) private readonly orderItemRepo: Repository<SupplyOrderItem>,
     @InjectRepository(SupplyReceipt) private readonly receiptRepo: Repository<SupplyReceipt>,
     @InjectRepository(SupplyReceiptItem) private readonly receiptItemRepo: Repository<SupplyReceiptItem>,
+    @InjectRepository(Payable) private readonly payableRepo: Repository<Payable>,
     private readonly audit: SupplyAuditService,
     private readonly purchaseService: SupplyPurchaseService,
   ) {}
@@ -264,6 +266,38 @@ export class SupplyOrderService {
       actorId: userId,
     });
     return this.findOne(userId, id);
+  }
+
+  /** Видалити замовлення. Звичайний користувач: лише без приходів. Адмін: будь-яке (приходи та пов’язані payables видаляються каскадно). */
+  async remove(userId: number, id: number, options?: { isAdmin?: boolean }): Promise<void> {
+    const o = await this.orderRepo.findOne({ where: { id } });
+    if (!o) throw new NotFoundException('Supply order not found');
+    const isAdmin = options?.isAdmin === true;
+    const receipts = await this.receiptRepo.find({ where: { sourceOrderId: id }, select: ['id'] });
+    if (receipts.length > 0 && !isAdmin) {
+      throw new BadRequestException('Неможливо видалити замовлення, по якому вже є приходи.');
+    }
+    if (isAdmin && receipts.length > 0) {
+      const receiptIds = receipts.map((r) => r.id);
+      const payables = await this.payableRepo.find({
+        where: { sourceReceiptId: In(receiptIds) },
+        select: ['id'],
+      });
+      for (const p of payables) {
+        await this.payableRepo.delete(p.id);
+      }
+      await this.receiptItemRepo.delete({ receiptId: In(receiptIds) });
+      await this.receiptRepo.delete({ id: In(receiptIds) });
+    }
+    await this.orderItemRepo.delete({ orderId: id });
+    await this.orderRepo.delete(id);
+    await this.audit.log({
+      entityType: 'supply_order',
+      entityId: id,
+      action: 'delete',
+      message: isAdmin ? 'Замовлення видалено (адмін)' : 'Замовлення видалено',
+      actorId: userId,
+    });
   }
 
   async createReceiptQuick(userId: number, orderId: number, dto: CreateReceiptQuickDto) {

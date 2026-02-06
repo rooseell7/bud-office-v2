@@ -45,8 +45,31 @@ export class ActivityService {
     }));
   }
 
+  /** Log project audit event for timeline (sales stage, next action, etc.). */
+  async logProjectAudit(params: {
+    projectId: number;
+    actorId: number | null;
+    action: string;
+    summary: string;
+    payload?: Record<string, unknown>;
+  }): Promise<void> {
+    const row = this.repo.create({
+      ts: new Date(),
+      actorId: params.actorId,
+      entity: 'project',
+      action: params.action,
+      entityId: params.projectId,
+      projectId: params.projectId,
+      summary: params.summary,
+      payload: params.payload ?? null,
+    });
+    await this.repo.save(row);
+  }
+
   async log(event: DomainEvent): Promise<void> {
-    const summary = this.summaryFor(event);
+    const summary = (event as any).payload?.summary && typeof (event as any).payload.summary === 'string'
+      ? (event as any).payload.summary
+      : this.summaryFor(event);
     const row = this.repo.create({
       ts: new Date(event.ts),
       actorId: typeof event.actorId === 'number' ? event.actorId : parseInt(String(event.actorId), 10) || null,

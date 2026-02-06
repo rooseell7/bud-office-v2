@@ -30,6 +30,7 @@ export class AttachmentsService {
     entityType: string;
     entityId: unknown;
     file: Express.Multer.File;
+    tag?: string | null;
     uploadedByUserId?: number | null;
   }) {
     const entityType = String(params.entityType || '').trim();
@@ -38,14 +39,15 @@ export class AttachmentsService {
     const f = params.file;
     if (!f) throw new BadRequestException('file is required');
 
+    const tag = params.tag?.trim().slice(0, 32) || null;
     const item = this.repo.create({
       entityType,
       entityId,
+      tag,
       originalName: f.originalname,
       fileName: f.filename,
       mimeType: f.mimetype,
       size: String(f.size),
-      // multer destination + filename already represent a relative path
       path: f.path.replace(/\\/g, '/'),
       uploadedByUserId: (typeof params.uploadedByUserId === 'number' ? params.uploadedByUserId : (params.uploadedByUserId != null ? Number(params.uploadedByUserId) : null)),
     });

@@ -21,12 +21,11 @@ import {
 } from '@mui/material';
 
 import AddIcon from '@mui/icons-material/Add';
-import PictureAsPdfOutlinedIcon from '@mui/icons-material/PictureAsPdfOutlined';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
 import {
   createInvoice,
-  downloadInvoicePdf,
+  deleteInvoice,
   listInvoices,
   type Invoice,
 } from '../api/invoices.api';
@@ -218,41 +217,15 @@ export default function InvoicesPage() {
     }
   }
 
-  async function onPdfClient(id: number) {
+  async function onDelete(id: number) {
+    if (!window.confirm(`Видалити накладну №${id}?`)) return;
     setLoading(true);
     setError(null);
     try {
-      const blob = await downloadInvoicePdf(id, 'client');
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `invoice_${id}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      await deleteInvoice(id);
+      await load();
     } catch (e: any) {
-      setError(e?.message || 'Не вдалося згенерувати PDF');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function onPdfInternal(id: number) {
-    setLoading(true);
-    setError(null);
-    try {
-      const blob = await downloadInvoicePdf(id, 'internal');
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `invoice_${id}_internal.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setError(e?.message || 'Не вдалося згенерувати PDF');
+      setError(e?.response?.data?.message?.join?.('\n') || e?.message || 'Помилка видалення');
     } finally {
       setLoading(false);
     }
@@ -383,8 +356,9 @@ export default function InvoicesPage() {
                             )}
                           </Box>
 
-                          <Stack direction="row" spacing={1}>
+                          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                             <Button
+                              size="small"
                               variant="outlined"
                               startIcon={<OpenInNewIcon />}
                               onClick={() => navigate(`/invoices/${x.id}`)}
@@ -393,20 +367,21 @@ export default function InvoicesPage() {
                               Відкрити
                             </Button>
                             <Button
-                              variant="outlined"
-                              startIcon={<PictureAsPdfOutlinedIcon />}
-                              onClick={() => void onPdfClient(x.id)}
+                              size="small"
+                              variant="contained"
+                              onClick={() => navigate(`/invoices/${x.id}`)}
                               disabled={loading}
                             >
-                              PDF клієнт
+                              Редагувати
                             </Button>
                             <Button
+                              size="small"
                               variant="outlined"
-                              startIcon={<PictureAsPdfOutlinedIcon />}
-                              onClick={() => void onPdfInternal(x.id)}
+                              color="error"
+                              onClick={() => void onDelete(x.id)}
                               disabled={loading}
                             >
-                              PDF внутр.
+                              Видалити
                             </Button>
                           </Stack>
                         </Box>

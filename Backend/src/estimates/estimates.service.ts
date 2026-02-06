@@ -13,6 +13,11 @@ import { User } from '../users/user.entity';
 import { buildFromTemplate } from '../sheets/templates/buildFromTemplate';
 import { CreateStageDto } from './dto/create-stage.dto';
 import { UpdateStageDto } from './dto/update-stage.dto';
+import type {
+  EstimatesProjectsQueryDto,
+  EstimatesProjectsResponseDto,
+  EstimatesProjectItemDto,
+} from './dto/estimates-projects-query.dto';
 
 export type EstimateStage = {
   id: string;
@@ -170,6 +175,234 @@ export class EstimatesService {
       updatedAt: d.updatedAt,
       createdByName: d.createdById != null ? createdByMap.get(d.createdById) ?? null : null,
     }));
+  }
+
+  /** Список об'єктів для відділу кошторисів: агрегати КП, акти, накладні; фільтри та пагінація. */
+  async getProjectsList(query: EstimatesProjectsQueryDto): Promise<EstimatesProjectsResponseDto> {
+    const page = Math.max(1, query.page ?? 1);
+    const limit = Math.min(100, Math.max(1, query.limit ?? 20));
+    const offset = (page - 1) * limit;
+
+    const q = (query.q ?? '').trim();
+    const activeFrom = (query.activeFrom ?? '').trim().slice(0, 10);
+    const activeTo = (query.activeTo ?? '').trim().slice(0, 10);
+
+    let projects: Project[] = [];
+    const qb = this.projectRepo.createQueryBuilder('p').orderBy('p.updatedAt', 'DESC');
+    if (q) {
+      qb.andWhere('(p.name ILIKE :q OR p.address ILIKE :q)', { q: `%${q}%` });
+    }
+    if (activeFrom) {
+      qb.andWhere('p.updatedAt >= :activeFrom', { activeFrom: `${activeFrom}T00:00:00.000Z` });
+    }
+    if (activeTo) {
+      qb.andWhere('p.updatedAt <= :activeTo', { activeTo: `${activeTo}T23:59:59.999Z` });
+    }
+    projects = await qb.getMany();
+
+    const projectIds = projects.map((p) => p.id);
+    if (projectIds.length === 0) {
+      return { items: [], total: 0 };
+    }
+
+    const idsList = projectIds.join(',');
+    const manager = this.projectRepo.manager;
+
+    const [quoteRows, actRows, invRows, clientRows] = await Promise.all([
+      manager.query(
+        `SELECT DISTINCT ON (d."projectId") d."projectId", d.id AS "lastQuoteId", d.status, d.total, d."updatedAt"
+         FROM documents d WHERE d.type = 'quote' AND d."projectId" = ANY($1::int[])
+         ORDER BY d."projectId", d."updatedAt" DESC`,
+        [projectIds],
+      ),
+      manager.query(
+        `SELECT a."projectId", COUNT(*)::int AS count, MAX(a."updatedAt") AS "lastActAt"
+         FROM acts a WHERE a."projectId" = ANY($1::int[]) GROUP BY a."projectId"`,
+        [projectIds],
+      ),
+      manager.query(
+        `SELECT i."projectId",
+         COUNT(*)::int AS count,
+         COUNT(*) FILTER (WHERE i.status IS NULL OR i.status != 'paid')::int AS "unpaidCount",
+         MAX(i."updatedAt") AS "lastInvoiceAt"
+         FROM invoices i WHERE i."projectId" = ANY($1::int[]) GROUP BY i."projectId"`,
+        [projectIds],
+      ),
+      (async () => {
+        const clientIds = [...new Set(projects.map((p) => p.clientId).filter((id): id is number => id != null))];
+        if (clientIds.length === 0) return [];
+        try {
+          return await manager.query(
+            'SELECT id, name FROM clients WHERE id = ANY($1::int[])',
+            [clientIds],
+          );
+        } catch {
+          return [];
+        }
+      })(),
+    ]);
+
+    const quoteMap = new Map<number, { lastQuoteId: number; status: string; total: string | null; updatedAt: string }>(
+      (quoteRows ?? []).map((r: any) => [
+        r.projectId,
+        {
+          lastQuoteId: r.lastQuoteId,
+          status: r.status,
+          total: r.total != null ? String(r.total) : null,
+          updatedAt: r.updatedAt != null ? new Date(r.updatedAt).toISOString() : '',
+        },
+      ]),
+    );
+    const actMap = new Map<number, { count: number; lastActAt: string | null }>(
+      (actRows ?? []).map((r: any) => [
+        r.projectId,
+        {
+          count: r.count ?? 0,
+          lastActAt: r.lastActAt ? new Date(r.lastActAt).toISOString() : null,
+        },
+      ]),
+    );
+    const invMap = new Map<
+      number,
+      { count: number; unpaidCount: number; lastInvoiceAt: string | null }
+    >(
+      (invRows ?? []).map((r: any) => [
+        r.projectId,
+        {
+          count: r.count ?? 0,
+          unpaidCount: r.unpaidCount ?? 0,
+          lastInvoiceAt: r.lastInvoiceAt ? new Date(r.lastInvoiceAt).toISOString() : null,
+        },
+      ]),
+    );
+    const clientById = new Map<string | number, string>();
+    for (const c of clientRows ?? []) {
+      clientById.set(c.id, c.name ?? '');
+    }
+
+    const items: EstimatesProjectItemDto[] = projects.map((p) => {
+      const quote = quoteMap.get(p.id);
+      const acts = actMap.get(p.id);
+      const inv = invMap.get(p.id);
+      const lastQuoteAt = quote?.updatedAt ?? null;
+      const lastActAt = acts?.lastActAt ?? null;
+      const lastInvAt = inv?.lastInvoiceAt ?? null;
+      const dates = [lastQuoteAt, lastActAt, lastInvAt].filter(Boolean) as string[];
+      const lastActivityAt = dates.length > 0 ? dates.sort().reverse()[0]! : null;
+
+      const client =
+        p.clientId != null
+          ? { id: p.clientId, name: clientById.get(p.clientId) ?? clientById.get(String(p.clientId)) ?? '—' }
+          : null;
+
+      return {
+        projectId: p.id,
+        name: p.name,
+        address: p.address ?? null,
+        client,
+        quote: {
+          lastQuoteId: quote?.lastQuoteId ?? null,
+          status: quote?.status ?? null,
+          total: quote?.total ?? null,
+          updatedAt: lastQuoteAt,
+        },
+        acts: {
+          count: acts?.count ?? 0,
+          lastActAt: acts?.lastActAt ?? null,
+        },
+        invoices: {
+          count: inv?.count ?? 0,
+          unpaidCount: inv?.unpaidCount ?? 0,
+          lastInvoiceAt: inv?.lastInvoiceAt ?? null,
+        },
+        lastActivityAt,
+      };
+    });
+
+    let filtered = items;
+    if (query.quoteStatus) {
+      const status = query.quoteStatus.trim().toLowerCase();
+      filtered = filtered.filter((i) => (i.quote.status ?? '').toLowerCase() === status);
+    }
+    if (query.hasUnpaidInvoices === true) {
+      filtered = filtered.filter((i) => i.invoices.unpaidCount > 0);
+    }
+    filtered.sort((a, b) => {
+      const ta = a.lastActivityAt ?? '';
+      const tb = b.lastActivityAt ?? '';
+      return tb.localeCompare(ta);
+    });
+
+    const total = filtered.length;
+    const pageItems = filtered.slice(offset, offset + limit);
+    return { items: pageItems, total };
+  }
+
+  /** Dashboard для одного об'єкта: остання КП, акти, накладні, lastActivityAt. */
+  async getProjectDashboard(projectId: number): Promise<EstimatesProjectItemDto> {
+    const project = await this.projectRepo.findOne({ where: { id: projectId } });
+    if (!project) throw new NotFoundException('Проєкт не знайдено');
+
+    const manager = this.projectRepo.manager;
+    const [quoteRows, actRows, invRows, clientRow] = await Promise.all([
+      manager.query(
+        `SELECT d.id AS "lastQuoteId", d.status, d.total, d."updatedAt"
+         FROM documents d WHERE d.type = 'quote' AND d."projectId" = $1 ORDER BY d."updatedAt" DESC LIMIT 1`,
+        [projectId],
+      ),
+      manager.query(
+        `SELECT COUNT(*)::int AS count, MAX(a."updatedAt") AS "lastActAt"
+         FROM acts a WHERE a."projectId" = $1`,
+        [projectId],
+      ),
+      manager.query(
+        `SELECT COUNT(*)::int AS count,
+         COUNT(*) FILTER (WHERE i.status IS NULL OR i.status != 'paid')::int AS "unpaidCount",
+         MAX(i."updatedAt") AS "lastInvoiceAt"
+         FROM invoices i WHERE i."projectId" = $1`,
+        [projectId],
+      ),
+      project.clientId != null
+        ? manager.query('SELECT id, name FROM clients WHERE id = $1 LIMIT 1', [project.clientId])
+        : Promise.resolve([]),
+    ]);
+
+    const quote = quoteRows?.[0];
+    const acts = actRows?.[0];
+    const inv = invRows?.[0];
+    const lastQuoteAt = quote?.updatedAt ? new Date(quote.updatedAt).toISOString() : null;
+    const lastActAt = acts?.lastActAt ? new Date(acts.lastActAt).toISOString() : null;
+    const lastInvAt = inv?.lastInvoiceAt ? new Date(inv.lastInvoiceAt).toISOString() : null;
+    const dates = [lastQuoteAt, lastActAt, lastInvAt].filter(Boolean) as string[];
+    const lastActivityAt = dates.length > 0 ? dates.sort().reverse()[0]! : null;
+
+    const client =
+      project.clientId != null && clientRow?.[0]
+        ? { id: project.clientId, name: String(clientRow[0].name ?? '') }
+        : null;
+
+    return {
+      projectId: project.id,
+      name: project.name,
+      address: project.address ?? null,
+      client,
+      quote: {
+        lastQuoteId: quote?.lastQuoteId ?? null,
+        status: quote?.status ?? null,
+        total: quote?.total != null ? String(quote.total) : null,
+        updatedAt: lastQuoteAt,
+      },
+      acts: {
+        count: acts?.count ?? 0,
+        lastActAt: acts?.lastActAt ? new Date(acts.lastActAt).toISOString() : null,
+      },
+      invoices: {
+        count: inv?.count ?? 0,
+        unpaidCount: inv?.unpaidCount ?? 0,
+        lastInvoiceAt: inv?.lastInvoiceAt ? new Date(inv.lastInvoiceAt).toISOString() : null,
+      },
+      lastActivityAt,
+    };
   }
 
   async create(payload: { projectId: number; title?: string }, userId: number | null) {

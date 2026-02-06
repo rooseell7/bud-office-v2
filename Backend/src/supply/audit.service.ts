@@ -14,6 +14,7 @@ export type AuditEntityType =
 export type AuditAction =
   | 'create'
   | 'update'
+  | 'delete'
   | 'status_change'
   | 'create_from'
   | 'create_receipt_quick'

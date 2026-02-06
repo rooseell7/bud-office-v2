@@ -21,6 +21,7 @@ import { Permissions } from '../auth/decorators/permissions.decorator';
 import { EstimatesService } from './estimates.service';
 import { CreateStageDto } from './dto/create-stage.dto';
 import { UpdateStageDto } from './dto/update-stage.dto';
+import { EstimatesProjectsQueryDto } from './dto/estimates-projects-query.dto';
 
 function getUserId(req: Request): number | null {
   const anyReq = req as any;
@@ -39,6 +40,18 @@ export class EstimatesController {
   findRecent(@Query('limit') limit?: string) {
     const lim = limit ? Math.min(parseInt(limit, 10) || 10, 50) : 10;
     return this.service.findRecent(lim);
+  }
+
+  @Permissions('documents:read', 'sheet:read', 'estimates:read')
+  @Get('projects')
+  getProjectsList(@Query() q: EstimatesProjectsQueryDto) {
+    return this.service.getProjectsList(q);
+  }
+
+  @Permissions('documents:read', 'sheet:read', 'estimates:read')
+  @Get('projects/:id/dashboard')
+  getProjectDashboard(@Param('id', ParseIntPipe) id: number) {
+    return this.service.getProjectDashboard(id);
   }
 
   @Permissions('documents:read', 'sheet:read', 'estimates:read')

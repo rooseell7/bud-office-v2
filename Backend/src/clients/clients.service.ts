@@ -35,14 +35,22 @@ export class ClientService {
    * Якщо entity містить поле note, TypeORM за замовчуванням включає його в SELECT і падає.
    * Тому тут використовуємо select, щоб НЕ читати "note" та не ловити 500.
    */
-  async findAll(userId: number | string): Promise<Client[]> {
+  async findAll(userId: number | string, search?: string): Promise<Client[]> {
     const userIdNum = this.toUserId(userId);
+
+    if (search) {
+      const qb = this.clientRepo
+        .createQueryBuilder('c')
+        .where('c.userId = :userId', { userId: userIdNum })
+        .andWhere('(c.name ILIKE :q OR c.phone ILIKE :q OR c.email ILIKE :q)', { q: `%${search}%` })
+        .orderBy('c.createdAt', 'DESC')
+        .select(['c.id', 'c.name', 'c.phone', 'c.email', 'c.userId', 'c.createdAt', 'c.updatedAt']);
+      return qb.getMany();
+    }
 
     return this.clientRepo.find({
       where: { userId: userIdNum },
       order: { createdAt: 'DESC' },
-
-      // НЕ вибираємо note, щоб не падати, якщо колонки нема в БД
       select: [
         'id',
         'name',

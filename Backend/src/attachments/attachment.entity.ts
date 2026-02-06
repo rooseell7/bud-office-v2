@@ -36,6 +36,10 @@ export class Attachment {
   @Column({ type: 'int' })
   entityId: number;
 
+  /** Optional tag: photo_before | photo_progress | photo_after | contract | plan | other */
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  tag: string | null;
+
   @Column({ type: 'varchar', length: 255 })
   originalName: string;
 

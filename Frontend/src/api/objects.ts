@@ -38,7 +38,27 @@ export async function getObjects(params?: { department?: 'sales' | 'delivery' })
   return [];
 }
 
+export type CreateObjectPayload = {
+  name: string;
+  address?: string;
+  type?: string;
+  status?: string;
+  clientId?: number;
+  foremanId?: number;
+  estimatorId?: number;
+  supplyManagerId?: number;
+};
+
+export async function createObject(payload: CreateObjectPayload): Promise<ObjectDto> {
+  const res = await api.post<ObjectDto>('/objects', payload);
+  return res.data;
+}
+
 export async function updateObject(id: number, payload: Partial<ObjectDto>): Promise<ObjectDto> {
   const res = await api.patch<ObjectDto>(`/objects/${id}`, payload);
   return res.data;
+}
+
+export async function deleteObject(id: number): Promise<void> {
+  await api.delete(`/objects/${id}`);
 }

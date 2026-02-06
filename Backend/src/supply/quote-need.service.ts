@@ -65,7 +65,7 @@ export class QuoteNeedService {
         .andWhere('i.materialId IS NOT NULL')
         .select('i.materialId', 'materialId')
         .addSelect('i.unit', 'unit')
-        .addSelect('SUM(i.qtyPlanned::decimal)', 'total')
+        .addSelect('SUM("i"."qtyPlanned"::decimal)', 'total')
         .groupBy('i.materialId')
         .addGroupBy('i.unit')
         .getRawMany<{ materialId: number; unit: string; total: string }>(),
@@ -79,7 +79,7 @@ export class QuoteNeedService {
         .andWhere('i.materialId IS NOT NULL')
         .select('i.materialId', 'materialId')
         .addSelect('i.unit', 'unit')
-        .addSelect('SUM(i.qtyReceived::decimal)', 'total')
+        .addSelect('SUM("i"."qtyReceived"::decimal)', 'total')
         .groupBy('i.materialId')
         .addGroupBy('i.unit')
         .getRawMany<{ materialId: number; unit: string; total: string }>(),

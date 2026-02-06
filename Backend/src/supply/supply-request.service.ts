@@ -207,6 +207,12 @@ export class SupplyRequestService {
         await this.itemRepo.save(
           this.itemRepo.create({
             requestId: saved.id,
+            sourceType: row.sourceType ?? 'manual',
+            sourceQuoteId: row.sourceQuoteId ?? null,
+            sourceStageId: row.sourceStageId ?? null,
+            sourceQuoteRowId: row.sourceQuoteRowId ?? null,
+            sourceMaterialFingerprint: row.sourceMaterialFingerprint ?? null,
+            sourceStageName: row.sourceStageName ?? null,
             materialId,
             customName: customName ?? null,
             unit: row.unit,
@@ -464,6 +470,33 @@ export class SupplyRequestService {
       actorId: userId,
     });
     return this.findOne(userId, id);
+  }
+
+  /** Видалити заявку. Звичайний користувач: лише draft без пов’язаних замовлень. Адмін: будь-яку (замовлення відв’язуються). */
+  async remove(userId: number, id: number, options?: { isAdmin?: boolean }): Promise<void> {
+    const r = await this.requestRepo.findOne({ where: { id } });
+    if (!r) throw new NotFoundException('Supply request not found');
+    const isAdmin = options?.isAdmin === true;
+    if (!isAdmin) {
+      if (r.status !== 'draft') {
+        throw new BadRequestException('Видалити можна лише заявку зі статусом «Чернетка».');
+      }
+      const linkedCount = await this.orderRepo.count({ where: { sourceRequestId: id } });
+      if (linkedCount > 0) {
+        throw new BadRequestException('Неможливо видалити заявку, з якої вже створено замовлення.');
+      }
+    } else {
+      await this.orderRepo.update({ sourceRequestId: id }, { sourceRequestId: null });
+    }
+    await this.itemRepo.delete({ requestId: id });
+    await this.requestRepo.delete(id);
+    await this.audit.log({
+      entityType: 'supply_request',
+      entityId: id,
+      action: 'delete',
+      message: isAdmin ? 'Заявку видалено (адмін)' : 'Заявку видалено',
+      actorId: userId,
+    });
   }
 
   async createOrder(userId: number, id: number) {

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box, Button, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
-  Select, MenuItem, FormControl, InputLabel, Snackbar, Checkbox, Dialog, DialogTitle, DialogContent, FormControlLabel, Chip,
+  Select, MenuItem, FormControl, InputLabel, Snackbar, Checkbox, Dialog, DialogTitle, DialogContent, DialogActions, FormControlLabel, Chip,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import PriceCheckIcon from '@mui/icons-material/PriceCheck';
@@ -11,13 +11,18 @@ import MergeTypeIcon from '@mui/icons-material/MergeType';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import {
   getSupplyOrder, setSupplyOrderStatus, createReceiptFromOrder, createReceiptQuickFromOrder, fillOrderPricesFromLast, updateSupplyOrder,
-  getLastPurchasesBatch, getSupplyOrders, moveOrderItems, mergeOrder, getOrderSubstitutions,
+  getLastPurchasesBatch, getSupplyOrders, moveOrderItems, mergeOrder, getOrderSubstitutions, deleteSupplyOrder,
 } from '../../../api/supply';
+import { useAuth } from '../../auth/AuthContext';
 import { AuditBlock } from '../components/AuditBlock';
 import { LinksBlockOrder } from '../components/LinksBlock';
 import type { SupplyOrderDto, LastPurchaseResult, OrderSubstitutionDto } from '../../../api/supply';
 
 const statusOptions = ['draft', 'sent', 'confirmed', 'partially_delivered', 'delivered', 'closed', 'cancelled'];
+const statusLabels: Record<string, string> = {
+  draft: 'Чернетка', sent: 'Відправлено', confirmed: 'Підтверджено',
+  partially_delivered: 'Частково доставлено', delivered: 'Доставлено', closed: 'Закрито', cancelled: 'Скасовано',
+};
 
 function formatLastPurchase(last: LastPurchaseResult): string {
   const date = last.receivedAt ? new Date(last.receivedAt).toLocaleDateString('uk-UA') : '';
@@ -27,6 +32,8 @@ function formatLastPurchase(last: LastPurchaseResult): string {
 export default function SupplyOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { roles } = useAuth();
+  const isAdmin = Array.isArray(roles) && roles.map((r) => String(r).toLowerCase()).includes('admin');
   const [data, setData] = useState<SupplyOrderDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -46,6 +53,9 @@ export default function SupplyOrderDetailPage() {
   const [toastMessage, setToastMessage] = useState('');
   const [substitutionsModalOpen, setSubstitutionsModalOpen] = useState(false);
   const [substitutionsList, setSubstitutionsList] = useState<OrderSubstitutionDto[]>([]);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const load = async () => {
     if (!id) return;
@@ -88,6 +98,20 @@ export default function SupplyOrderDetailPage() {
       navigate(`/supply/receipts/${receiptId}`);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleDeleteOrder = async () => {
+    if (!id) return;
+    setDeleteBusy(true);
+    setDeleteError('');
+    try {
+      await deleteSupplyOrder(Number(id));
+      navigate('/supply/orders');
+    } catch (e: any) {
+      setDeleteError(e?.response?.data?.message || 'Помилка видалення');
+    } finally {
+      setDeleteBusy(false);
     }
   };
 
@@ -223,7 +247,7 @@ export default function SupplyOrderDetailPage() {
         <FormControl size="small" sx={{ minWidth: 160 }}>
           <InputLabel>Статус</InputLabel>
           <Select value={data.status} label="Статус" onChange={(e) => handleSetStatus(e.target.value)} disabled={busy}>
-            {statusOptions.map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+            {statusOptions.map((s) => <MenuItem key={s} value={s}>{statusLabels[s] ?? s}</MenuItem>)}
           </Select>
         </FormControl>
       </Box>
@@ -306,8 +330,22 @@ export default function SupplyOrderDetailPage() {
             )}
           </>
         )}
+        {((data.linkedReceipts?.length ?? 0) === 0 || isAdmin) && (
+          <Button color="error" variant="outlined" size="small" disabled={busy} onClick={() => setDeleteConfirmOpen(true)}>Видалити замовлення</Button>
+        )}
       </Box>
 
+      <Dialog open={deleteConfirmOpen} onClose={() => !deleteBusy && setDeleteConfirmOpen(false)}>
+        <DialogTitle>Видалити замовлення?</DialogTitle>
+        <DialogContent>
+          {deleteError && <Typography color="error" sx={{ mt: 1 }}>{deleteError}</Typography>}
+          <Typography>Замовлення №{data.id} буде видалено безповоротно.</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmOpen(false)} disabled={deleteBusy}>Скасувати</Button>
+          <Button color="error" variant="contained" onClick={handleDeleteOrder} disabled={deleteBusy}>{deleteBusy ? 'Видалення…' : 'Видалити'}</Button>
+        </DialogActions>
+      </Dialog>
       <Dialog open={moveModalOpen} onClose={() => setMoveModalOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Перемістити позиції</DialogTitle>
         <DialogContent>
@@ -316,7 +354,7 @@ export default function SupplyOrderDetailPage() {
             <Select value={moveToOrderId} label="Куди" onChange={(e) => setMoveToOrderId(e.target.value === '' ? '' : (e.target.value as number))}>
               <MenuItem value="">—</MenuItem>
               {targetOrderList.map((o) => (
-                <MenuItem key={o.id} value={o.id}>№{o.id} • Постачальник #{o.supplierId ?? '—'} • {o.status}</MenuItem>
+                <MenuItem key={o.id} value={o.id}>№{o.id} • Постачальник #{o.supplierId ?? '—'} • {statusLabels[o.status] ?? o.status}</MenuItem>
               ))}
             </Select>
           </FormControl>
