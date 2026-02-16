@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
 import { getForemanCandidates, deleteObject, type ForemanCandidate } from '../../api/objects';
 import { useAuth } from '../auth/AuthContext';
+import { useRealtime } from '../../realtime/RealtimeContext';
 import { Button } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 
@@ -39,6 +40,7 @@ const statusLabels: Record<ProjectObject['status'], string> = {
 const ProjectsPage: React.FC = () => {
   const nav = useNavigate();
   const { roles, can } = useAuth();
+  const realtime = useRealtime();
   const isAdmin = Array.isArray(roles) && roles.map((r) => String(r).toLowerCase()).includes('admin');
   const canCreateObject = can('objects:create');
   const [objects, setObjects] = useState<ProjectObject[]>([]);
@@ -78,6 +80,11 @@ const ProjectsPage: React.FC = () => {
     loadObjects();
     loadForemanCandidates();
   }, []);
+
+  useEffect(() => {
+    if (!realtime) return;
+    return realtime.subscribeInvalidateAll(loadObjects);
+  }, [realtime]);
 
   const handleDelete = async () => {
     if (deleteId == null) return;

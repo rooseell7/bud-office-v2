@@ -8,12 +8,13 @@ import App from './App';
 import { AuthProvider } from './modules/auth/context/AuthContext';
 
 import './index.css';
-import './shared/theme/variant3.css';
-import { muiTheme } from './theme/muiTheme';
+import './shared/theme/bud-modern.tokens.css';
+import './shared/theme/bud-modern.skin.css';
+import { budModernTheme } from './shared/theme/budModernTheme';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ThemeProvider theme={muiTheme}>
+    <ThemeProvider theme={budModernTheme}>
       <CssBaseline />
       <AuthProvider>
         <BrowserRouter>

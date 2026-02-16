@@ -40,7 +40,7 @@ export class ObjectsController {
   @Post()
   create(@Req() req: any, @Body() dto: CreateObjectDto) {
     const userId = this.getUserId(req);
-    return this.objectsService.create(userId, dto);
+    return this.objectsService.create(userId, dto, { clientOpId: req.clientOpId });
   }
 
   @Permissions('objects:read')
@@ -75,7 +75,7 @@ export class ObjectsController {
   @Patch(':id')
   update(@Req() req: any, @Param('id') id: string, @Body() dto: UpdateObjectDto) {
     const userId = this.getUserId(req);
-    return this.objectsService.update(id, userId, dto);
+    return this.objectsService.update(id, userId, dto, { clientOpId: req.clientOpId });
   }
 
   /** Видалення об'єкта — тільки адмін (system:manage). */
@@ -83,6 +83,6 @@ export class ObjectsController {
   @Delete(':id')
   remove(@Req() req: any, @Param('id') id: string) {
     const userId = this.getUserId(req);
-    return this.objectsService.remove(id, userId);
+    return this.objectsService.remove(id, userId, { clientOpId: req.clientOpId });
   }
 }

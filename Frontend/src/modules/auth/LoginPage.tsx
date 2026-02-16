@@ -9,7 +9,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { useAuth } from './AuthContext';
-import { BRAND } from '../../theme/muiTheme';
+import { BRAND } from '../../shared/theme/budModernTheme';
 
 const LOGIN = {
   primary: BRAND.primary,

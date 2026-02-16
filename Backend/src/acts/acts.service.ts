@@ -1,13 +1,15 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 
 import { Document } from '../documents/document.entity';
 import { Act } from './act.entity';
 import { CreateActFromQuoteDto } from './dto/create-act-from-quote.dto';
 import { CreateActDto } from './dto/create-act.dto';
 import { UpdateActDto } from './dto/update-act.dto';
+import { RealtimeEmitterService } from '../realtime/realtime-emitter.service';
+import { buildPatchForEntity } from '../realtime/invalidate-hints';
 
 type RowType = 'meta' | 'section' | 'work' | 'percent' | 'subtotal';
 
@@ -61,6 +63,8 @@ export class ActsService {
   constructor(
     @InjectRepository(Act) private readonly repo: Repository<Act>,
     @InjectRepository(Document) private readonly documents: Repository<Document>,
+    private readonly dataSource: DataSource,
+    private readonly realtimeEmitter: RealtimeEmitterService,
   ) {}
 
   private sanitizeRows(items: any[] | undefined): ActRow[] {
@@ -275,8 +279,35 @@ export class ActsService {
       status: dto.status ?? 'draft',
     });
 
-    const saved = await this.repo.save(act);
-    return { ...saved, items: computed.items, totalAmount: computed.totalAmount, totalCost: computed.totalCost };
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      const saved = await qr.manager.getRepository(Act).save(act);
+      const patch = buildPatchForEntity('act', 'created', {
+        id: saved.id,
+        projectId: saved.projectId,
+        status: saved.status,
+        actDate: saved.actDate,
+        updatedAt: saved.updatedAt,
+      });
+      await this.realtimeEmitter.emitEntityChangedTx(qr.manager, {
+        eventType: 'entity.created',
+        entityType: 'act',
+        entityId: String(saved.id),
+        projectId: saved.projectId ?? null,
+        actorUserId: uid,
+        updatedAt: saved.updatedAt?.toISOString?.() ?? undefined,
+        patch: patch ?? undefined,
+      });
+      await qr.commitTransaction();
+      return { ...saved, items: computed.items, totalAmount: computed.totalAmount, totalCost: computed.totalCost };
+    } catch (e) {
+      await qr.rollbackTransaction();
+      throw e;
+    } finally {
+      await qr.release();
+    }
   }
 
   async createFromQuote(dto: CreateActFromQuoteDto, req: Request) {
@@ -338,8 +369,35 @@ export class ActsService {
       status: 'draft',
     });
 
-    const saved = await this.repo.save(act);
-    return { ...saved, items: computed.items, totalAmount: computed.totalAmount, totalCost: computed.totalCost };
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      const saved = await qr.manager.getRepository(Act).save(act);
+      const patch = buildPatchForEntity('act', 'created', {
+        id: saved.id,
+        projectId: saved.projectId,
+        status: saved.status,
+        actDate: saved.actDate,
+        updatedAt: saved.updatedAt,
+      });
+      await this.realtimeEmitter.emitEntityChangedTx(qr.manager, {
+        eventType: 'entity.created',
+        entityType: 'act',
+        entityId: String(saved.id),
+        projectId: saved.projectId ?? null,
+        actorUserId: uid,
+        updatedAt: saved.updatedAt?.toISOString?.() ?? undefined,
+        patch: patch ?? undefined,
+      });
+      await qr.commitTransaction();
+      return { ...saved, items: computed.items, totalAmount: computed.totalAmount, totalCost: computed.totalCost };
+    } catch (e) {
+      await qr.rollbackTransaction();
+      throw e;
+    } finally {
+      await qr.release();
+    }
   }
 
   async update(id: number, dto: UpdateActDto, req: Request) {
@@ -362,13 +420,59 @@ export class ActsService {
     const computed = this.compute(safeRows);
     act.items = computed.items as any;
 
-    const saved = await this.repo.save(act);
-    return { ...saved, items: computed.items, totalAmount: computed.totalAmount, totalCost: computed.totalCost };
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      const saved = await qr.manager.getRepository(Act).save(act);
+      const patch = buildPatchForEntity('act', 'changed', {
+        id: saved.id,
+        projectId: saved.projectId,
+        status: saved.status,
+        actDate: saved.actDate,
+        updatedAt: saved.updatedAt,
+      });
+      await this.realtimeEmitter.emitEntityChangedTx(qr.manager, {
+        eventType: 'entity.changed',
+        entityType: 'act',
+        entityId: String(saved.id),
+        projectId: saved.projectId ?? null,
+        actorUserId: uid,
+        updatedAt: saved.updatedAt?.toISOString?.() ?? undefined,
+        patch: patch ?? undefined,
+      });
+      await qr.commitTransaction();
+      return { ...saved, items: computed.items, totalAmount: computed.totalAmount, totalCost: computed.totalCost };
+    } catch (e) {
+      await qr.rollbackTransaction();
+      throw e;
+    } finally {
+      await qr.release();
+    }
   }
 
   async remove(id: number) {
     const act = await this.repo.findOne({ where: { id } });
     if (!act) throw new NotFoundException('Act not found');
-    await this.repo.remove(act);
+    const projectId = act.projectId;
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      await qr.manager.getRepository(Act).remove(act);
+      await this.realtimeEmitter.emitEntityChangedTx(qr.manager, {
+        eventType: 'entity.deleted',
+        entityType: 'act',
+        entityId: String(id),
+        projectId: projectId ?? null,
+        patch: { op: 'delete' },
+      });
+      await qr.commitTransaction();
+    } catch (e) {
+      await qr.rollbackTransaction();
+      throw e;
+    } finally {
+      await qr.release();
+    }
   }
 }

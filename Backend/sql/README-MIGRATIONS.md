@@ -25,6 +25,9 @@
 | 15 | `2026-02-05_supply_request_templates.sql` | Шаблони заявок на постачання (supply_request_templates, supply_request_template_items) |
 | 16 | `2026-02-05_supply_receipt_substitutions.sql` | Заміни матеріалів у приходах (isSubstitution, original*, substitute*, substitutionReason) |
 | 17 | `2026-02-06_objects_v1_profile_contacts_attachments.sql` | Objects v1: project profile (city, area_m2, tags, access_info, notes), attachments.tag, project_contacts |
+| 18 | `2026-02-06_clients_object_id.sql` | Клієнти: прив'язка до об'єкта (object_id), зберігається на сервері |
+| 19 | `2026-02-06_audit_log_outbox.sql` | audit_log (журнал дій), outbox_events (outbox для realtime bo:invalidate) |
+| 20 | `2026-02-07_outbox_dead_letter_retention.sql` | outbox_events.deadLetteredAt (DLQ) |
 
 Після додавання **нового** SQL-файлу — допишіть його в цю таблицю в кінець і збережіть порядок при наступному запуску міграцій.
 
@@ -66,6 +69,45 @@ for f in 2025-12-27_warehouse_movement_drafts.sql 2025-12-30_attachments_foundat
   psql -h localhost -p 5432 -U postgres -d buduy_crm -f "$f" || exit 1
 done
 ```
+
+## Помилка «треба бути власником таблиці warehouse_movement_drafts»
+
+Якщо `npm run migrate` падає з таким текстом, таблицю створив інший користувач (наприклад postgres), а міграції запускаються під **DB_USER** з `.env`. Потрібно один раз передати власність таблиці саме **DB_USER** (це роль/користувач у PostgreSQL, не назва бази).
+
+```powershell
+# PowerShell: підключись як суперюзер postgres; заміни YOUR_DB_USER на значення DB_USER з .env, DB_NAME — назва бази
+$env:PGPASSWORD = 'пароль_суперюзера_postgres'
+psql -h localhost -U postgres -d DB_NAME -c "ALTER TABLE warehouse_movement_drafts OWNER TO YOUR_DB_USER;"
+```
+
+**Приклад:** якщо в `.env` є `DB_USER=buduy`, `DB_NAME=bud_office`:
+
+```powershell
+psql -h localhost -U postgres -d bud_office -c "ALTER TABLE warehouse_movement_drafts OWNER TO buduy;"
+```
+
+(Пароль postgres потрібно ввести при запиті або задати `$env:PGPASSWORD`.)
+
+### Якщо не знаєте пароль користувача postgres
+
+Змінити власника може лише поточний власник таблиці або суперюзер. Якщо пароль postgres невідомий, можна **один раз** дозволити локальне підключення без пароля:
+
+1. Знайди файл `pg_hba.conf` (на Windows часто: `C:\Program Files\PostgreSQL\<версія>\data\pg_hba.conf`).
+2. Зроби резервну копію: скопіюй файл, наприклад, в `pg_hba.conf.bak`.
+3. У `pg_hba.conf` знайди рядки для `localhost` / `127.0.0.1` з методом `scram-sha-256` або `md5` і **тимчасово** заміни метод на `trust` для IPv4 та IPv6, наприклад:
+   ```
+   host    all    all    127.0.0.1/32    trust
+   host    all    all    ::1/128         trust
+   ```
+4. Перезапусти службу PostgreSQL (Services → PostgreSQL → Restart).
+5. У PowerShell виконай (підстав свій DB_USER та DB_NAME з `.env`):
+   ```powershell
+   psql -h localhost -U postgres -d bud_office -c "ALTER TABLE warehouse_movement_drafts OWNER TO buduy;"
+   ```
+   Пароль вводити не потрібно.
+6. Поверни в `pg_hba.conf` попередні значення (scram-sha-256 або md5), збережи файл, знову перезапусти PostgreSQL.
+
+Детальніше: коментарі в `sql/fix-ownership-warehouse_drafts.sql`.
 
 ## Якщо у додатку «Internal server error» на Фінансах / Реалізації / Виконроб / Аналітиці
 

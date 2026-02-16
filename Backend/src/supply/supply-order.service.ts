@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { SupplyOrder } from './entities/supply-order.entity';
 import { SupplyOrderItem } from './entities/supply-order-item.entity';
 import { SupplyReceipt } from './entities/supply-receipt.entity';
@@ -9,6 +9,8 @@ import { Payable } from './entities/payable.entity';
 import { SupplyAuditService } from './audit.service';
 import { SupplyPurchaseService } from './supply-purchase.service';
 import { CreateSupplyOrderDto, UpdateSupplyOrderDto } from './dto/supply-order.dto';
+import { RealtimeEmitterService } from '../realtime/realtime-emitter.service';
+import { buildPatchForEntity } from '../realtime/invalidate-hints';
 import { MoveItemsDto } from './dto/move-items.dto';
 import { MergeOrdersDto } from './dto/merge-orders.dto';
 import { CreateReceiptQuickDto } from './dto/create-receipt-quick.dto';
@@ -23,6 +25,8 @@ export class SupplyOrderService {
     @InjectRepository(Payable) private readonly payableRepo: Repository<Payable>,
     private readonly audit: SupplyAuditService,
     private readonly purchaseService: SupplyPurchaseService,
+    private readonly dataSource: DataSource,
+    private readonly realtimeEmitter: RealtimeEmitterService,
   ) {}
 
   private computeTotalPlan(items: { qtyPlanned: string; unitPrice: string | null }[]): number {
@@ -174,27 +178,53 @@ export class SupplyOrderService {
       comment: dto.comment ?? null,
       createdById: userId,
     });
-    const saved = await this.orderRepo.save(o);
-    if (dto.items?.length) {
-      for (const row of dto.items) {
-        const hasMaterial = row.materialId != null;
-        const hasName = row.customName != null && String(row.customName).trim() !== '';
-        if (!hasMaterial && !hasName) {
-          throw new BadRequestException('У кожної позиції має бути матеріал (materialId) або найменування (customName).');
+    let saved: SupplyOrder;
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      saved = await qr.manager.getRepository(SupplyOrder).save(o);
+      if (dto.items?.length) {
+        for (const row of dto.items) {
+          const hasMaterial = row.materialId != null;
+          const hasName = row.customName != null && String(row.customName).trim() !== '';
+          if (!hasMaterial && !hasName) {
+            throw new BadRequestException('У кожної позиції має бути матеріал (materialId) або найменування (customName).');
+          }
+          await qr.manager.getRepository(SupplyOrderItem).save(
+            this.orderItemRepo.create({
+              orderId: saved.id,
+              sourceRequestItemId: row.sourceRequestItemId ?? null,
+              materialId: row.materialId ?? null,
+              customName: row.customName ?? null,
+              unit: row.unit,
+              qtyPlanned: String(row.qtyPlanned),
+              unitPrice: row.unitPrice != null ? String(row.unitPrice) : null,
+              note: row.note ?? null,
+            }),
+          );
         }
-        await this.orderItemRepo.save(
-          this.orderItemRepo.create({
-            orderId: saved.id,
-            sourceRequestItemId: row.sourceRequestItemId ?? null,
-            materialId: row.materialId ?? null,
-            customName: row.customName ?? null,
-            unit: row.unit,
-            qtyPlanned: String(row.qtyPlanned),
-            unitPrice: row.unitPrice != null ? String(row.unitPrice) : null,
-            note: row.note ?? null,
-          }),
-        );
       }
+      const patch = buildPatchForEntity('order', 'created', {
+        id: saved.id,
+        status: saved.status,
+        updatedAt: saved.updatedAt,
+      });
+      await this.realtimeEmitter.emitEntityChangedTx(qr.manager, {
+        eventType: 'entity.created',
+        entityType: 'supply_order',
+        entityId: String(saved.id),
+        projectId: saved.projectId ?? null,
+        actorUserId: userId,
+        updatedAt: saved.updatedAt?.toISOString?.() ?? undefined,
+        patch: patch ?? undefined,
+      });
+      await qr.commitTransaction();
+    } catch (e) {
+      await qr.rollbackTransaction();
+      throw e;
+    } finally {
+      await qr.release();
     }
     await this.audit.log({
       entityType: 'supply_order',
@@ -216,30 +246,55 @@ export class SupplyOrderService {
     if (dto.deliveryDatePlanned !== undefined) o.deliveryDatePlanned = dto.deliveryDatePlanned ?? null;
     if (dto.paymentTerms !== undefined) o.paymentTerms = dto.paymentTerms ?? null;
     if (dto.comment !== undefined) o.comment = dto.comment ?? null;
-    await this.orderRepo.save(o);
-    if (dto.items !== undefined) {
-      for (const row of dto.items) {
-        const hasMaterial = row.materialId != null;
-        const hasName = row.customName != null && String(row.customName).trim() !== '';
-        if (!hasMaterial && !hasName) {
-          throw new BadRequestException('У кожної позиції має бути матеріал (materialId) або найменування (customName).');
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      const saved = await qr.manager.getRepository(SupplyOrder).save(o);
+      if (dto.items !== undefined) {
+        for (const row of dto.items) {
+          const hasMaterial = row.materialId != null;
+          const hasName = row.customName != null && String(row.customName).trim() !== '';
+          if (!hasMaterial && !hasName) {
+            throw new BadRequestException('У кожної позиції має бути матеріал (materialId) або найменування (customName).');
+          }
+        }
+        await qr.manager.getRepository(SupplyOrderItem).delete({ orderId: id });
+        for (const row of dto.items) {
+          await qr.manager.getRepository(SupplyOrderItem).save(
+            this.orderItemRepo.create({
+              orderId: id,
+              sourceRequestItemId: row.sourceRequestItemId ?? null,
+              materialId: row.materialId ?? null,
+              customName: row.customName ?? null,
+              unit: row.unit,
+              qtyPlanned: String(row.qtyPlanned),
+              unitPrice: row.unitPrice != null ? String(row.unitPrice) : null,
+              note: row.note ?? null,
+            }),
+          );
         }
       }
-      await this.orderItemRepo.delete({ orderId: id });
-      for (const row of dto.items) {
-        await this.orderItemRepo.save(
-          this.orderItemRepo.create({
-            orderId: id,
-            sourceRequestItemId: row.sourceRequestItemId ?? null,
-            materialId: row.materialId ?? null,
-            customName: row.customName ?? null,
-            unit: row.unit,
-            qtyPlanned: String(row.qtyPlanned),
-            unitPrice: row.unitPrice != null ? String(row.unitPrice) : null,
-            note: row.note ?? null,
-          }),
-        );
-      }
+      const patch = buildPatchForEntity('order', 'changed', {
+        id: saved.id,
+        status: saved.status,
+        updatedAt: saved.updatedAt,
+      });
+      await this.realtimeEmitter.emitEntityChangedTx(qr.manager, {
+        eventType: 'entity.changed',
+        entityType: 'supply_order',
+        entityId: String(id),
+        projectId: saved.projectId ?? null,
+        actorUserId: userId,
+        updatedAt: saved.updatedAt?.toISOString?.() ?? undefined,
+        patch: patch ?? undefined,
+      });
+      await qr.commitTransaction();
+    } catch (e) {
+      await qr.rollbackTransaction();
+      throw e;
+    } finally {
+      await qr.release();
     }
     await this.audit.log({
       entityType: 'supply_order',
@@ -256,7 +311,32 @@ export class SupplyOrderService {
     if (!o) throw new NotFoundException('Supply order not found');
     const prev = o.status;
     o.status = status;
-    await this.orderRepo.save(o);
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      const saved = await qr.manager.getRepository(SupplyOrder).save(o);
+      const patch = buildPatchForEntity('order', 'changed', {
+        id: saved.id,
+        status: saved.status,
+        updatedAt: saved.updatedAt,
+      });
+      await this.realtimeEmitter.emitEntityChangedTx(qr.manager, {
+        eventType: 'entity.changed',
+        entityType: 'supply_order',
+        entityId: String(id),
+        projectId: saved.projectId ?? null,
+        actorUserId: userId,
+        updatedAt: saved.updatedAt?.toISOString?.() ?? undefined,
+        patch: patch ?? undefined,
+      });
+      await qr.commitTransaction();
+    } catch (e) {
+      await qr.rollbackTransaction();
+      throw e;
+    } finally {
+      await qr.release();
+    }
     await this.audit.log({
       entityType: 'supply_order',
       entityId: id,
@@ -273,24 +353,44 @@ export class SupplyOrderService {
     const o = await this.orderRepo.findOne({ where: { id } });
     if (!o) throw new NotFoundException('Supply order not found');
     const isAdmin = options?.isAdmin === true;
+    const projectId = o.projectId;
     const receipts = await this.receiptRepo.find({ where: { sourceOrderId: id }, select: ['id'] });
     if (receipts.length > 0 && !isAdmin) {
       throw new BadRequestException('Неможливо видалити замовлення, по якому вже є приходи.');
     }
-    if (isAdmin && receipts.length > 0) {
-      const receiptIds = receipts.map((r) => r.id);
-      const payables = await this.payableRepo.find({
-        where: { sourceReceiptId: In(receiptIds) },
-        select: ['id'],
-      });
-      for (const p of payables) {
-        await this.payableRepo.delete(p.id);
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      if (isAdmin && receipts.length > 0) {
+        const receiptIds = receipts.map((r) => r.id);
+        const payables = await this.payableRepo.find({
+          where: { sourceReceiptId: In(receiptIds) },
+          select: ['id'],
+        });
+        for (const p of payables) {
+          await qr.manager.getRepository(Payable).delete(p.id);
+        }
+        await qr.manager.getRepository(SupplyReceiptItem).delete({ receiptId: In(receiptIds) });
+        await qr.manager.getRepository(SupplyReceipt).delete({ id: In(receiptIds) });
       }
-      await this.receiptItemRepo.delete({ receiptId: In(receiptIds) });
-      await this.receiptRepo.delete({ id: In(receiptIds) });
+      await qr.manager.getRepository(SupplyOrderItem).delete({ orderId: id });
+      await qr.manager.getRepository(SupplyOrder).delete(id);
+      await this.realtimeEmitter.emitEntityChangedTx(qr.manager, {
+        eventType: 'entity.deleted',
+        entityType: 'supply_order',
+        entityId: String(id),
+        projectId: projectId ?? null,
+        actorUserId: userId,
+        patch: { op: 'delete' },
+      });
+      await qr.commitTransaction();
+    } catch (e) {
+      await qr.rollbackTransaction();
+      throw e;
+    } finally {
+      await qr.release();
     }
-    await this.orderItemRepo.delete({ orderId: id });
-    await this.orderRepo.delete(id);
     await this.audit.log({
       entityType: 'supply_order',
       entityId: id,

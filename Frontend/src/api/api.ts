@@ -12,6 +12,14 @@ api.interceptors.request.use((config) => {
     config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
   }
+  const method = (config.method || '').toLowerCase();
+  if (['post', 'patch', 'put', 'delete'].includes(method)) {
+    config.headers = config.headers || {};
+    config.headers['x-client-op-id'] =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
   return config;
 });
 

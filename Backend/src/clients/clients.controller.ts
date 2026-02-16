@@ -33,7 +33,7 @@ export class ClientController {
   @Permissions('sales:write')
   @Post()
   create(@Req() req: AuthedRequest, @Body() dto: CreateClientDto) {
-    return this.clientService.create(req.user.id, dto);
+    return this.clientService.create(req.user.id, dto, { clientOpId: (req as any).clientOpId });
   }
 
   @Permissions('sales:read')
@@ -55,12 +55,12 @@ export class ClientController {
     @Param('id') id: string,
     @Body() dto: UpdateClientDto,
   ) {
-    return this.clientService.update(id, req.user.id, dto);
+    return this.clientService.update(id, req.user.id, dto, { clientOpId: (req as any).clientOpId });
   }
 
   @Permissions('sales:approve')
   @Delete(':id')
   remove(@Req() req: AuthedRequest, @Param('id') id: string) {
-    return this.clientService.remove(id, req.user.id);
+    return this.clientService.remove(id, req.user.id, { clientOpId: (req as any).clientOpId });
   }
 }

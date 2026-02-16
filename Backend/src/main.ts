@@ -6,10 +6,30 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { existsSync } from 'fs';
 import { join } from 'path';
+import { getRedisOptions, isRedisEnabled } from './infra/redis/redis.config';
+import { RedisIoAdapter } from './infra/redis/redis-io.adapter';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  app.useWebSocketAdapter(new IoAdapter(app));
+
+  if (isRedisEnabled()) {
+    const { createAdapter } = await import('@socket.io/redis-adapter');
+    const Redis = (await import('ioredis')).default;
+    const opts = getRedisOptions();
+    const pub = opts.url
+      ? new Redis(opts.url, { maxRetriesPerRequest: null })
+      : new Redis({
+          host: opts.host ?? 'localhost',
+          port: opts.port ?? 6379,
+          password: opts.password,
+          maxRetriesPerRequest: null,
+        });
+    const sub = pub.duplicate();
+    const redisAdapter = createAdapter(pub, sub);
+    app.useWebSocketAdapter(new RedisIoAdapter(app, redisAdapter));
+  } else {
+    app.useWebSocketAdapter(new IoAdapter(app));
+  }
 
   app.setGlobalPrefix('api');
 

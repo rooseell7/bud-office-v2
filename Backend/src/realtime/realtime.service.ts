@@ -12,8 +12,34 @@ export class RealtimeService {
 
   constructor(private readonly activityService: ActivityService) {}
 
+  private _publisherRunning = true;
+
   setServer(server: Server): void {
     this.server = server;
+  }
+
+  getServer(): Server | null {
+    return this.server;
+  }
+
+  setPublisherRunning(running: boolean): void {
+    this._publisherRunning = running;
+  }
+
+  getPublisherRunning(): boolean {
+    return this._publisherRunning;
+  }
+
+  /** Approximate count of connected WS clients (for health). */
+  getWsClientsCount(): number {
+    if (!this.server?.sockets?.sockets) return 0;
+    return this.server.sockets.sockets.size;
+  }
+
+  /** Approximate count of rooms (for health). */
+  getWsRoomsCount(): number {
+    if (!this.server?.sockets?.adapter?.rooms) return 0;
+    return this.server.sockets.adapter.rooms.size;
   }
 
   /**

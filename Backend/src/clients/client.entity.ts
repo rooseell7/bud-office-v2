@@ -28,6 +28,10 @@ export class Client {
   @Column({ type: 'text', nullable: true })
   note?: string;
 
+  /** Прив'язка до об'єкта (project) — зберігається на сервері, доступна всім. */
+  @Column({ type: 'int', name: 'object_id', nullable: true })
+  objectId: number | null = null;
+
   /**
    * В БД колонка має бути user_id (snake_case).
    * nullable залишаємо, як ти і планував.

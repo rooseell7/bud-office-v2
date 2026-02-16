@@ -36,7 +36,9 @@ import {
 import { getObjects, type ObjectDto } from '../../api/objects';
 import { listDocuments, type DocumentDto } from '../../api/documents';
 import { useAuth } from '../../modules/auth/context/AuthContext';
-
+import { useRealtime } from '../../realtime/RealtimeContext';
+import { buildDraftKey } from '../../shared/drafts/draftsApi';
+import { useDraft } from '../../shared/drafts/useDraft';
 import { n } from '../../modules/shared/sheet/utils';
 
 function fmtDate(value?: string | null): string {
@@ -117,6 +119,33 @@ export const ActsPage: React.FC = () => {
   const [filterProject, setFilterProject] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [edit, setEdit] = useState<EditState>({ open: false });
+  const realtime = useRealtime();
+
+  const draftKey = useMemo(() => {
+    if (!edit.open) return '';
+    const pid = Number(edit.projectId);
+    return buildDraftKey({
+      entityType: 'act',
+      mode: edit.mode,
+      projectId: Number.isFinite(pid) && pid > 0 ? pid : 0,
+      entityId: edit.mode === 'edit' && edit.id != null ? String(edit.id) : null,
+    });
+  }, [edit.open, edit.projectId, edit.mode, edit.id]);
+
+  const {
+    hasDraft,
+    loading: draftLoading,
+    saveDraftData,
+    clearDraftData,
+    restoreFromDraft,
+  } = useDraft<EditState & { open: true }>({
+    key: draftKey,
+    enabled: edit.open && !!draftKey,
+    projectId: Number(edit.projectId) > 0 ? Number(edit.projectId) : undefined,
+    entityType: 'act',
+    entityId: edit.mode === 'edit' && edit.id != null ? String(edit.id) : undefined,
+    scopeType: 'project',
+  });
 
   // deep-link підтримка: /delivery/acts?projectId=123
   useEffect(() => {
@@ -191,6 +220,16 @@ export const ActsPage: React.FC = () => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canRead]);
+
+  useEffect(() => {
+    if (!edit.open || !draftKey) return;
+    saveDraftData({ ...edit } as any);
+  }, [edit.open, draftKey, edit.projectId, edit.foremanId, edit.quoteId, edit.actDate, edit.status, edit.itemsJson, saveDraftData]);
+
+  useEffect(() => {
+    if (!realtime) return;
+    return realtime.subscribeInvalidateAll(load);
+  }, [realtime]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -296,12 +335,13 @@ export const ActsPage: React.FC = () => {
         const created = Number.isFinite(qid) && qid > 0
           ? await createActFromQuote({ quoteId: qid, projectId: pid, actDate: edit.actDate })
           : await createAct(dto);
+        await clearDraftData();
         closeDialog();
         await load();
         if (created?.id) nav(`/delivery/acts/${created.id}`);
       } else {
-        // редагування відбувається на детальній сторінці
-        await updateAct(Number(edit.id), dto);
+        await updateAct(Number(edit.id!), dto);
+        await clearDraftData();
         closeDialog();
         await load();
       }
@@ -477,6 +517,18 @@ export const ActsPage: React.FC = () => {
       <Dialog open={edit.open} onClose={closeDialog} fullWidth maxWidth="md">
         <DialogTitle>{edit.open && edit.mode === 'create' ? 'Створити акт' : 'Редагувати акт'}</DialogTitle>
         <DialogContent>
+          {hasDraft && !draftLoading && edit.open ? (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Є збережена чернетка.{' '}
+              <Button size="small" onClick={() => restoreFromDraft((p) => setEdit({ ...edit, ...p }))}>
+                Відновити
+              </Button>
+              {' / '}
+              <Button size="small" onClick={() => clearDraftData()}>
+                Скинути
+              </Button>
+            </Alert>
+          ) : null}
           {dialogError && (
             <Alert severity="error" sx={{ mt: 1, mb: 2 }}>
               {dialogError}

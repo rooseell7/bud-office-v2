@@ -1,0 +1,19 @@
+-- Виправити власника таблиці warehouse_movement_drafts (один раз під суперюзером postgres).
+-- Помилка: "треба бути власником таблиці warehouse_movement_drafts" при npm run migrate.
+--
+-- Власником має бути саме DB_USER з .env (роль у PostgreSQL), не назва бази (DB_NAME).
+--
+-- 1. Відкрий Backend/.env і подивись DB_USER (наприклад buduy) та DB_NAME (наприклад bud_office).
+-- 2. Підключись до БД як суперюзер (postgres) і виконай (заміни your_db_user на DB_USER):
+--
+--    ALTER TABLE warehouse_movement_drafts OWNER TO your_db_user;
+--
+-- Приклад для DB_USER=buduy, DB_NAME=bud_office (PowerShell):
+--
+--   $env:PGPASSWORD = 'пароль_postgres'
+--   psql -h localhost -U postgres -d bud_office -c "ALTER TABLE warehouse_movement_drafts OWNER TO buduy;"
+--
+-- Якщо пароль postgres невідомий — див. розділ "Якщо не знаєте пароль postgres" у README-MIGRATIONS.md
+-- (тимчасово trust у pg_hba.conf, виконати ALTER, потім повернути налаштування).
+--
+-- Після успішного ALTER npm run migrate має проходити без цієї помилки.

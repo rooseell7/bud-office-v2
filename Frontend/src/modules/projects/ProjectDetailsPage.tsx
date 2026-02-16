@@ -21,6 +21,7 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  TextField,
   Typography,
 } from '@mui/material';
 
@@ -34,6 +35,7 @@ import { listInvoices, type Invoice } from '../invoices/api/invoices.api';
 import { getProjectSummary, getTransactions, createTransactionIn, createTransactionOut, type ProjectSummaryDto, type TransactionDto } from '../../api/finance';
 import { TransactionInModal } from '../finance/components/TransactionInModal';
 import { TransactionOutModal } from '../finance/components/TransactionOutModal';
+import { ProjectActivityPanel } from '../activity/ProjectActivityPanel';
 
 import { n } from '../shared/sheet/utils';
 
@@ -83,6 +85,13 @@ const ProjectDetailsPage: React.FC = () => {
   const [foremanId, setForemanId] = useState<number | ''>('');
   const [savingForeman, setSavingForeman] = useState(false);
 
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editStatus, setEditStatus] = useState('');
+  const [editType, setEditType] = useState('');
+  const [savingMain, setSavingMain] = useState(false);
+
   const [financeSummary, setFinanceSummary] = useState<ProjectSummaryDto | null>(null);
   const [financeTransactions, setFinanceTransactions] = useState<TransactionDto[]>([]);
   const [financeInModal, setFinanceInModal] = useState(false);
@@ -91,6 +100,8 @@ const ProjectDetailsPage: React.FC = () => {
   const canWrite = can('objects:write') || can('projects:write');
   const canFinanceRead = can('finance:read');
   const canFinanceWrite = can('finance:write');
+  const canActivityRead = can('activity:read:global');
+  const activityTabIndex = canFinanceRead ? 4 : 3;
 
   useEffect(() => {
     if (!Number.isFinite(objectId) || objectId <= 0) {
@@ -107,6 +118,10 @@ const ProjectDetailsPage: React.FC = () => {
         const data = res.data ?? null;
         setObj(data);
         setForemanId(data?.foremanId ?? '');
+        setEditName(data?.name ?? '');
+        setEditAddress(data?.address ?? '');
+        setEditStatus(data?.status ?? '');
+        setEditType(data?.type ?? '');
 
         const [candidates] = await Promise.all([
           getForemanCandidates(),
@@ -185,6 +200,7 @@ const ProjectDetailsPage: React.FC = () => {
           <Tab label={`Акти (${acts.length})`} {...a11yProps(1)} />
           <Tab label={`Накладні (${invoices.length})`} {...a11yProps(2)} />
           {canFinanceRead && <Tab label="Фінанси" {...a11yProps(3)} />}
+          {canActivityRead && <Tab label="Активність" {...a11yProps(activityTabIndex)} />}
         </Tabs>
         <Divider />
         <CardContent>
@@ -195,29 +211,143 @@ const ProjectDetailsPage: React.FC = () => {
               ) : (
                 <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
                       Назва
                     </Typography>
-                    <Typography sx={{ fontWeight: 700 }}>{obj.name}</Typography>
+                    {canWrite && isEditing ? (
+                      <TextField
+                        size="small"
+                        fullWidth
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        placeholder="Назва обʼєкта"
+                      />
+                    ) : (
+                      <Typography sx={{ fontWeight: 700 }}>{obj.name}</Typography>
+                    )}
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
                       Адреса
                     </Typography>
-                    <Typography sx={{ fontWeight: 700 }}>{obj.address || '—'}</Typography>
+                    {canWrite && isEditing ? (
+                      <TextField
+                        size="small"
+                        fullWidth
+                        value={editAddress}
+                        onChange={(e) => setEditAddress(e.target.value)}
+                        placeholder="Адреса"
+                      />
+                    ) : (
+                      <Typography sx={{ fontWeight: 700 }}>{obj.address || '—'}</Typography>
+                    )}
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
                       Статус
                     </Typography>
-                    <Typography sx={{ fontWeight: 700 }}>{obj.status || '—'}</Typography>
+                    {canWrite && isEditing ? (
+                      <FormControl size="small" fullWidth>
+                        <Select
+                          value={editStatus}
+                          onChange={(e) => setEditStatus(e.target.value)}
+                          displayEmpty
+                        >
+                          <MenuItem value="">— не обрано —</MenuItem>
+                          <MenuItem value="planned">Планується</MenuItem>
+                          <MenuItem value="in_progress">В роботі</MenuItem>
+                          <MenuItem value="paused">Пауза</MenuItem>
+                          <MenuItem value="done">Завершено</MenuItem>
+                          <MenuItem value="archived">Архів</MenuItem>
+                          <MenuItem value="lead">Лід</MenuItem>
+                        </Select>
+                      </FormControl>
+                    ) : (
+                      <Typography sx={{ fontWeight: 700 }}>{obj.status || '—'}</Typography>
+                    )}
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
                       Тип
                     </Typography>
-                    <Typography sx={{ fontWeight: 700 }}>{obj.type || '—'}</Typography>
+                    {canWrite && isEditing ? (
+                      <FormControl size="small" fullWidth>
+                        <Select
+                          value={editType}
+                          onChange={(e) => setEditType(e.target.value)}
+                          displayEmpty
+                        >
+                          <MenuItem value="">— не обрано —</MenuItem>
+                          <MenuItem value="apartment">Квартира</MenuItem>
+                          <MenuItem value="house">Будинок</MenuItem>
+                          <MenuItem value="commercial">Комерція</MenuItem>
+                          <MenuItem value="other">Інше</MenuItem>
+                        </Select>
+                      </FormControl>
+                    ) : (
+                      <Typography sx={{ fontWeight: 700 }}>{obj.type || '—'}</Typography>
+                    )}
                   </Box>
+                  {canWrite && (
+                    <Box sx={{ gridColumn: '1 / -1', display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                      {isEditing ? (
+                        <>
+                          <Button
+                            variant="contained"
+                            size="small"
+                            disabled={savingMain}
+                            onClick={async () => {
+                              setSavingMain(true);
+                              try {
+                                await updateObject(objectId, {
+                                  name: editName.trim() || obj.name,
+                                  address: editAddress.trim() || null,
+                                  status: editStatus || undefined,
+                                  type: editType || null,
+                                });
+                                setObj((o) =>
+                                  o
+                                    ? {
+                                        ...o,
+                                        name: editName.trim() || o.name,
+                                        address: editAddress.trim() || null,
+                                        status: editStatus || null,
+                                        type: editType || null,
+                                      }
+                                    : null
+                                );
+                                setIsEditing(false);
+                              } catch (e: any) {
+                                setError(e?.response?.data?.message || 'Помилка збереження');
+                              } finally {
+                                setSavingMain(false);
+                              }
+                            }}
+                          >
+                            {savingMain ? 'Збереження…' : 'Зберегти зміни'}
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            disabled={savingMain}
+                            onClick={() => {
+                              setEditName(obj?.name ?? '');
+                              setEditAddress(obj?.address ?? '');
+                              setEditStatus(obj?.status ?? '');
+                              setEditType(obj?.type ?? '');
+                              setIsEditing(false);
+                            }}
+                          >
+                            Скасувати
+                          </Button>
+                        </>
+                      ) : (
+                        <Button variant="outlined" size="small" onClick={() => setIsEditing(true)}>
+                          Редагувати дані обʼєкта
+                        </Button>
+                      )}
+                    </Box>
+                  )}
                   <Box sx={{ gridColumn: '1 / -1' }}>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
                       Виконроб
@@ -382,6 +512,11 @@ const ProjectDetailsPage: React.FC = () => {
             </Box>
           )}
 
+          {canActivityRead && tab === activityTabIndex && (
+            <Box sx={{ py: 1 }}>
+              <ProjectActivityPanel projectId={objectId} />
+            </Box>
+          )}
           {canFinanceRead && tab === 3 && (
             <Box>
               {financeSummary != null && (

@@ -33,3 +33,12 @@ nginx/
 *.njsproj
 *.sln
 *.sw?
+
+# ZIP-бекапи проєкту (створюються make-backup.ps1)
+BUD_office_backup_*.zip
+
+# Локальна папка бекапів (куди make-backup.ps1 зберігає архіви)
+_backups/
+
+# Помилкові файли (наприклад, випадково створені)
+Backend/\{

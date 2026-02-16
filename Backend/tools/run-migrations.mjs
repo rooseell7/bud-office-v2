@@ -34,6 +34,11 @@ const MIGRATIONS_ORDER = [
   '2026-02-06_sales_stage_canonical.sql',
   '2026-02-06_project_next_actions.sql',
   '2026-02-06_objects_v1_profile_contacts_attachments.sql',
+  '2026-02-06_clients_object_id.sql',
+  '2026-02-06_audit_log_outbox.sql',
+  '2026-02-07_outbox_dead_letter_retention.sql',
+  '2026-02-07_drafts.sql',
+  '2026-02-07_notifications.sql',
 ];
 
 function loadEnv() {

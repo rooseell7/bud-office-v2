@@ -6,6 +6,7 @@ export type ObjectDto = {
   id: number;
   name: string;
   address?: string | null;
+  type?: string | null;
 
   clientId?: number | null;
   clientName?: string | null;

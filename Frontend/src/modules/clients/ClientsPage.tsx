@@ -28,6 +28,7 @@ import { getAxiosErrorMessage } from '../../shared/httpError';
 import { createClient, deleteClient, fetchClients, updateClient } from './api';
 import { getObjects, type ObjectDto } from '../../api/objects';
 import { lsGetJson, lsSetJson } from '../../shared/localStorageJson';
+import { useRealtime } from '../../realtime/RealtimeContext';
 
 const LS_CLIENT_META_KEY = 'buduy.clients.meta.v1';
 
@@ -73,7 +74,7 @@ function toEditModel(c?: Client, meta?: ClientMeta): EditModel {
     phone: c?.phone ?? '',
     email: (c?.email ?? '') as string,
     note: (c?.note ?? '') as string,
-    objectId: (meta?.objectId ?? null) as number | null,
+    objectId: (c?.objectId ?? meta?.objectId ?? null) as number | null,
     companyName: meta?.requisites?.companyName ?? '',
     edrpou: meta?.requisites?.edrpou ?? '',
     iban: meta?.requisites?.iban ?? '',
@@ -95,6 +96,7 @@ export default function ClientsPage() {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [model, setModel] = useState<EditModel>(toEditModel());
+  const realtime = useRealtime();
 
   async function load() {
     setLoading(true);
@@ -115,6 +117,11 @@ export default function ClientsPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!realtime) return;
+    return realtime.subscribeInvalidateAll(load);
+  }, [realtime]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -141,7 +148,6 @@ export default function ClientsPage() {
   function persistMeta(id: string, m: EditModel) {
     const next: ClientMetaMap = { ...metaMap };
     next[id] = {
-      objectId: m.objectId,
       requisites: {
         companyName: m.companyName,
         edrpou: m.edrpou,
@@ -168,6 +174,7 @@ export default function ClientsPage() {
         phone: model.phone.trim(),
         email: model.email.trim() ? model.email.trim() : null,
         note: model.note.trim() ? model.note.trim() : null,
+        objectId: model.objectId ?? null,
       };
 
       if (model.id) {
@@ -271,8 +278,8 @@ export default function ClientsPage() {
                 </thead>
                 <tbody>
                   {filtered.map((c) => {
-                    const meta = metaMap[c.id];
-                    const objName = meta?.objectId ? objectsById.get(Number(meta.objectId))?.name : '';
+                    const objectId = c.objectId ?? metaMap[c.id]?.objectId;
+                    const objName = objectId ? objectsById.get(Number(objectId))?.name : '';
                     return (
                       <tr key={c.id}>
                         <td style={{ padding: 8 }}>{c.name}</td>
@@ -335,7 +342,7 @@ export default function ClientsPage() {
                 value={model.objectId ? objectsById.get(Number(model.objectId)) ?? null : null}
                 onChange={(_, v) => setModel((p) => ({ ...p, objectId: v ? Number(v.id) : null }))}
                 renderInput={(params) => (
-                  <TextField {...params} label="Прив'язка до об'єкта" helperText="Локально (зберігається в цьому браузері)" />
+                  <TextField {...params} label="Прив'язка до об'єкта" helperText="Зберігається на сервері, доступно всім користувачам" />
                 )}
               />
             </Stack>

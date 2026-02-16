@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   Alert,
@@ -30,6 +30,9 @@ import { createWarehouseMovement } from '../../../api/warehouse.movements';
 
 import api from '../../../api/api';
 
+import { buildDraftKey } from '../../../shared/drafts/draftsApi';
+import { useDraft } from '../../../shared/drafts/useDraft';
+
 import type { MaterialDto } from '../../../api/materials';
 import { getMaterials } from '../../../api/materials';
 
@@ -43,11 +46,9 @@ type WarehouseLike = {
 type Props = {
   open: boolean;
   warehouseId: number;
+  projectId?: number; // for unified draft key (APPENDIX D)
 
-  // If you want to lock the type (e.g. user clicked "+ IN"), pass defaultType.
   defaultType?: MovementType;
-
-  // Permissions from parent
   canWrite: boolean;
   canTransfer: boolean;
 
@@ -74,6 +75,7 @@ function normalizeWarehouses(input: unknown): WarehouseLike[] {
 export default function MovementCreateDialog({
   open,
   warehouseId,
+  projectId = 0,
   defaultType,
   canWrite,
   canTransfer,
@@ -83,21 +85,12 @@ export default function MovementCreateDialog({
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // server draft
-  const [draftId, setDraftId] = useState<number | null>(null);
-  const [draftLoaded, setDraftLoaded] = useState(false);
-  const saveTimer = useRef<number | null>(null);
-
   const [type, setType] = useState<MovementType>(defaultType ?? 'IN');
-
   const [docNo, setDocNo] = useState('');
   const [objectName, setObjectName] = useState('');
   const [counterpartyName, setCounterpartyName] = useState('');
   const [note, setNote] = useState('');
-
-  // TRANSFER
   const [toWarehouseId, setToWarehouseId] = useState<number | null>(null);
-
   const [items, setItems] = useState<CreateWarehouseMovementItemDto[]>([
     { materialId: 0, qty: 0, price: null, unit: '' },
   ]);
@@ -105,74 +98,100 @@ export default function MovementCreateDialog({
   const [materials, setMaterials] = useState<MaterialDto[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseLike[]>([]);
 
+  const draftKey = useMemo(
+    () =>
+      open && isValidId(warehouseId)
+        ? buildDraftKey({
+            entityType: 'warehouse_movement',
+            mode: 'create',
+            projectId: projectId > 0 ? projectId : 0,
+          })
+        : '',
+    [open, warehouseId, projectId],
+  );
+
+  const {
+    hasDraft,
+    loading: draftLoading,
+    saveDraftData,
+    clearDraftData,
+    restoreFromDraft,
+  } = useDraft<{
+    type: MovementType;
+    docNo: string;
+    objectName: string;
+    counterpartyName: string;
+    note: string;
+    toWarehouseId: number | null;
+    items: CreateWarehouseMovementItemDto[];
+  }>({
+    key: draftKey,
+    enabled: open && !!draftKey,
+    projectId: projectId > 0 ? projectId : undefined,
+    entityType: 'warehouse_movement',
+    scopeType: 'project',
+  });
+
   useEffect(() => {
     if (!open) return;
-
     let cancelled = false;
-
     (async () => {
-      // materials
       try {
         const mats = await getMaterials();
         if (!cancelled) setMaterials(Array.isArray(mats) ? mats : []);
       } catch {
         if (!cancelled) setMaterials([]);
       }
-
-      // warehouses (via axios instance, no extra module import)
       try {
         const res = await api.get<unknown>('/warehouses');
         if (!cancelled) setWarehouses(normalizeWarehouses((res as any)?.data));
       } catch {
         if (!cancelled) setWarehouses([]);
       }
-
-      // draft (server)
-      try {
-        const dres = await api.get(`/warehouse/movements/draft/${warehouseId}`);
-        const d = (dres as any)?.data ?? dres;
-        if (!cancelled) {
-          if (d && typeof d === 'object' && (d as any).payload) {
-            setDraftId(Number((d as any).id) || null);
-            const p = (d as any).payload || {};
-            // відновлюємо тільки якщо payload схожий на форму
-            if (p && typeof p === 'object') {
-              setType((p.type as MovementType) || (defaultType ?? 'IN'));
-              setDocNo(String(p.docNo ?? ''));
-              setObjectName(String(p.objectName ?? ''));
-              setCounterpartyName(String(p.counterpartyName ?? ''));
-              setNote(String(p.note ?? ''));
-              setToWarehouseId(p.toWarehouseId == null ? null : Number(p.toWarehouseId));
-              if (Array.isArray(p.items) && p.items.length) {
-                setItems(
-                  p.items.map((it: any) => ({
-                    materialId: it?.materialId ?? null,
-                    qty: it?.qty ?? 0,
-                    price: it?.price ?? null,
-                    unit: it?.unit ?? null,
-                  })),
-                );
-              }
-            }
-          } else {
-            setDraftId(null);
-          }
-          setDraftLoaded(true);
-        }
-      } catch {
-        if (!cancelled) {
-          setDraftId(null);
-          setDraftLoaded(true);
-        }
-      }
     })();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [open]);
 
   const typeLocked = useMemo(() => Boolean(defaultType), [defaultType]);
+
+  const buildDraftPayload = useCallback(
+    () => ({
+      type,
+      docNo,
+      objectName,
+      counterpartyName,
+      note,
+      toWarehouseId: type === 'TRANSFER' ? toWarehouseId : null,
+      items,
+    }),
+    [type, docNo, objectName, counterpartyName, note, toWarehouseId, items],
+  );
+
+  useEffect(() => {
+    if (!open || !draftKey) return;
+    saveDraftData(buildDraftPayload());
+  }, [open, draftKey, buildDraftPayload, saveDraftData]);
+
+  const handleRestore = useCallback(() => {
+    restoreFromDraft((p) => {
+      setType(p.type ?? (defaultType ?? 'IN'));
+      setDocNo(String(p.docNo ?? ''));
+      setObjectName(String(p.objectName ?? ''));
+      setCounterpartyName(String(p.counterpartyName ?? ''));
+      setNote(String(p.note ?? ''));
+      setToWarehouseId(p.toWarehouseId ?? null);
+      if (Array.isArray(p.items) && p.items.length) {
+        setItems(
+          p.items.map((it: any) => ({
+            materialId: it?.materialId ?? 0,
+            qty: it?.qty ?? 0,
+            price: it?.price ?? null,
+            unit: it?.unit ?? '',
+          })),
+        );
+      }
+    });
+  }, [restoreFromDraft, defaultType]);
 
   const canSubmit = useMemo(() => {
     if (!canWrite) return false;
@@ -193,7 +212,7 @@ export default function MovementCreateDialog({
     return true;
   }, [canWrite, canTransfer, type, warehouseId, toWarehouseId, items]);
 
-  const reset = () => {
+  const reset = useCallback(() => {
     setErr(null);
     setType(defaultType ?? 'IN');
     setDocNo('');
@@ -202,7 +221,7 @@ export default function MovementCreateDialog({
     setNote('');
     setToWarehouseId(null);
     setItems([{ materialId: 0, qty: 0, price: null, unit: '' }]);
-  };
+  }, [defaultType]);
 
   const handleClose = () => {
     if (submitting) return;
@@ -219,81 +238,9 @@ export default function MovementCreateDialog({
   };
 
 
-  // autosave draft to server (debounced)
-  useEffect(() => {
-    if (!open) return;
-    if (!draftLoaded) return;
-    if (!canWrite) return;
-    if (!isValidId(warehouseId)) return;
-
-    // не зберігаємо, якщо форма порожня повністю
-    const hasAny =
-      docNo.trim() ||
-      objectName.trim() ||
-      counterpartyName.trim() ||
-      note.trim() ||
-      (Array.isArray(items) && items.some((it) => isValidId((it as any).materialId) || n((it as any).qty) > 0)) ||
-      (type === 'TRANSFER' && isValidId(toWarehouseId));
-
-    if (!hasAny) return;
-
-    if (saveTimer.current) window.clearTimeout(saveTimer.current);
-
-    saveTimer.current = window.setTimeout(async () => {
-      try {
-        const payload = buildDraftPayload();
-        const res = await api.post('/warehouse/movements/draft', {
-          warehouseId,
-          payload,
-        });
-        const data = (res as any)?.data ?? res;
-        const id = Number((data as any)?.id);
-        if (Number.isFinite(id) && id > 0) setDraftId(id);
-      } catch {
-        // draft save is best-effort; do not block UI
-      }
-    }, 800);
-
-    return () => {
-      if (saveTimer.current) window.clearTimeout(saveTimer.current);
-    };
-  }, [
-    open,
-    draftLoaded,
-    canWrite,
-    warehouseId,
-    type,
-    docNo,
-    objectName,
-    counterpartyName,
-    note,
-    toWarehouseId,
-    items,
-  ]);
-
-  const clearDraft = async () => {
-    try {
-      await api.post(`/warehouse/movements/draft/${warehouseId}/delete`);
-    } catch {
-      // ignore
-    } finally {
-      setDraftId(null);
-    }
-  };
-
   const updateRow = (idx: number, patch: Partial<CreateWarehouseMovementItemDto>) => {
     setItems((p) => p.map((row, i) => (i === idx ? { ...row, ...patch } : row)));
   };
-
-  const buildDraftPayload = () => ({
-    type,
-    docNo,
-    objectName,
-    counterpartyName,
-    note,
-    toWarehouseId: type === 'TRANSFER' ? toWarehouseId : null,
-    items,
-  });
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -320,8 +267,7 @@ export default function MovementCreateDialog({
       };
 
       const created = await createWarehouseMovement(warehouseId, payload);
-      // після створення — прибираємо чернетку
-      await clearDraft();
+      await clearDraftData();
       onCreated(created);
       reset();
       onClose();
@@ -344,11 +290,15 @@ export default function MovementCreateDialog({
 
       
       <DialogContent>
-        {draftId ? (
+        {hasDraft && !draftLoading ? (
           <Alert severity="info" sx={{ mb: 2 }}>
-            Відновлено чернетку. 
-            <Button size="small" onClick={clearDraft} sx={{ ml: 1 }}>
-              Очистити
+            Є збережена чернетка.{' '}
+            <Button size="small" onClick={handleRestore}>
+              Відновити
+            </Button>
+            {' / '}
+            <Button size="small" onClick={() => clearDraftData()}>
+              Скинути
             </Button>
           </Alert>
         ) : null}

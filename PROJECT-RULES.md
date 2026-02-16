@@ -63,4 +63,21 @@
 | Захищені колонки sheet | `Frontend/src/sheet/ui/Grid.tsx` |
 | Safe-save актів | `Backend/README_ACTS_STEP1_V1.md` |
 
+### Layout та навігація
+
+| Компонент | Роль | Використання |
+|-----------|------|--------------|
+| `Frontend/src/modules/layout/MainLayout.tsx` | Основний layout | Активний. Використовується в `App.tsx` для маршрутів `/`, `/admin`. Структура меню в `navGroups`. |
+| `Frontend/src/layouts/AppLayout.tsx` + `Sidebar.tsx` | Legacy layout | Використовується тільки в `_legacy_routes/AppRoutes.tsx`. Не змінювати без явної згоди. |
+
+**Канонічна структура меню:** `MainLayout.tsx`, масив `navGroups`. Версія «v2.1 — структура меню затверджена» — не змінювати без узгодження.
+
+### Бекапи та безпека
+
+- **Git** — основний механізм версіонування. Регулярно робити commit і push.
+- **ZIP-архіви** — створюються `Deployment/make-backup.ps1`, зберігаються в `_backups/` (папка в .gitignore).
+- **Cursor snapshots** — внутрішній стан IDE. **Не вважати їх бекапом проєкту.** Для збереження роботи використовувати Git і ZIP-бекапи.
+
+---
+
 У проєкті **немає** окремого файлу типу `AGENTS.md` або `.cursor/rules` — усі заборони та правила розкидані по коді та цих документах; цей файл їх збирає в одному місці.

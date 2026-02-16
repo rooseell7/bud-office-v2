@@ -6,13 +6,17 @@ import { Document } from '../documents/document.entity';
 import { DocumentSheetOp } from '../documents/document-sheet-op.entity';
 import { SheetSnapshot } from '../documents/sheet-snapshot.entity';
 import { Project } from '../projects/project.entity';
+import { Act } from '../acts/act.entity';
+import { Invoice } from '../supply/invoice.entity';
+import { SupplyOrder } from '../supply/entities/supply-order.entity';
+import { User } from '../users/user.entity';
 import { PresenceModule } from '../presence/presence.module';
 import { CollabGateway } from './collab.gateway';
 import { CollabService } from './collab.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Document, DocumentSheetOp, SheetSnapshot, Project]),
+    TypeOrmModule.forFeature([Document, DocumentSheetOp, SheetSnapshot, Project, Act, Invoice, SupplyOrder, User]),
     PresenceModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

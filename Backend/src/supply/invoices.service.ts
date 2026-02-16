@@ -1,12 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import PDFDocument from 'pdfkit';
 
 import { Invoice } from './invoice.entity';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { InvoicesQueryDto } from './dto/invoices-query.dto';
+import { RealtimeEmitterService } from '../realtime/realtime-emitter.service';
+import { buildPatchForEntity } from '../realtime/invalidate-hints';
 
 function toIsoDate(d?: unknown): string | null {
   if (d === null || d === undefined) return null;
@@ -51,6 +53,8 @@ export class InvoicesService {
   constructor(
     @InjectRepository(Invoice)
     private readonly repo: Repository<Invoice>,
+    private readonly dataSource: DataSource,
+    private readonly realtimeEmitter: RealtimeEmitterService,
   ) {}
 
   private async getEntity(id: number): Promise<Invoice> {
@@ -119,8 +123,35 @@ export class InvoicesService {
     }, 0);
     inv.total = String(sum);
 
-    const saved = await this.repo.save(inv);
-    return toApi(saved);
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      const saved = await qr.manager.getRepository(Invoice).save(inv);
+      const patch = buildPatchForEntity('invoice', 'created', {
+        id: saved.id,
+        projectId: saved.projectId,
+        status: saved.status,
+        total: saved.total,
+        updatedAt: saved.updatedAt,
+      });
+      await this.realtimeEmitter.emitEntityChangedTx(qr.manager, {
+        eventType: 'entity.created',
+        entityType: 'invoice',
+        entityId: String(saved.id),
+        projectId: saved.projectId ?? null,
+        actorUserId: userId ?? null,
+        updatedAt: saved.updatedAt?.toISOString?.() ?? undefined,
+        patch: patch ?? undefined,
+      });
+      await qr.commitTransaction();
+      return toApi(saved);
+    } catch (e) {
+      await qr.rollbackTransaction();
+      throw e;
+    } finally {
+      await qr.release();
+    }
   }
 
   async update(id: number, dto: UpdateInvoiceDto) {
@@ -143,14 +174,59 @@ export class InvoicesService {
 
     if (dto.status !== undefined) inv.status = (dto.status ?? inv.status) as any;
 
-    const saved = await this.repo.save(inv);
-    return toApi(saved);
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      const saved = await qr.manager.getRepository(Invoice).save(inv);
+      const patch = buildPatchForEntity('invoice', 'changed', {
+        id: saved.id,
+        projectId: saved.projectId,
+        status: saved.status,
+        total: saved.total,
+        updatedAt: saved.updatedAt,
+      });
+      await this.realtimeEmitter.emitEntityChangedTx(qr.manager, {
+        eventType: 'entity.changed',
+        entityType: 'invoice',
+        entityId: String(saved.id),
+        projectId: saved.projectId ?? null,
+        updatedAt: saved.updatedAt?.toISOString?.() ?? undefined,
+        patch: patch ?? undefined,
+      });
+      await qr.commitTransaction();
+      return toApi(saved);
+    } catch (e) {
+      await qr.rollbackTransaction();
+      throw e;
+    } finally {
+      await qr.release();
+    }
   }
 
   async remove(id: number) {
     const inv = await this.getEntity(id);
-    await this.repo.remove(inv);
-    return { ok: true };
+    const projectId = inv.projectId;
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      await qr.manager.getRepository(Invoice).remove(inv);
+      await this.realtimeEmitter.emitEntityChangedTx(qr.manager, {
+        eventType: 'entity.deleted',
+        entityType: 'invoice',
+        entityId: String(id),
+        projectId: projectId ?? null,
+        patch: { op: 'delete' },
+      });
+      await qr.commitTransaction();
+      return { ok: true };
+    } catch (e) {
+      await qr.rollbackTransaction();
+      throw e;
+    } finally {
+      await qr.release();
+    }
   }
 
   async generatePdf(id: number): Promise<Buffer> {

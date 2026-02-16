@@ -91,6 +91,9 @@ export const PERMISSIONS = [
   // ===== Analytics (для власників) =====
   'analytics:read',
   'analytics:admin',
+
+  // ===== Activity Feed (STEP 6) =====
+  'activity:read:global',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -118,7 +121,7 @@ export type RoleCode =
   | 'viewer';
 
 export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
-  admin: [...PERMISSIONS],
+  admin: [...PERMISSIONS], // includes activity:read:global
 
   // ===== Foreman =====
   foreman: [
@@ -133,6 +136,7 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
 
   // ===== Supply =====
   supply_head: [
+    'activity:read:global',
     'warehouse:read',
     'warehouse:write',
     'warehouse:transfer',
@@ -219,6 +223,7 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
 
   // ===== Sales =====
   sales_head: [
+    'activity:read:global',
     // legacy aggregate
     'sales:read',
     'sales:write',
@@ -268,6 +273,7 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
 
   // ===== Delivery =====
   delivery_head: [
+    'activity:read:global',
     'delivery:read',
     'delivery:write',
     'delivery:approve',
@@ -304,6 +310,7 @@ export const ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
 
   // ===== Finance / Viewer =====
   accountant: [
+    'activity:read:global',
     'warehouse:read',
 
     // legacy aggregate

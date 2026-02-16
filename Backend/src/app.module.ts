@@ -1,6 +1,6 @@
 // buduy-crm-backend/src/app.module.ts
 
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { StageModule } from './stages/stage.module';
@@ -37,6 +37,7 @@ import { EstimatesModule } from './estimates/estimates.module';
 import { SalesModule } from './sales/sales.module';
 import { SheetsModule } from './sheets/sheets.module';
 import { ActivityModule } from './activity/activity.module';
+import { AuditModule } from './audit/audit.module';
 import { PresenceModule } from './presence/presence.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { CollabModule } from './collab/collab.module';
@@ -46,6 +47,10 @@ import { ForemanModule } from './foreman/foreman.module';
 import { ExecutionModule } from './execution/execution.module';
 import { FinanceModule } from './finance/finance.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { ClientOpIdMiddleware } from './common/middleware/client-op-id.middleware';
+import { RedisModule } from './infra/redis/redis.module';
+import { DraftsModule } from './drafts/drafts.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 function toBool(v: unknown, def = false): boolean {
   if (v === undefined || v === null) return def;
@@ -59,6 +64,8 @@ function toBool(v: unknown, def = false): boolean {
       isGlobal: true,
       envFilePath: '.env',
     }),
+
+    RedisModule,
 
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -125,6 +132,7 @@ function toBool(v: unknown, def = false): boolean {
     SalesModule,
     SheetsModule,
     ActivityModule,
+    AuditModule,
     PresenceModule,
     RealtimeModule,
     CollabModule,
@@ -134,6 +142,12 @@ function toBool(v: unknown, def = false): boolean {
     ExecutionModule,
     FinanceModule,
     AnalyticsModule,
+    DraftsModule,
+    NotificationsModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(ClientOpIdMiddleware).forRoutes('*');
+  }
+}

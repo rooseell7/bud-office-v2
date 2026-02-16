@@ -21,7 +21,7 @@ import HandshakeOutlinedIcon from '@mui/icons-material/HandshakeOutlined';
 import WorkOutlineOutlinedIcon from '@mui/icons-material/WorkOutlineOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 
-import { BRAND } from '../theme/muiTheme';
+import { BRAND } from '../shared/theme/budModernTheme';
 
 type NavItem = {
   label: string;

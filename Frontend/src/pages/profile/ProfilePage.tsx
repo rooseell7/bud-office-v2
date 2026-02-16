@@ -22,7 +22,7 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useAuth } from '../../modules/auth/AuthContext';
 import { updateMyProfile, changeMyPassword } from '../../api/client';
-import { BRAND } from '../../theme/muiTheme';
+import { BRAND } from '../../shared/theme/budModernTheme';
 
 const BIO_MAX = 500;
 const LS_COMPACT = 'profile.pref.compactMode';

@@ -1,0 +1,45 @@
+/**
+ * BUD Office — Premium dark-gray + glass (ref_primary_dashboard.png)
+ * НЕ чорний, не industrial/concrete/grunge.
+ */
+
+:root {
+  --bo-accent: #7AC854;
+  --bo-accent-2: #63B944;
+  --bo-accent-soft: rgba(122, 200, 84, 0.14);
+
+  /* фон НЕ чорний — premium dark gray */
+  --bo-bg-0: #12151B;
+  --bo-bg-1: #0C0F14;
+
+  /* surface світліші, glass */
+  --bo-surface: rgba(24, 28, 35, 0.72);
+  --bo-surface-strong: rgba(24, 28, 35, 0.84);
+  --bo-surface-lite: rgba(255, 255, 255, 0.08);
+
+  /* borders читаються */
+  --bo-line: rgba(255, 255, 255, 0.1);
+  --bo-line-strong: rgba(255, 255, 255, 0.14);
+
+  /* text */
+  --bo-text: rgba(255, 255, 255, 0.92);
+  --bo-text-muted: rgba(255, 255, 255, 0.68);
+  --bo-text-faint: rgba(255, 255, 255, 0.5);
+
+  /* shadows преміальні */
+  --bo-shadow-1: 0 10px 26px rgba(0, 0, 0, 0.35);
+  --bo-shadow-2: 0 18px 52px rgba(0, 0, 0, 0.5);
+
+  --bo-r-sm: 12px;
+  --bo-r-md: 16px;
+  --bo-r-lg: 20px;
+
+  --bo-blur: blur(10px);
+  --bo-gap: 14px;
+  --bo-pad: 18px;
+
+  --bo-font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  --bo-fs: 14px;
+  --bo-h1: 28px;
+  --bo-h2: 18px;
+}

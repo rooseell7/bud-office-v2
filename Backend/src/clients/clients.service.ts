@@ -1,32 +1,66 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Client } from './client.entity';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
+import { AuditService } from '../audit/audit.service';
+import { RealtimeEmitterService } from '../realtime/realtime-emitter.service';
 
 @Injectable()
 export class ClientService {
   constructor(
     @InjectRepository(Client)
     private readonly clientRepo: Repository<Client>,
+    private readonly dataSource: DataSource,
+    private readonly auditService: AuditService,
+    private readonly realtimeEmitter: RealtimeEmitterService,
   ) {}
 
   private toUserId(userId: number | string): number {
     const n = Number(userId);
-    // якщо раптом прилетить щось некоректне — краще 0 (нічого не знайде), ніж падати
     return Number.isFinite(n) ? n : 0;
   }
 
-  async create(userId: number | string, dto: CreateClientDto): Promise<Client> {
+  async create(
+    userId: number | string,
+    dto: CreateClientDto,
+    meta?: { clientOpId?: string | null },
+  ): Promise<Client> {
     const userIdNum = this.toUserId(userId);
 
-    const client = this.clientRepo.create({
-      ...dto,
-      userId: userIdNum,
-    });
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      const client = this.clientRepo.create({ ...dto, userId: userIdNum });
+      const saved = await qr.manager.save(Client, client);
 
-    return this.clientRepo.save(client);
+      await this.auditService.logTx(qr.manager, {
+        actorUserId: userIdNum,
+        action: 'client.create',
+        entityType: 'client',
+        entityId: saved.id,
+        after: { name: saved.name },
+        meta: meta?.clientOpId ? { clientOpId: meta.clientOpId } : null,
+      });
+      await this.realtimeEmitter.emitEntityChangedTx(qr.manager, {
+        eventType: 'entity.created',
+        entityType: 'client',
+        entityId: saved.id,
+        // No projectId → auto scopeType='global'
+        actorUserId: userIdNum,
+        clientOpId: meta?.clientOpId ?? null,
+      });
+
+      await qr.commitTransaction();
+      return saved;
+    } catch (e) {
+      await qr.rollbackTransaction();
+      throw e;
+    } finally {
+      await qr.release();
+    }
   }
 
   /**
@@ -44,7 +78,7 @@ export class ClientService {
         .where('c.userId = :userId', { userId: userIdNum })
         .andWhere('(c.name ILIKE :q OR c.phone ILIKE :q OR c.email ILIKE :q)', { q: `%${search}%` })
         .orderBy('c.createdAt', 'DESC')
-        .select(['c.id', 'c.name', 'c.phone', 'c.email', 'c.userId', 'c.createdAt', 'c.updatedAt']);
+        .select(['c.id', 'c.name', 'c.phone', 'c.email', 'c.userId', 'c.objectId', 'c.createdAt', 'c.updatedAt']);
       return qb.getMany();
     }
 
@@ -57,6 +91,7 @@ export class ClientService {
         'phone',
         'email',
         'userId',
+        'objectId',
         'createdAt',
         'updatedAt',
       ] as (keyof Client)[],
@@ -75,6 +110,7 @@ export class ClientService {
         'phone',
         'email',
         'userId',
+        'objectId',
         'createdAt',
         'updatedAt',
       ] as (keyof Client)[],
@@ -91,24 +127,77 @@ export class ClientService {
     id: string,
     userId: number | string,
     dto: UpdateClientDto,
+    meta?: { clientOpId?: string | null },
   ): Promise<Client> {
     const userIdNum = this.toUserId(userId);
-
-    // знайдемо клієнта (без note)
     const client = await this.findOne(id, userIdNum);
-
     Object.assign(client, dto);
 
-    // якщо dto містить note, а колонки в БД немає — save впаде.
-    // Тому без міграції краще, щоб UpdateClientDto НЕ містив note,
-    // або щоб фронт його не відправляв. Ми це вирівняємо в міграціях.
-    return this.clientRepo.save(client);
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      const saved = await qr.manager.save(Client, client);
+      await this.auditService.logTx(qr.manager, {
+        actorUserId: userIdNum,
+        action: 'client.update',
+        entityType: 'client',
+        entityId: saved.id,
+        after: { name: saved.name },
+        meta: meta?.clientOpId ? { clientOpId: meta.clientOpId } : null,
+      });
+      await this.realtimeEmitter.emitEntityChangedTx(qr.manager, {
+        eventType: 'entity.changed',
+        entityType: 'client',
+        entityId: saved.id,
+        // No projectId → auto scopeType='global'
+        actorUserId: userIdNum,
+        clientOpId: meta?.clientOpId ?? null,
+      });
+      await qr.commitTransaction();
+      return saved;
+    } catch (e) {
+      await qr.rollbackTransaction();
+      throw e;
+    } finally {
+      await qr.release();
+    }
   }
 
-  async remove(id: string, userId: number | string): Promise<void> {
+  async remove(
+    id: string,
+    userId: number | string,
+    meta?: { clientOpId?: string | null },
+  ): Promise<void> {
     const userIdNum = this.toUserId(userId);
-
     const client = await this.findOne(id, userIdNum);
-    await this.clientRepo.remove(client);
+
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      await qr.manager.remove(Client, client);
+      await this.auditService.logTx(qr.manager, {
+        actorUserId: userIdNum,
+        action: 'client.delete',
+        entityType: 'client',
+        entityId: id,
+        meta: meta?.clientOpId ? { clientOpId: meta.clientOpId } : null,
+      });
+      await this.realtimeEmitter.emitEntityChangedTx(qr.manager, {
+        eventType: 'entity.deleted',
+        entityType: 'client',
+        entityId: id,
+        // No projectId → auto scopeType='global'
+        actorUserId: userIdNum,
+        clientOpId: meta?.clientOpId ?? null,
+      });
+      await qr.commitTransaction();
+    } catch (e) {
+      await qr.rollbackTransaction();
+      throw e;
+    } finally {
+      await qr.release();
+    }
   }
 }

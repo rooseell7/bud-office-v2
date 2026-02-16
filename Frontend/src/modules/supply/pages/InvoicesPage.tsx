@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -34,6 +35,8 @@ import {
   updateInvoice,
 } from '../../../api/invoices';
 
+import { buildDraftKey } from '../../shared/drafts/draftsApi';
+import { useDraft } from '../../shared/drafts/useDraft';
 import { formatFixed, n } from '../../shared/sheet/utils';
 
 function money(v: unknown): string {
@@ -64,6 +67,42 @@ export function InvoicesPage() {
   });
   const [items, setItems] = useState<InvoiceItem[]>([{ qty: 1 }]);
   const [err, setErr] = useState<string | null>(null);
+
+  const projectIdForDraft = useMemo(() => {
+    if (editId != null) {
+      const row = rows.find((r) => r.id === editId);
+      const oid = row?.objectId ?? row?.projectId;
+      return oid != null && Number.isFinite(Number(oid)) ? Number(oid) : 0;
+    }
+    const oid = form.objectId ? Number(form.objectId) : null;
+    return oid != null && Number.isFinite(oid) && oid > 0 ? oid : 0;
+  }, [form.objectId, editId, rows]);
+
+  const draftKey = useMemo(() => {
+    if (!editOpen) return '';
+    const pid = projectIdForDraft > 0 ? projectIdForDraft : 0;
+    return buildDraftKey({
+      entityType: 'invoice',
+      mode: editId == null ? 'create' : 'edit',
+      projectId: pid,
+      entityId: editId != null ? String(editId) : null,
+    });
+  }, [editOpen, projectIdForDraft, editId]);
+
+  const {
+    hasDraft,
+    loading: draftLoading,
+    saveDraftData,
+    clearDraftData,
+    restoreFromDraft,
+  } = useDraft<{ form: typeof form; items: InvoiceItem[] }>({
+    key: draftKey,
+    enabled: editOpen && !!draftKey,
+    projectId: projectIdForDraft > 0 ? projectIdForDraft : undefined,
+    entityType: 'invoice',
+    entityId: editId != null ? String(editId) : undefined,
+    scopeType: 'project',
+  });
 
   const objectOptions = useMemo(
     () => objects.map((o) => ({ id: o.id, label: `${o.name} (${o.address})` })),
@@ -102,6 +141,11 @@ export function InvoicesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canRead]);
 
+  useEffect(() => {
+    if (!editOpen || !draftKey) return;
+    saveDraftData({ form, items });
+  }, [editOpen, draftKey, form, items, saveDraftData]);
+
   const cols = useMemo<GridColDef<Invoice>[]>(
     () => [
       { field: 'id', headerName: 'ID', width: 90 },
@@ -130,15 +174,15 @@ export function InvoicesPage() {
     [objects],
   );
 
-  function openNew() {
+  const openNew = useCallback(() => {
     setEditId(null);
     setForm({ objectId: '', supplierName: '', customerName: '', status: 'draft' });
     setItems([{ qty: 1 }]);
     setErr(null);
     setEditOpen(true);
-  }
+  }, []);
 
-  function openEdit(row: Invoice) {
+  const openEdit = useCallback((row: Invoice) => {
     setEditId(row.id);
     setForm({
       objectId: String(row.objectId ?? row.projectId ?? ''),
@@ -149,13 +193,13 @@ export function InvoicesPage() {
     setItems(Array.isArray(row.items) && row.items.length ? row.items : [{ qty: 1 }]);
     setErr(null);
     setEditOpen(true);
-  }
+  }, []);
 
   function setItem(i: number, patch: Partial<InvoiceItem>) {
     setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
   }
 
-  async function onSave() {
+  const onSave = useCallback(async () => {
     setErr(null);
     try {
       const oid = form.objectId ? Number(form.objectId) : undefined;
@@ -179,7 +223,6 @@ export function InvoicesPage() {
       if (editId == null) {
         await createInvoice({
           ...dto,
-          // тимчасово: бекенд очікує supplyManagerId (для сумісності)
           supplyManagerId: auth.user?.id ?? 1,
           projectId: oid,
         } as any);
@@ -187,12 +230,13 @@ export function InvoicesPage() {
         await updateInvoice(editId, dto);
       }
 
+      await clearDraftData();
       setEditOpen(false);
       await load();
     } catch (e: any) {
       setErr(e?.response?.data?.message?.join?.(', ') ?? e?.response?.data?.message ?? String(e));
     }
-  }
+  }, [form, items, editId, auth.user?.id, clearDraftData]);
 
   async function onDelete(id: number) {
     if (!canWrite) return;
@@ -274,6 +318,18 @@ export function InvoicesPage() {
         <DialogTitle>{editId == null ? 'Нова накладна' : `Редагувати накладну #${editId}`}</DialogTitle>
         <DialogContent>
           <Stack spacing={2}>
+            {hasDraft && !draftLoading ? (
+              <Alert severity="info">
+                Є збережена чернетка.{' '}
+                <Button size="small" onClick={() => restoreFromDraft((p) => { setForm(p.form); setItems(p.items); })}>
+                  Відновити
+                </Button>
+                {' / '}
+                <Button size="small" onClick={() => clearDraftData()}>
+                  Скинути
+                </Button>
+              </Alert>
+            ) : null}
             {err ? (
               <Typography color="error" variant="body2">
                 {err}

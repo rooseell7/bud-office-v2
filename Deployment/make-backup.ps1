@@ -3,13 +3,15 @@ $ErrorActionPreference = "Stop"
 $root = "F:\BUD_office"
 $date = Get-Date -Format "yyyy-MM-dd_HH-mm"
 $zipName = "BUD_office_backup_$date.zip"
-$dest = Join-Path $root $zipName
+$backupDir = Join-Path $root "_backups"
+if (-not (Test-Path $backupDir)) { New-Item -ItemType Directory -Path $backupDir -Force | Out-Null }
+$dest = Join-Path $backupDir $zipName
 
 Push-Location $root
 
 # Збираємо тільки потрібні папки/файли (без node_modules всередині Backend/Frontend)
-$tempDir = Join-Path $env:TEMP "bud_backup_$date"
-if (Test-Path $tempDir) { Remove-Item $tempDir -Recurse -Force }
+# Унікальна папка щоб не чіпати заблоковані залишки попередніх запусків
+$tempDir = Join-Path $env:TEMP "bud_backup_$date`_$([guid]::NewGuid().ToString('N').Substring(0,8))"
 New-Item -ItemType Directory -Path $tempDir | Out-Null
 
 # Копіюємо Backend без node_modules
@@ -47,3 +49,4 @@ Pop-Location
 $sizeMB = [math]::Round((Get-Item $dest).Length / 1MB, 2)
 Write-Host "Done: $zipName ($sizeMB MB)"
 Write-Host "Path: $dest"
+Write-Host "Backups folder: $backupDir"

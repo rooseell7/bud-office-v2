@@ -76,6 +76,10 @@ import ObjectCreatePage from './modules/projects/ObjectCreatePage';
 
 // ✅ Home (після логіну)
 import HomePage from './pages/home/HomePage';
+// STEP 6: Activity Feed
+import ActivityPage from './pages/activity/ActivityPage';
+// STEP 10: Notifications
+import NotificationsPage from './pages/notifications/NotificationsPage';
 import { ProfilePage } from './pages/profile/ProfilePage';
 import ForbiddenPage from './pages/ForbiddenPage';
 
@@ -86,8 +90,8 @@ import { EstimateIndexPage } from './pages/estimate/EstimateIndexPage';
 import { EstimateByIdPage } from './pages/estimate/EstimateByIdPage';
 
 const RealtimeWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { accessToken } = useAuth();
-  return <RealtimeProvider token={accessToken}>{children}</RealtimeProvider>;
+  const { accessToken, user } = useAuth();
+  return <RealtimeProvider token={accessToken} userId={user?.id ?? null}>{children}</RealtimeProvider>;
 };
 
 const RootLayout: React.FC = () => (
@@ -112,6 +116,10 @@ const App: React.FC = () => (
         <Route path="home" element={<HomePage />} />
         {/* ✅ Профіль */}
         <Route path="profile" element={<ProfilePage />} />
+        {/* STEP 6: Activity Feed */}
+        <Route path="activity" element={<ActivityPage />} />
+        {/* STEP 10: Notifications */}
+        <Route path="notifications" element={<NotificationsPage />} />
 
         {/* ✅ Sheet Grid demo (canonical src/sheet) */}
         <Route path="sheet" element={<SheetDemoPage />} />

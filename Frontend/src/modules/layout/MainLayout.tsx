@@ -1,17 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useRealtime } from '../../realtime/RealtimeContext';
-import { getPresenceOnline } from '../../api/presence';
+import { usePresence } from '../../shared/realtime/usePresence';
+import { buildPresenceContext } from '../../shared/realtime/presenceClient';
 import { RealtimeDebugPanel } from '../../realtime/RealtimeDebugPanel';
 import { DEBUG_NAV } from '../../shared/config/env';
 
 import {
   AppBar,
+  Badge,
   Box,
+  IconButton,
   Toolbar,
   Button,
-  IconButton,
   Drawer,
   ListItemButton,
   ListItemIcon,
@@ -19,9 +21,16 @@ import {
   Divider,
   Typography,
   Tooltip,
+  Popover,
+  Menu,
+  MenuItem,
+  List,
+  ListItem,
 } from '@mui/material';
 
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
+import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
 import WorkOutlineOutlinedIcon from '@mui/icons-material/WorkOutlineOutlined';
@@ -34,7 +43,10 @@ import AccountBalanceOutlinedIcon from '@mui/icons-material/AccountBalanceOutlin
 import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import ConstructionOutlinedIcon from '@mui/icons-material/ConstructionOutlined';
 import SettingsIcon from '@mui/icons-material/Settings';
-import { BRAND } from '../../theme/muiTheme';
+import TimelineIcon from '@mui/icons-material/Timeline';
+import NotificationsIcon from '@mui/icons-material/Notifications';
+import { getNotifications, getUnreadCount, markNotificationRead } from '../../api/notifications';
+const accent = '#7AC854';
 
 const drawerWidth = 260;
 
@@ -57,30 +69,52 @@ const MainLayout: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout, can, isAuthLoading, roles } = useAuth();
   const realtime = useRealtime();
+  const presence = usePresence();
   const connectionStatus = realtime?.connectionStatus ?? 'offline';
-  const [onlineCount, setOnlineCount] = useState(0);
+  const [onlineAnchor, setOnlineAnchor] = useState<HTMLElement | null>(null);
+  const [userMenuAnchor, setUserMenuAnchor] = useState<HTMLElement | null>(null);
+  const [notifyAnchor, setNotifyAnchor] = useState<HTMLElement | null>(null);
+  const [notifyUnread, setNotifyUnread] = useState(0);
+  const [notifyList, setNotifyList] = useState<any[]>([]);
+
+  // STEP 4: send presence hello on connect and route change
+  useEffect(() => {
+    if (!realtime?.connected || !presence.sendPresenceHello) return;
+    const searchParams = loc.search ? new URLSearchParams(loc.search) : undefined;
+    presence.sendPresenceHello(buildPresenceContext(loc.pathname, searchParams, 'view'));
+  }, [realtime?.connected, loc.pathname, loc.search, presence.sendPresenceHello]);
 
   useEffect(() => {
-    if (connectionStatus !== 'connected') {
-      setOnlineCount(0);
-      return;
-    }
-    let cancelled = false;
-    const fetchOnline = async () => {
-      try {
-        const list = await getPresenceOnline();
-        if (!cancelled) setOnlineCount(list.length);
-      } catch {
-        if (!cancelled) setOnlineCount(0);
-      }
-    };
-    fetchOnline();
-    const t = setInterval(fetchOnline, 30_000);
     return () => {
-      cancelled = true;
-      clearInterval(t);
+      presence.sendPresenceLeave?.();
     };
-  }, [connectionStatus]);
+  }, []);
+
+  const fetchNotifyCount = useCallback(async () => {
+    try {
+      const c = await getUnreadCount();
+      setNotifyUnread(c);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchNotifyCount();
+  }, [user, fetchNotifyCount]);
+
+  const handleNotifyOpen = useCallback(async (e: React.MouseEvent<HTMLElement>) => {
+    setNotifyAnchor(e.currentTarget);
+    try {
+      const res = await getNotifications({ limit: 10 });
+      setNotifyList(res.items ?? []);
+    } catch {
+      setNotifyList([]);
+    }
+  }, []);
+
+  const onlineCount = presence.globalUsers.length;
   const displayName = getDisplayName(user);
   const initial = getInitial(displayName);
 
@@ -152,6 +186,12 @@ const MainLayout: React.FC = () => {
       items: [{ to: '/finance', label: 'Фінанси', icon: <AccountBalanceOutlinedIcon /> }],
     },
     {
+      title: 'Система',
+      items: [
+        { to: '/activity', label: 'Активність', icon: <TimelineIcon /> },
+      ],
+    },
+    {
       title: 'Аналітика (для власників)',
       items: [
         { to: '/analytics', label: 'Огляд', icon: <InsightsOutlinedIcon /> },
@@ -194,71 +234,13 @@ const MainLayout: React.FC = () => {
 
           <Box sx={{ flex: 1 }} />
 
-          {realtime && (
-            <Tooltip
-              title={
-                connectionStatus === 'connected'
-                  ? 'Синхронізація онлайн'
-                  : connectionStatus === 'reconnecting'
-                    ? 'Повторне підключення…'
-                    : 'Офлайн'
-              }
-              placement="bottom"
-            >
-              <Box
-                sx={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 0.5,
-                  px: 1,
-                  py: 0.25,
-                  borderRadius: 1,
-                  fontSize: '0.75rem',
-                  backgroundColor:
-                    connectionStatus === 'connected'
-                      ? 'rgba(76, 175, 80, 0.15)'
-                      : connectionStatus === 'reconnecting'
-                        ? 'rgba(255, 193, 7, 0.2)'
-                        : 'rgba(0,0,0,0.06)',
-                  color:
-                    connectionStatus === 'connected'
-                      ? '#4caf50'
-                      : connectionStatus === 'reconnecting'
-                        ? '#ffc107'
-                        : 'var(--text-secondary)',
-                }}
-              >
-                <Box
-                  component="span"
-                  sx={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: '50%',
-                    backgroundColor:
-                      connectionStatus === 'connected'
-                        ? '#4caf50'
-                        : connectionStatus === 'reconnecting'
-                          ? '#ffc107'
-                          : 'var(--text-secondary)',
-                    animation: connectionStatus === 'reconnecting' ? 'pulse 1.5s ease-in-out infinite' : 'none',
-                    '@keyframes pulse': { '0%, 100%': { opacity: 1 }, '50%': { opacity: 0.4 } },
-                  }}
-                />
-                {connectionStatus === 'connected' && 'Online'}
-                {connectionStatus === 'reconnecting' && 'Reconnecting…'}
-                {connectionStatus === 'offline' && 'Offline'}
-                {onlineCount > 0 && connectionStatus === 'connected' && ` · ${onlineCount} онлайн`}
-              </Box>
-            </Tooltip>
-          )}
-
           {isAuthLoading && (
             <Box
               sx={{
                 width: 30,
                 height: 30,
                 borderRadius: '50%',
-                backgroundColor: 'var(--divider)',
+                backgroundColor: 'var(--bo-line)',
                 opacity: 0.6,
               }}
               aria-hidden
@@ -286,10 +268,24 @@ const MainLayout: React.FC = () => {
               placement="bottom"
               arrow
             >
-              <Link
-                to="/profile"
-                style={{ textDecoration: 'none', color: 'inherit' }}
-                aria-label="Перейти до профілю"
+              <Button
+                onClick={(e) => setUserMenuAnchor(e.currentTarget)}
+                size="small"
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  color: 'var(--bo-text)',
+                  minWidth: 'auto',
+                  px: 1,
+                  borderRadius: 9999,
+                  textTransform: 'none',
+                  transition: 'all 140ms ease',
+                  '&:hover': {
+                    backgroundColor: 'rgba(255,255,255,0.08)',
+                  },
+                }}
+                aria-label="Меню профілю"
               >
                 <Box
                   component="span"
@@ -300,7 +296,7 @@ const MainLayout: React.FC = () => {
                     width: 30,
                     height: 30,
                     borderRadius: '50%',
-                    backgroundColor: BRAND.accent ?? 'var(--primary)',
+                    backgroundColor: accent,
                     color: '#fff',
                     fontSize: '0.875rem',
                     fontWeight: 600,
@@ -309,68 +305,238 @@ const MainLayout: React.FC = () => {
                 >
                   {initial}
                 </Box>
-              </Link>
+                <Typography component="span" variant="body2" sx={{ fontWeight: 500 }}>
+                  {displayName}
+                </Typography>
+              </Button>
             </Tooltip>
           )}
+          {/* STEP 10: Notifications bell */}
           {!isAuthLoading && user && (
-            <Link
-              to="/profile"
-              style={{
-                color: 'var(--text-secondary)',
-                textDecoration: 'none',
-                fontSize: '0.875rem',
-                transition: 'color var(--anim-fast)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = 'var(--text-primary)';
-                e.currentTarget.style.textDecoration = 'underline';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = 'var(--text-secondary)';
-                e.currentTarget.style.textDecoration = 'none';
-              }}
-              aria-label="Перейти до профілю"
-            >
-              {displayName}
-            </Link>
+            <>
+              <Tooltip title="Сповіщення">
+                <IconButton
+                  size="small"
+                  onClick={(e) => handleNotifyOpen(e)}
+                  sx={{
+                    color: 'var(--bo-text)',
+                    '&:hover': { backgroundColor: 'rgba(255,255,255,0.08)' },
+                  }}
+                >
+                  <Badge badgeContent={notifyUnread} color="error">
+                    <NotificationsIcon fontSize="small" />
+                  </Badge>
+                </IconButton>
+              </Tooltip>
+              <Popover
+                open={Boolean(notifyAnchor)}
+                anchorEl={notifyAnchor}
+                onClose={() => setNotifyAnchor(null)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                slotProps={{
+                  paper: {
+                    sx: { mt: 1.5, minWidth: 280, maxHeight: 400, borderRadius: 2 },
+                  },
+                }}
+              >
+                <Box sx={{ p: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                    <Typography variant="subtitle2">Сповіщення</Typography>
+                    <Button size="small" component={Link} to="/notifications" onClick={() => setNotifyAnchor(null)}>
+                      Всі
+                    </Button>
+                  </Box>
+                  <List dense disablePadding>
+                    {notifyList.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        Немає сповіщень
+                      </Typography>
+                    ) : (
+                      notifyList.slice(0, 10).map((n) => {
+                        const route =
+                          n.entityType && n.entityId
+                            ? n.entityType === 'invoice'
+                              ? `/supply/invoices/${n.entityId}`
+                              : n.entityType === 'act'
+                                ? `/estimate/acts/${n.entityId}`
+                                : n.entityType === 'project'
+                                  ? `/projects/${n.entityId}`
+                                  : '/notifications'
+                            : '/notifications';
+                        return (
+                          <ListItem
+                            key={n.id}
+                            disablePadding
+                            sx={{ py: 0.5 }}
+                            component={Link}
+                            to={route}
+                            style={{ textDecoration: 'none', color: 'inherit' }}
+                            onClick={async () => {
+                              if (!n.readAt) {
+                                try {
+                                  await markNotificationRead(n.id);
+                                  setNotifyUnread((c) => Math.max(0, c - 1));
+                                } catch {
+                                  /* ignore */
+                                }
+                              }
+                              setNotifyAnchor(null);
+                            }}
+                          >
+                            <ListItemText
+                              primary={n.title}
+                              secondary={n.createdAt ? new Date(n.createdAt).toLocaleString('uk-UA') : null}
+                              primaryTypographyProps={{ variant: 'body2', fontWeight: n.readAt ? 400 : 600 }}
+                            />
+                          </ListItem>
+                        );
+                      })
+                    )}
+                  </List>
+                </Box>
+              </Popover>
+            </>
           )}
-          {can('users:read') && (
-            <IconButton
-              component={Link}
-              to="/admin/users"
-              size="small"
-              sx={{
-                color: 'var(--text-primary)',
-                borderRadius: '10px',
-                transition: 'all 120ms ease-out',
-                '&:hover': {
-                  color: BRAND.accent,
-                  backgroundColor: 'rgba(255,255,255,0.06)',
+          {/* STEP 4: Online indicator + dropdown */}
+          {realtime?.connected && (
+            <>
+              <Tooltip title="Онлайн зараз">
+                <Button
+                  size="small"
+                  onClick={(e) => setOnlineAnchor(e.currentTarget)}
+                  sx={{
+                    color: 'var(--bo-text)',
+                    minWidth: 'auto',
+                    px: 1,
+                    '&:hover': { backgroundColor: 'rgba(255,255,255,0.08)' },
+                  }}
+                >
+                  <Box
+                    component="span"
+                    sx={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      bgcolor: '#7AC854',
+                      mr: 0.75,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <Typography component="span" variant="body2">
+                    {onlineCount}
+                  </Typography>
+                </Button>
+              </Tooltip>
+              <Popover
+                open={Boolean(onlineAnchor)}
+                anchorEl={onlineAnchor}
+                onClose={() => setOnlineAnchor(null)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              >
+                <Box sx={{ p: 2, minWidth: 220 }}>
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                    Онлайн зараз: {onlineCount}
+                  </Typography>
+                  <List dense disablePadding>
+                    {presence.globalUsers.slice(0, 10).map((u) => (
+                      <ListItem key={u.userId} disablePadding sx={{ py: 0.25 }}>
+                        <Typography variant="body2">
+                          {u.name}
+                          {u.role && (
+                            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                              · {u.role}
+                            </Typography>
+                          )}
+                          {u.module && (
+                            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                              · {u.module}
+                            </Typography>
+                          )}
+                        </Typography>
+                      </ListItem>
+                    ))}
+                    {onlineCount > 10 && (
+                      <ListItem disablePadding>
+                        <Typography variant="caption" color="text.secondary">
+                          +{onlineCount - 10} ще
+                        </Typography>
+                      </ListItem>
+                    )}
+                  </List>
+                </Box>
+              </Popover>
+            </>
+          )}
+          {!isAuthLoading && user && (
+            <Menu
+              anchorEl={userMenuAnchor}
+              open={Boolean(userMenuAnchor)}
+              onClose={() => setUserMenuAnchor(null)}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              slotProps={{
+                paper: {
+                  sx: {
+                    mt: 1.5,
+                    minWidth: 200,
+                    borderRadius: 2,
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+                    bgcolor: 'var(--bo-surface-elevated, #1e293b)',
+                    border: '1px solid var(--bo-line, rgba(255,255,255,0.08))',
+                  },
                 },
               }}
-              aria-label="Меню адміна"
             >
-              <SettingsIcon />
-            </IconButton>
+              <MenuItem
+                component={Link}
+                to="/profile"
+                onClick={() => setUserMenuAnchor(null)}
+                sx={{
+                  py: 1.25,
+                  gap: 1.5,
+                  color: 'var(--bo-text)',
+                  '&:hover': { bgcolor: 'rgba(122,200,84,0.12)', color: accent },
+                }}
+              >
+                <PersonOutlinedIcon fontSize="small" sx={{ color: 'inherit' }} />
+                Профіль
+              </MenuItem>
+              {can('users:read') && (
+                <MenuItem
+                  component={Link}
+                  to="/admin/users"
+                  onClick={() => setUserMenuAnchor(null)}
+                  sx={{
+                    py: 1.25,
+                    gap: 1.5,
+                    color: 'var(--bo-text)',
+                    '&:hover': { bgcolor: 'rgba(122,200,84,0.12)', color: accent },
+                  }}
+                >
+                  <SettingsIcon fontSize="small" sx={{ color: 'inherit' }} />
+                  Налаштування
+                </MenuItem>
+              )}
+              <Divider sx={{ borderColor: 'var(--bo-line)' }} />
+              <MenuItem
+                onClick={() => {
+                  setUserMenuAnchor(null);
+                  logout();
+                }}
+                sx={{
+                  py: 1.25,
+                  gap: 1.5,
+                  color: 'var(--bo-text-muted)',
+                  '&:hover': { bgcolor: 'rgba(239,68,68,0.12)', color: '#ef4444' },
+                }}
+              >
+                <LogoutOutlinedIcon fontSize="small" sx={{ color: 'inherit' }} />
+                Вийти
+              </MenuItem>
+            </Menu>
           )}
-          <Button
-            onClick={logout}
-            variant="outlined"
-            size="small"
-            sx={{
-              borderColor: 'var(--divider)',
-              color: 'var(--text-primary)',
-              borderRadius: '10px',
-              transition: 'all 120ms ease-out',
-              '&:hover': {
-                borderColor: BRAND.accent,
-                color: BRAND.accent,
-                backgroundColor: BRAND.accentGlow,
-              },
-            }}
-          >
-            Вийти
-          </Button>
         </Toolbar>
       </AppBar>
 
@@ -400,6 +566,7 @@ const MainLayout: React.FC = () => {
         >
           {navGroups
             .filter((g) => {
+              if (g.title === 'Система') return can('activity:read:global');
               if (g.title === 'Кабінет виконроба') return can('foreman:read');
               if (g.title === 'Відділ реалізації') return can('execution:read');
               if (g.title === 'Відділ фінансів') return can('finance:read');
@@ -460,13 +627,13 @@ const MainLayout: React.FC = () => {
             </Box>
           ))}
 
-          <Divider sx={{ my: 1.5, borderColor: 'var(--divider)' }} />
+          <Divider sx={{ my: 1.5, borderColor: 'var(--bo-line)' }} />
 
           <Box
             component="span"
             sx={{
               px: 2,
-              color: 'var(--text-secondary)',
+              color: 'var(--bo-text-muted)',
               fontSize: '0.7rem',
               display: 'block',
             }}
@@ -494,10 +661,8 @@ const MainLayout: React.FC = () => {
             route: {loc.pathname}
           </Typography>
         )}
-        <Box sx={{ flex: 1 }}>
-          <Box className="boContentPanel">
-            <Outlet key={loc.pathname} />
-          </Box>
+        <Box sx={{ flex: 1 }} className="boPage">
+          <Outlet key={loc.pathname} />
         </Box>
       </Box>
       <RealtimeDebugPanel />

@@ -14,7 +14,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 
 import { useTheme } from '@mui/material/styles';
 import Sidebar from './Sidebar';
-import { BRAND } from '../theme/muiTheme';
+import { BRAND } from '../shared/theme/budModernTheme';
 
 const DRAWER_WIDTH = 280;
 

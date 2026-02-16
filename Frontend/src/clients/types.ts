@@ -4,6 +4,7 @@ export type Client = {
   phone: string;
   email?: string | null;
   note?: string | null;
+  objectId?: number | null;
   createdAt: string;
   updatedAt: string;
 };
