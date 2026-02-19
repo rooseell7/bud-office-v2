@@ -1,0 +1,17 @@
+---
+description: "CRITICAL: Sheet engine / collab / persistence. Будь-які зміни тут можуть зламати весь продукт. Лише по явному ТЗ + обов'язкові тести."
+globs:
+  - "Frontend/src/sheet/**"
+  - "bud_office-frontend/src/sheet/**"
+alwaysApply: false
+---
+
+## Критичні правила
+- Заборонено робити "покращення" або рефакторинг за власною ініціативою.
+- Міняти тільки те, що потрібно для задачі.
+- Не змінюй протоколи/формат ops/snapshots/версій, якщо це не в ТЗ.
+- Не ламай канонічний persistence switch: WS (collab) vs REST fallback.
+
+## Обов'язкові перевірки
+- Прогнати тести, які покривають Sheet (unit/e2e), якщо вони існують у проєкті.
+- Перевірити руками базові сценарії: selection, edit cell, undo/redo, autosave/indicator, reload.

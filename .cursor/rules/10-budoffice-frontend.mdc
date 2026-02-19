@@ -1,0 +1,19 @@
+---
+description: "BUD_OFFICE Frontend: правила для React/Vite фронтенду. Мінімальні зміни, без поломки роутів/ENV/Sheet."
+globs:
+  - "Frontend/**"
+  - "frontend/**"
+  - "bud_office-frontend/**"
+alwaysApply: false
+---
+
+## Frontend guardrails
+- Не змінюй структуру роутів/меню без прямого ТЗ.
+- Не хардкодь URL'и API/WS — використовуй існуючий env resolver/конфіг.
+- Не чіпай стилі/тему, якщо задача не про дизайн.
+- Будь-які зміни в таблицях (Sheet) — тільки за правилами sheet-critical.
+
+## Мінімальні перевірки після змін
+- TypeScript typecheck (як налаштовано у package.json).
+- Build: npm run build (або еквівалент).
+- Якщо зміни в UI/таблицях — прогнати релевантні e2e (Playwright), якщо налаштовані.

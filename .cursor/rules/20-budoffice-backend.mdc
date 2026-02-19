@@ -1,0 +1,18 @@
+---
+description: "BUD_OFFICE Backend: правила для NestJS/TypeORM бекенду. Не ламати схеми/міграції/API контракти без явного ТЗ."
+globs:
+  - "Backend/**"
+  - "backend/**"
+  - "bud_office-backend/**"
+alwaysApply: false
+---
+
+## Backend guardrails
+- Не змінюй DB schema/Entity поля/типи без явного ТЗ або узгодженої міграції.
+- Не міняй API contracts (DTO/response) без синхронізації з фронтом.
+- Permissions/roles: source of truth — існуючі permissions файли в бекенді.
+
+## Мінімальні перевірки після змін
+- npm run build
+- npm run test (якщо є)
+- lint/format (як налаштовано у проєкті)

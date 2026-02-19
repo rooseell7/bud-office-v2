@@ -42,3 +42,13 @@ _backups/
 
 # Помилкові файли (наприклад, випадково створені)
 Backend/\{
+
+# Cursor: ignore all local cursor stuff by default
+.cursor/**
+
+# Cursor: track rules/commands as source of truth
+!.cursor/rules/
+!.cursor/rules/**
+!.cursor/commands/
+!.cursor/commands/**
+# NOTE: do NOT allowlist settings.json (keep it local/untracked)
