@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
@@ -68,8 +68,9 @@ export default function EstimatesProjectPage() {
         setInvoices(Array.isArray(invList) ? invList : []);
         const allActs = await getActs();
         setActs(Array.isArray(allActs) ? allActs.filter((a) => Number((a as any).projectId) === projectId) : []);
-      } catch (e: any) {
-        setError(e?.response?.data?.message || e?.message || 'Помилка завантаження');
+      } catch (e: unknown) {
+        const ex = e as { response?: { data?: { message?: string } }; message?: string };
+        setError(ex?.response?.data?.message || ex?.message || 'Помилка завантаження');
       } finally {
         setLoading(false);
       }
@@ -83,8 +84,9 @@ export default function EstimatesProjectPage() {
     try {
       const { id: quoteId } = await createEstimate({ projectId });
       navigate(`/estimate/${quoteId}`);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || 'Помилка створення КП');
+    } catch (e: unknown) {
+      const ex = e as { response?: { data?: { message?: string } }; message?: string };
+      setError(ex?.response?.data?.message || ex?.message || 'Помилка створення КП');
     } finally {
       setCreatingQuote(false);
     }

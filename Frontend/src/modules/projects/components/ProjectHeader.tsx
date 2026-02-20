@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Button, Chip, Stack, Typography } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';

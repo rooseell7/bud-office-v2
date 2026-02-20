@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -90,8 +90,10 @@ export default function SalesProjectsListPage() {
       const res = await getSalesProjects(query);
       setItems(res.items);
       setTotal(res.total);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || 'Помилка завантаження');
+    } catch (e: unknown) {
+      const ex = e as { response?: { data?: { message?: string } }; message?: string };
+      const msg = ex?.response?.data?.message || ex?.message || 'Помилка завантаження';
+      setError(msg);
     } finally {
       setLoading(false);
     }

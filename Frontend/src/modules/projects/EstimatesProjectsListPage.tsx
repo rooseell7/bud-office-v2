@@ -1,10 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
-  Chip,
-  CircularProgress,
   Paper,
   Table,
   TableBody,
@@ -16,13 +14,13 @@ import {
   Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { getEstimatesProjects, type EstimatesProjectItem, type EstimatesProjectsQuery } from '../../api/estimates';
 
-function formatDate(iso: string | null): string {
-  if (!iso) return '—';
+function formatDate(str: string | null): string {
+  if (!str) return '—';
   try {
-    const d = new Date(iso);
-    return d.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return new Date(str).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' });
   } catch {
     return '—';
   }
@@ -36,7 +34,6 @@ export default function EstimatesProjectsListPage() {
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [quoteStatus, setQuoteStatus] = useState('');
-  const [hasUnpaid, setHasUnpaid] = useState(false);
   const [page, setPage] = useState(1);
   const limit = 20;
 
@@ -46,13 +43,14 @@ export default function EstimatesProjectsListPage() {
     const query: EstimatesProjectsQuery = { page, limit };
     if (q.trim()) query.q = q.trim();
     if (quoteStatus.trim()) query.quoteStatus = quoteStatus.trim();
-    if (hasUnpaid) query.hasUnpaidInvoices = true;
     try {
       const res = await getEstimatesProjects(query);
       setItems(res.items);
       setTotal(res.total);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || 'Помилка завантаження');
+    } catch (e: unknown) {
+      const ex = e as { response?: { data?: { message?: string } }; message?: string };
+      const msg = ex?.response?.data?.message || ex?.message || 'Помилка завантаження';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -60,7 +58,7 @@ export default function EstimatesProjectsListPage() {
 
   useEffect(() => {
     load();
-  }, [page, hasUnpaid]);
+  }, [page]);
 
   const handleSearch = () => {
     setPage(1);
@@ -69,7 +67,7 @@ export default function EstimatesProjectsListPage() {
 
   return (
     <Box sx={{ p: 2 }}>
-      <Button size="small" startIcon={<ArrowBackIcon />} onClick={() => navigate('/estimate')} sx={{ mb: 1 }}>
+      <Button size="small" startIcon={<ArrowBackIcon />} onClick={() => navigate('/estimate/kp')} sx={{ mb: 1 }}>
         Назад
       </Button>
       <Typography variant="h6" sx={{ mb: 2 }}>
@@ -90,11 +88,9 @@ export default function EstimatesProjectsListPage() {
           placeholder="Статус КП"
           value={quoteStatus}
           onChange={(e) => setQuoteStatus(e.target.value)}
-          sx={{ minWidth: 120 }}
+          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+          sx={{ minWidth: 140 }}
         />
-        <Button variant="outlined" size="small" onClick={() => setHasUnpaid(!hasUnpaid)} color={hasUnpaid ? 'primary' : 'inherit'}>
-          Є неоплачені накладні
-        </Button>
         <Button variant="contained" size="small" onClick={handleSearch}>
           Шукати
         </Button>
@@ -108,7 +104,7 @@ export default function EstimatesProjectsListPage() {
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-          <CircularProgress />
+          <Typography>Завантаження…</Typography>
         </Box>
       ) : (
         <TableContainer component={Paper}>
@@ -117,16 +113,17 @@ export default function EstimatesProjectsListPage() {
               <TableRow>
                 <TableCell>Об'єкт</TableCell>
                 <TableCell>Клієнт</TableCell>
-                <TableCell>КП (статус / сума)</TableCell>
-                <TableCell>Акти (кількість / остання дата)</TableCell>
-                <TableCell>Накладні (кількість / неопл. / остання дата)</TableCell>
+                <TableCell>КП</TableCell>
+                <TableCell>Акти</TableCell>
+                <TableCell>Накладні</TableCell>
                 <TableCell>Остання активність</TableCell>
+                <TableCell align="right" />
               </TableRow>
             </TableHead>
             <TableBody>
               {items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">
+                  <TableCell colSpan={7} align="center">
                     Немає об'єктів за критеріями
                   </TableCell>
                 </TableRow>
@@ -148,58 +145,34 @@ export default function EstimatesProjectsListPage() {
                     </TableCell>
                     <TableCell>{row.client?.name ?? '—'}</TableCell>
                     <TableCell>
-                      {row.quote.lastQuoteId ? (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                          <Chip
-                            size="small"
-                            label={row.quote.status ?? '—'}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/estimate/${row.quote.lastQuoteId}`);
-                            }}
-                          />
-                          {row.quote.total != null && row.quote.total !== '' && (
-                            <Typography variant="caption" color="text.secondary">
-                              {Number(row.quote.total).toLocaleString('uk-UA')}
-                            </Typography>
-                          )}
-                        </Box>
-                      ) : (
-                        '—'
+                      {row.quote?.status ?? '—'}
+                      {row.quote?.total != null && (
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          {row.quote.total}
+                        </Typography>
                       )}
                     </TableCell>
+                    <TableCell>{row.acts?.count ?? 0}</TableCell>
                     <TableCell>
-                      {row.acts.count > 0 ? (
-                        <>
-                          {row.acts.count}
-                          {row.acts.lastActAt && (
-                            <Typography variant="caption" color="text.secondary" display="block">
-                              {formatDate(row.acts.lastActAt)}
-                            </Typography>
-                          )}
-                        </>
-                      ) : (
-                        '—'
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {row.invoices.count > 0 ? (
-                        <>
-                          {row.invoices.count}
-                          {row.invoices.unpaidCount > 0 && (
-                            <Chip size="small" color="warning" label={row.invoices.unpaidCount} sx={{ ml: 0.5 }} />
-                          )}
-                          {row.invoices.lastInvoiceAt && (
-                            <Typography variant="caption" color="text.secondary" display="block">
-                              {formatDate(row.invoices.lastInvoiceAt)}
-                            </Typography>
-                          )}
-                        </>
-                      ) : (
-                        '—'
+                      {row.invoices?.count ?? 0}
+                      {row.invoices?.unpaidCount != null && row.invoices.unpaidCount > 0 && (
+                        <Typography component="span" variant="caption" color="error.main">
+                          {' '}(неопл. {row.invoices.unpaidCount})
+                        </Typography>
                       )}
                     </TableCell>
                     <TableCell>{formatDate(row.lastActivityAt)}</TableCell>
+                    <TableCell align="right" onClick={(e) => e.stopPropagation()}>
+                      {row.quote?.lastQuoteId != null && (
+                        <Button
+                          size="small"
+                          startIcon={<OpenInNewIcon />}
+                          onClick={() => navigate(`/estimate/${row.quote!.lastQuoteId}`)}
+                        >
+                          КП
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))
               )}

@@ -51,6 +51,7 @@ export default function ProjectCreatePage() {
   const navigate = useNavigate();
   const { can } = useAuth();
   const canCreate = can('sales:write');
+  void canCreate;
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [clientId, setClientId] = useState<number | ''>('');
@@ -91,8 +92,10 @@ export default function ProjectCreatePage() {
       };
       const { id } = await createProject(body);
       navigate(`/sales/projects/${id}`);
-    } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || 'Помилка створення');
+    } catch (err: unknown) {
+      const ex = err as { response?: { data?: { message?: string } }; message?: string };
+      const msg = ex?.response?.data?.message || ex?.message || 'Помилка створення';
+      setError(msg);
     } finally {
       setLoading(false);
     }
