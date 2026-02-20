@@ -20,13 +20,15 @@
   - `cd Frontend && npm run e2e`
 - **Очікування:** 2 passed (quotes + invoices).
 
-## Backend gate
+## Gates before DONE
 
-- `cd Backend && npm test` — unit/інтеграційні тести (якщо є).
+Стандартний набір перевірок перед «готово» (можна запустити **Deployment/run-gates.bat** за умови, що E2E_EMAIL/E2E_PASSWORD задані):
 
-## Frontend gate
+- **Backend:** `cd Backend && npm test`
+- **Frontend:** `cd Frontend && npm run build`
+- **E2E:** спочатку **run-online.bat** (http://localhost), потім `E2E_BASE_URL=http://localhost`, `E2E_EMAIL`, `E2E_PASSWORD`, `cd Frontend && npm run e2e` → очікується 2 passed.
 
-- `cd Frontend && npm run build` — збірка без помилок.
+Якщо E2E креденшіали не задані — run-gates.bat виконає Backend + Frontend і підкаже, як запустити E2E вручну.
 
 ## Якщо щось падає
 
