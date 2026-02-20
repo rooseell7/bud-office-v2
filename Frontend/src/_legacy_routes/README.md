@@ -1,6 +1,5 @@
-# LEGACY: NOT USED
+# DEPRECATED
 
-Source of truth for routing: **src/App.tsx**.
-main.tsx renders `<App />`.
+Не використовувати. Канонічний роутер: **Frontend/src/App.tsx**.
 
-Do not modify. Kept for reference only.
+Ця папка не повинна імпортуватись у production-код. Залишена для історії.

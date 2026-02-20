@@ -42,6 +42,8 @@
 
 Не імпортувати auth/ProtectedRoute/Login з **legacy** шляхів: `src/auth/*`, `src/_legacy_routes/*`. Зміни в авторизації — тільки через канонічні файли вище.
 
+Legacy папки позначені DEPRECATED: **Frontend/src/auth/**, **Frontend/src/_legacy_routes/**. Не імпортувати. Якщо потрібно — спочатку обговорити з Назаром.
+
 ## Нагадування
 
 - Без змін у **Frontend/src/sheet/** без окремого ТЗ.
