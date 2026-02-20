@@ -55,7 +55,7 @@ const AnalyticsProjectsPage: React.FC = () => {
       setData(res);
     } catch (e: unknown) {
       const msg = e && typeof e === 'object' && 'response' in e && (e as { response?: { data?: { message?: string } } }).response?.data?.message;
-      setError(msg || 'Помилка завантаження');
+      setError(typeof msg === 'string' ? msg : 'Помилка завантаження');
       setData([]);
     } finally {
       setLoading(false);
