@@ -4,7 +4,8 @@ import {
   Button,
   Stack,
 } from '@mui/material';
-import { DataGrid, GridColDef } from '@mui/x-data-grid';
+import { DataGrid } from '@mui/x-data-grid';
+import type { GridColDef } from '@mui/x-data-grid';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   getMaterials,

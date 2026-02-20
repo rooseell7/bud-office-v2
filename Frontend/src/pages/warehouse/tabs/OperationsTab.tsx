@@ -1,5 +1,6 @@
 import { Paper, Typography, Box } from '@mui/material';
-import { DataGrid, GridColDef } from '@mui/x-data-grid';
+import { DataGrid } from '@mui/x-data-grid';
+import type { GridColDef } from '@mui/x-data-grid';
 import { useQuery } from '@tanstack/react-query';
 import { getOperations } from '../../../api/operations.api';
 
