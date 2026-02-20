@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "e2e": "node node_modules/@playwright/test/cli.js test -c playwright.config.cjs",
+    "e2e:diag": "node -e \"console.log(require.resolve('@playwright/test')); try { console.log(require('@playwright/test/package.json').version); } catch(e) { console.log('no pkg'); }\""
   },
   "dependencies": {
     "@emotion/react": "^11.13.3",
@@ -26,6 +28,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.58.2",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
