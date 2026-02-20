@@ -1,5 +1,9 @@
 # E2E Smoke (Playwright)
 
+## Why nginx mode
+
+E2E is best run via `run-online.bat` (nginx) with `E2E_BASE_URL=http://localhost` to avoid CORS and 5173→3000 cross-origin issues.
+
 ## Recommended mode (online / nginx)
 
 1. Run `run-online.bat` (build + backend:3000 + nginx on http://localhost).
