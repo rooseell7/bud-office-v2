@@ -44,7 +44,7 @@ const AnalyticsExecutionPage: React.FC = () => {
       setProblemProjects(projects.filter((p) => p.overdueTasksCount > 0 || p.blockedTasksCount > 0).slice(0, 15));
     } catch (e: unknown) {
       const msg = e && typeof e === 'object' && 'response' in e && (e as { response?: { data?: { message?: string } } }).response?.data?.message;
-      setError(msg || 'Помилка завантаження');
+      setError(typeof msg === 'string' ? msg : 'Помилка завантаження');
       setHealth(null);
       setProblemProjects([]);
     } finally {

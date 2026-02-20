@@ -71,7 +71,7 @@ const AnalyticsFinancePage: React.FC = () => {
       setTransactions(txRes.items ?? []);
     } catch (e: unknown) {
       const msg = e && typeof e === 'object' && 'response' in e && (e as { response?: { data?: { message?: string } } }).response?.data?.message;
-      setError(msg || 'Помилка завантаження');
+      setError(typeof msg === 'string' ? msg : 'Помилка завантаження');
       setData(null);
       setTransactions([]);
     } finally {

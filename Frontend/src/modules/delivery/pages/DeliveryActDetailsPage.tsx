@@ -1,6 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Sheet/act logic uses flexible types; refactor later */
 // FILE: src/modules/delivery/pages/DeliveryActDetailsPage.tsx
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import {
@@ -35,10 +35,8 @@ import {
 import { Sheet, actSheetConfig, draftKey } from '../../../sheet';
 
 import {
-  applyTsvPasteToRows,
   copyRangeToClipboard,
   forEachCellInRange,
-  handleSheetsGridKeyDown,
   isInRange,
   normalizeRange,
   useSheetSelection,
@@ -355,8 +353,9 @@ export default function DeliveryActDetailsPage() {
       setAct(a);
       setRows(ensureBaseStructure(normalizeIncomingRows(a.items)));
       setSaving('idle');
-    } catch (e: any) {
-      setError(e?.message || 'Не вдалося завантажити акт');
+    } catch (e: unknown) {
+      const msg = (e as { message?: string })?.message || 'Не вдалося завантажити акт';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -374,7 +373,6 @@ export default function DeliveryActDetailsPage() {
   const saveTimer = useRef<number | null>(null);
 
   const gridRowIndices = useMemo(() => buildGridRowIndices(rows), [rows]);
-  const gridRows = useMemo(() => gridRowIndices.map((ai) => rows[ai]).filter(Boolean) as ActRow[], [rows, gridRowIndices]);
 
   // actual row index (rows[]) -> grid row index (selection model)
   const actualToGrid = useMemo(() => {
@@ -387,11 +385,11 @@ export default function DeliveryActDetailsPage() {
 
   const {
     activeCell,
-    setActiveCell,
+    setActiveCell: _setActiveCell,
     sel,
-    setSel,
-    anchorRef,
-    setAnchor,
+    setSel: _setSel,
+    anchorRef: _anchorRef,
+    setAnchor: _setAnchor,
     selectCell,
     beginMouseSelection,
     extendMouseSelection,
@@ -448,9 +446,10 @@ export default function DeliveryActDetailsPage() {
       setRows(ensureBaseStructure(normalizeIncomingRows(updated.items)));
       setSaving('saved');
       window.setTimeout(() => setSaving((s) => (s === 'saved' ? 'idle' : s)), 1200);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setSaving('error');
-      setError(e?.message || 'Помилка збереження');
+      const msg = (e as { message?: string })?.message || 'Помилка збереження';
+      setError(msg);
     }
   }
   function getClipboardCellValue(row: ActRow, col: GridColKey): string {
@@ -535,13 +534,13 @@ export default function DeliveryActDetailsPage() {
     }
   }
 
-  function copySelectionToClipboard() {
+  function _copySelectionToClipboard() {
     if (!sel) return;
     const gridRows = gridRowIndices.map((ai) => rows[ai]).filter(Boolean) as ActRow[];
     void copyRangeToClipboard(gridRows, GRID_COLS, sel, getClipboardCellValue);
   }
 
-  function clearSelectionCells() {
+  function _clearSelectionCells() {
     if (!sel) return;
     const s = normalizeRange(sel);
     setRows((prev) => {
@@ -560,13 +559,13 @@ export default function DeliveryActDetailsPage() {
     markDirty();
   }
 
-  function pasteTsv(startR: number, startC: number, tsv: string) {
+  function _pasteTsv(startR: number, startC: number, tsv: string) {
     const matrix = parseClipboardMatrix(tsv);
     if (!matrix.length) return;
 
     setRows((prev) => {
-      let next = [...prev];
-      let g = buildGridRowIndices(next);
+      const next = [...prev];
+      const g = buildGridRowIndices(next);
 
       const baseAi = g[startR];
       if (baseAi === undefined) return prev;
@@ -659,41 +658,6 @@ export default function DeliveryActDetailsPage() {
 
     markDirty();
   }
-
-  function handleGridKeyDown(e: React.KeyboardEvent) {
-    const canEdit = canWrite;
-    handleSheetsGridKeyDown(e, {
-      canEdit,
-      editorOpen: Boolean(editor),
-      commitEditor,
-      closeEditor,
-      openEditor,
-      activeCell,
-      setActiveCell,
-      anchor: anchorRef.current,
-      setAnchor,
-      cols: GRID_COLS,
-      rowsCount: gridRowIndices.length,
-      sel,
-      setSel,
-      copySelectionToClipboard,
-      clearSelectionCells,
-    });
-  }
-
-  function handleGridPaste(e: React.ClipboardEvent) {
-    if (!canWrite) return;
-    const txt = e.clipboardData.getData('text');
-    if (!txt) return;
-    if (!activeCell && !sel) return;
-    e.preventDefault();
-
-    const s = sel ? normalizeRange(sel) : null;
-    const startR = s ? s.r1 : (activeCell?.r ?? 0);
-    const startC = s ? s.c1 : GRID_COLS.indexOf(activeCell!.c);
-    pasteTsv(startR, startC, txt);
-  }
-
 
   function startFill(r: number, c: GridColKey) {
     if (!canWrite) return;
