@@ -3,7 +3,7 @@
  * Uses RealtimeContext (presenceState, editState, sendPresenceHello, etc.).
  */
 
-import { useCallback, useContext } from 'react';
+import { useCallback } from 'react';
 import { useRealtime } from '../../realtime/RealtimeContext';
 
 export type PresenceUser = {

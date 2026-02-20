@@ -58,12 +58,14 @@ export const BO_Q = {
   DOCUMENT_DETAIL: (id: string | number) => `documents:detail:${id}`,
 
   // STEP 6: Activity Feed
-  ACTIVITY_FEED: (scope: string, projectId?: number, entityType?: string, entityId?: string) =>
-    projectId != null
+  ACTIVITY_FEED: (scope: string, projectId?: number, entityType?: string, entityId?: string) => {
+    void scope;
+    return projectId != null
       ? `activity:feed:project:${projectId}`
       : entityType && entityId
         ? `activity:feed:entity:${entityType}:${entityId}`
-        : 'activity:feed:global',
+        : 'activity:feed:global';
+  },
   ACTIVITY_FEED_GLOBAL: 'activity:feed:global',
   ACTIVITY_FEED_PROJECT: (projectId: number) => `activity:feed:project:${projectId}`,
   ACTIVITY_FEED_ENTITY: (entityType: string, entityId: string) =>

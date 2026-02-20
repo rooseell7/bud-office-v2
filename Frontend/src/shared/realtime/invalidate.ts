@@ -20,6 +20,10 @@ export function invalidateByCanonicalKey(queryClient: QueryClient, key: string):
   }
 
   const [module, entity, action, id] = parts;
+  void module;
+  void entity;
+  void action;
+  void id;
 
   // Map to React Query keys based on actual usage in the codebase
   // Adjust these predicates based on your actual query key structure
