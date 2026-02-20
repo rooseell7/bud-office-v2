@@ -40,7 +40,7 @@ const sections: NavSection[] = [
     items: [
       { label: 'Склади', to: '/supply/warehouses', icon: <WarehouseOutlinedIcon /> },
       { label: 'Матеріали', to: '/supply/materials', icon: <Inventory2OutlinedIcon /> },
-      { label: 'Накладні', to: '/supply/invoices', icon: <ReceiptLongOutlinedIcon /> },
+      { label: 'Накладні', to: '/invoices', icon: <ReceiptLongOutlinedIcon /> },
     ],
   },
   {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 import LoginPage from './modules/auth/LoginPage';
@@ -36,21 +36,30 @@ import MaterialsPage from './modules/materials/MaterialsPage';
 // ✅ Delivery сторінки
 import DeliveryIndexPage from './modules/delivery/pages/DeliveryIndexPage';
 import DeliveryProjectPage from './modules/delivery/pages/DeliveryProjectPage';
-import { ActByIdPage } from './pages/acts/ActByIdPage';
 import ActsPage from './pages/acts/ActsPage';
 
-// ✅ Stub pages (нові розділи меню)
-import StubPage from './pages/stubs/StubPage';
-import AnalyticsOverviewPage from './modules/analytics/pages/AnalyticsOverviewPage';
-import AnalyticsProjectsPage from './modules/analytics/pages/AnalyticsProjectsPage';
-import AnalyticsFinancePage from './modules/analytics/pages/AnalyticsFinancePage';
-import AnalyticsExecutionPage from './modules/analytics/pages/AnalyticsExecutionPage';
-// ✅ Фінанси
-import FinanceDashboardPage from './modules/finance/pages/FinanceDashboardPage';
-import FinanceWalletsPage from './modules/finance/pages/FinanceWalletsPage';
+// ✅ Lazy-load: важкі сторінки (Sheet, Analytics, Finance, Admin, Estimate)
+const SheetDemoPage = lazy(() => import('./pages/sheet/SheetDemoPage').then((m) => ({ default: m.SheetDemoPage })));
+const EstimateIndexPage = lazy(() => import('./pages/estimate/EstimateIndexPage').then((m) => ({ default: m.EstimateIndexPage })));
+const EstimateByIdPage = lazy(() => import('./pages/estimate/EstimateByIdPage').then((m) => ({ default: m.EstimateByIdPage })));
+const ActByIdPage = lazy(() => import('./pages/acts/ActByIdPage').then((m) => ({ default: m.ActByIdPage })));
+const AnalyticsOverviewPage = lazy(() => import('./modules/analytics/pages/AnalyticsOverviewPage').then((m) => ({ default: m.default })));
+const AnalyticsProjectsPage = lazy(() => import('./modules/analytics/pages/AnalyticsProjectsPage').then((m) => ({ default: m.default })));
+const AnalyticsFinancePage = lazy(() => import('./modules/analytics/pages/AnalyticsFinancePage').then((m) => ({ default: m.default })));
+const AnalyticsExecutionPage = lazy(() => import('./modules/analytics/pages/AnalyticsExecutionPage').then((m) => ({ default: m.default })));
+const FinanceDashboardPage = lazy(() => import('./modules/finance/pages/FinanceDashboardPage').then((m) => ({ default: m.default })));
+const FinanceWalletsPage = lazy(() => import('./modules/finance/pages/FinanceWalletsPage').then((m) => ({ default: m.default })));
+const AdminLayout = lazy(() => import('./modules/layout/AdminLayout').then((m) => ({ default: m.default })));
+const AdminUsersPage = lazy(() => import('./modules/admin/AdminUsersPage').then((m) => ({ default: m.default })));
+const AdminRolesPage = lazy(() => import('./modules/admin/AdminRolesPage').then((m) => ({ default: m.default })));
+
 // ✅ Кабінет виконроба
 import ForemanObjectsPage from './modules/foreman/pages/ForemanObjectsPage';
 import ForemanObjectPage from './modules/foreman/pages/ForemanObjectPage';
+import ForemanActsSubmitPage from './modules/foreman/pages/ForemanActsSubmitPage';
+// ✅ Прийом і погодження актів
+import EstimateActsIntakePage from './pages/estimate/EstimateActsIntakePage';
+import RealizationActsApprovalPage from './modules/realization/pages/RealizationActsApprovalPage';
 // ✅ Відділ реалізації
 import ExecutionProjectsPage from './modules/execution/pages/ExecutionProjectsPage';
 import ExecutionProjectDetailsPage from './modules/execution/pages/ExecutionProjectDetailsPage';
@@ -58,12 +67,6 @@ import ExecutionProjectDetailsPage from './modules/execution/pages/ExecutionProj
 // ✅ Warehouse details pages (з твого дерева: src/pages/warehouse/*)
 import WarehouseDetailsPage from './pages/warehouse/WarehouseDetailsPage';
 import MovementDetailsPage from './pages/warehouse/MovementDetailsPage';
-
-// Admin layout + сторінки
-import AdminLayout from './modules/layout/AdminLayout';
-import AdminDashboardPage from './modules/admin/AdminDashboardPage';
-import AdminUsersPage from './modules/admin/AdminUsersPage';
-import AdminRolesPage from './modules/admin/AdminRolesPage';
 
 // ✅ Деталі обʼєкта (вкладки: Інфо / Акти / Накладні)
 import ProjectDetailsPage from './modules/projects/ProjectDetailsPage';
@@ -76,22 +79,14 @@ import ObjectCreatePage from './modules/projects/ObjectCreatePage';
 
 // ✅ Home (після логіну)
 import HomePage from './pages/home/HomePage';
-// STEP 6: Activity Feed
-import ActivityPage from './pages/activity/ActivityPage';
-// STEP 10: Notifications
-import NotificationsPage from './pages/notifications/NotificationsPage';
 import { ProfilePage } from './pages/profile/ProfilePage';
 import ForbiddenPage from './pages/ForbiddenPage';
 
-// ✅ Sheet demo (STEP 0–3 smoke test)
-import { SheetDemoPage } from './pages/sheet/SheetDemoPage';
-// ✅ КП index + editor
-import { EstimateIndexPage } from './pages/estimate/EstimateIndexPage';
-import { EstimateByIdPage } from './pages/estimate/EstimateByIdPage';
+const PageFallback: React.FC = () => <div style={{ padding: 24, textAlign: 'center' }}>Завантаження…</div>;
 
 const RealtimeWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { accessToken, user } = useAuth();
-  return <RealtimeProvider token={accessToken} userId={user?.id ?? null}>{children}</RealtimeProvider>;
+  const { accessToken } = useAuth();
+  return <RealtimeProvider token={accessToken}>{children}</RealtimeProvider>;
 };
 
 const RootLayout: React.FC = () => (
@@ -103,6 +98,7 @@ const RootLayout: React.FC = () => (
 );
 
 const App: React.FC = () => (
+    <Suspense fallback={<PageFallback />}>
     <Routes>
       {/* Публічний роут */}
       <Route path="/login" element={<LoginPage />} />
@@ -116,10 +112,6 @@ const App: React.FC = () => (
         <Route path="home" element={<HomePage />} />
         {/* ✅ Профіль */}
         <Route path="profile" element={<ProfilePage />} />
-        {/* STEP 6: Activity Feed */}
-        <Route path="activity" element={<ActivityPage />} />
-        {/* STEP 10: Notifications */}
-        <Route path="notifications" element={<NotificationsPage />} />
 
         {/* ✅ Sheet Grid demo (canonical src/sheet) */}
         <Route path="sheet" element={<SheetDemoPage />} />
@@ -150,6 +142,7 @@ const App: React.FC = () => (
         <Route path="estimates/projects" element={<EstimatesProjectsListPage />} />
         <Route path="estimates/projects/:id" element={<EstimatesProjectPage />} />
         <Route path="estimate/acts" element={<ActsPage />} />
+        <Route path="estimate/acts/intake" element={<EstimateActsIntakePage />} />
         <Route path="estimate/acts/:id" element={<ActByIdPage />} />
         <Route path="estimate/quotes" element={<QuotesPage />} />
         <Route path="estimate/invoices" element={<InvoicesPage />} />
@@ -165,7 +158,7 @@ const App: React.FC = () => (
         <Route path="supply/receipts/:id" element={<SupplyReceiptDetailPage />} />
         <Route path="supply/payables" element={<SupplyPayablesPage />} />
         <Route path="supply/payables/:id" element={<SupplyPayableDetailPage />} />
-        <Route path="supply/invoices" element={<InvoicesPage />} />
+        <Route path="supply/invoices" element={<Navigate to="/invoices" replace />} />
         <Route path="supply/warehouses" element={<WarehousesPage />} />
         <Route path="supply/materials" element={<MaterialsPage />} />
 
@@ -193,8 +186,10 @@ const App: React.FC = () => (
         {/* ✅ Заглушки розділів */}
         <Route path="execution/projects" element={<ExecutionProjectsPage />} />
         <Route path="execution/projects/:id" element={<ExecutionProjectDetailsPage />} />
+        <Route path="realization/acts/approval" element={<RealizationActsApprovalPage />} />
         <Route path="foreman" element={<ForemanObjectsPage />} />
         <Route path="foreman/objects/:objectId" element={<ForemanObjectPage />} />
+        <Route path="foreman/acts/submit" element={<ForemanActsSubmitPage />} />
         <Route path="finance" element={<FinanceDashboardPage />} />
         <Route path="finance/wallets" element={<FinanceWalletsPage />} />
         <Route path="analytics" element={<AnalyticsOverviewPage />} />
@@ -223,6 +218,7 @@ const App: React.FC = () => (
       {/* Фолбек */}
       <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>
+    </Suspense>
 );
 
 export default App;

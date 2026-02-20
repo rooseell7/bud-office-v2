@@ -5,7 +5,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
-  Button,
   Card,
   CardContent,
   Chip,
@@ -16,14 +15,13 @@ import {
   ListItemText,
   Typography,
 } from '@mui/material';
-import NotificationsIcon from '@mui/icons-material/Notifications';
 import { getNotifications, markNotificationRead, type NotificationItem } from '../../api/notifications';
 
 function entityToRoute(n: NotificationItem): string | null {
   if (!n.entityType || !n.entityId) return null;
   switch (n.entityType) {
     case 'invoice':
-      return `/supply/invoices/${n.entityId}`;
+      return `/invoices/${n.entityId}`;
     case 'act':
       return `/estimate/acts/${n.entityId}`;
     case 'order':

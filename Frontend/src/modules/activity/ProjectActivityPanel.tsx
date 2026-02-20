@@ -51,7 +51,7 @@ function entityToRoute(item: ActivityFeedItem): string | null {
   const { type, id } = item.entity;
   switch (type) {
     case 'invoice':
-      return `/supply/invoices/${id}`;
+      return `/invoices/${id}`;
     case 'act':
       return `/estimate/acts/${id}`;
     case 'order':
