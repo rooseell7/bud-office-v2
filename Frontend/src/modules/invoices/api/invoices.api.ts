@@ -11,6 +11,8 @@ export type Invoice = {
   id: Id;
   /** Обʼєкт (projectId). Для internal може бути 0/відсутнім. */
   objectId: Id;
+  /** Legacy alias (backend може повертати). */
+  projectId?: number | null;
   /** Порядковий номер накладної в межах обʼєкта (projectId). */
   objectSeq?: number | null;
   type?: InvoiceType | string;
@@ -24,6 +26,8 @@ export type Invoice = {
   items: any[]; // JSONB (InvoiceItem[]), на UI нормалізуємо
   totalSupplier?: string | number | null;
   totalCustomer?: string | number | null;
+  /** Legacy/short alias (backend повертає total). */
+  total?: string;
   notes?: string | null;
   createdAt?: string;
   updatedAt?: string;
