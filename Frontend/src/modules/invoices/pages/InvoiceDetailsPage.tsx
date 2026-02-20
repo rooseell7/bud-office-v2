@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 import {
   Alert,
-  Autocomplete,
   Box,
   Button,
   Card,
@@ -26,7 +25,6 @@ import {
 
 import SaveIndicatorChip from '../../shared/sheet/SaveIndicatorChip';
 
-import AddIcon from '@mui/icons-material/Add';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import PictureAsPdfOutlinedIcon from '@mui/icons-material/PictureAsPdfOutlined';
@@ -67,13 +65,12 @@ import { exportInvoiceXlsx } from '../../../utils/xlsxExport';
 import { cleanNumInput, f2, formatFixed, n } from '../../shared/sheet/utils';
 import {
   SHEET_GRID_COLOR_SOFT,
-  SHEET_GOOGLE_BORDER,
   SHEET_GOOGLE_HEADER_BORDER,
   SHEET_HEADER_BG,
 } from '../../shared/sheet/constants';
 import { useSheetSelection } from '../../shared/sheet/engine';
 
-import { Sheet, formatUaMoney, type SheetTotals } from '../../../sheet';
+import { Sheet, type SheetTotals } from '../../../sheet';
 import { invoiceMaterialsSheetConfig } from '../../../sheet/configs/invoiceMaterialsSheetConfig';
 import { M_COL } from '../../../sheet/configs/materialsSheetConfig';
 import { useInvoiceSheetAdapter } from '../../../sheet/hooks/useInvoiceSheetAdapter';
@@ -207,6 +204,7 @@ export default function InvoiceDetailsPage() {
 
   const [materials, setMaterials] = useState<MaterialDto[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
+  void materialsLoading;
 
   const [supplierName, setSupplierName] = useState('');
   const [status, setStatus] = useState<InvoiceStatus>('draft');
@@ -220,13 +218,17 @@ export default function InvoiceDetailsPage() {
   // ===== Invoice → Warehouse (server draft) =====
   const canWarehouseRead = can('warehouse:read');
   const canWarehouseWrite = can('warehouse:write');
+  void canWarehouseWrite;
 
   const [warehouses, setWarehouses] = useState<WarehouseLike[]>([]);
   const [warehousesLoading, setWarehousesLoading] = useState(false);
+  void warehousesLoading;
   const [selectedWarehouse, setSelectedWarehouse] = useState<WarehouseLike | null>(null);
   const [objectName, setObjectName] = useState('');
   const [pushToWarehouseLoading, setPushToWarehouseLoading] = useState(false);
   const [pushToWarehouseError, setPushToWarehouseError] = useState<string | null>(null);
+  void pushToWarehouseLoading;
+  void pushToWarehouseError;
 
   const [sheetTotals, setSheetTotals] = useState<SheetTotals>({ sum: 0, cost: 0, profit: 0 });
   const adapterItems = useMemo(() => rows.map((r) => ({
@@ -351,13 +353,14 @@ export default function InvoiceDetailsPage() {
   const [editorValue, setEditorValue] = useState<string>('');
   const editorInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [overlayRect, setOverlayRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+  const [_overlayRect, setOverlayRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
 
   const [isFilling, setIsFilling] = useState(false);
   const fillTargetRef = useRef<{ r: number; c: ColKey } | null>(null);
   const fillBaseRef = useRef<{ r: number; c: ColKey; value: string; series: boolean } | null>(null);
 
   function isCellEditable(col: ColKey) {
+    void col;
     return canEdit && !isLocked; // узгоджено з поточними правилами
   }
 
@@ -630,18 +633,20 @@ export default function InvoiceDetailsPage() {
     return String.fromCharCode(A + idx);
   }
 
-  function activeCellLabel() {
+  function _activeCellLabel() {
     if (!activeCell) return '';
     const ci = COLS.indexOf(activeCell.c);
     return `${colLetter(ci)}${activeCell.r + 1}`;
   }
+  void _activeCellLabel;
 
-  function beginEdit(rowId: number, col: ColKey, current: unknown) {
+  function _beginEdit(rowId: number, col: ColKey, current: unknown) {
     const k = cellKey(rowId, col);
     if (!editStartRef.current.has(k)) editStartRef.current.set(k, String(current ?? ''));
   }
+  void _beginEdit;
 
-  function endEdit(rowId: number, col: ColKey, next: unknown) {
+  function _endEdit(rowId: number, col: ColKey, next: unknown) {
     const k = cellKey(rowId, col);
     const prev = editStartRef.current.get(k);
     if (prev === undefined) return;
@@ -651,8 +656,9 @@ export default function InvoiceDetailsPage() {
       pushUndo({ rowId, col, prev, next: n });
     }
   }
+  void _endEdit;
 
-  function commitFormula(moveDelta: -1 | 0 | 1) {
+  function _commitFormula(moveDelta: -1 | 0 | 1) {
     if (!activeCell) return;
     const row = rows[activeCell.r];
     if (!row) return;
@@ -669,6 +675,7 @@ export default function InvoiceDetailsPage() {
       setActiveCell({ r: nr, c: activeCell.c });
     }
   }
+  void _commitFormula;
 
   useEffect(() => {
     if (!activeCell) {
@@ -746,7 +753,7 @@ export default function InvoiceDetailsPage() {
     updateRow(rowId, { [col]: value } as any);
   }
 
-  function ensureRowsCount(minCount: number) {
+  function _ensureRowsCount(minCount: number) {
     setRows((prev) => {
       if (prev.length >= minCount) return prev;
       const next = [...prev];
@@ -758,6 +765,7 @@ export default function InvoiceDetailsPage() {
       return next;
     });
   }
+  void _ensureRowsCount;
 
   function copySelectionToClipboard() {
     if (!sel || rows.length === 0) return;
@@ -818,7 +826,7 @@ export default function InvoiceDetailsPage() {
   }
 
 
-  function handleGridKeyDown(e: React.KeyboardEvent) {
+  function _handleGridKeyDown(e: React.KeyboardEvent) {
     handleSheetsGridKeyDown(e, {
       canEdit,
       editorOpen: Boolean(editor),
@@ -857,8 +865,9 @@ export default function InvoiceDetailsPage() {
       },
     });
   }
+  void _handleGridKeyDown;
 
-  function handleGridPaste(e: React.ClipboardEvent) {
+  function _handleGridPaste(e: React.ClipboardEvent) {
     if (!canEdit) return;
     const txt = e.clipboardData.getData('text');
     if (!txt) return;
@@ -870,6 +879,7 @@ export default function InvoiceDetailsPage() {
     const startC = s ? s.c1 : COLS.indexOf(activeCell!.c);
     pasteTsv(startR, startC, txt);
   }
+  void _handleGridPaste;
 
   // Автозбереження (тільки для draft)
   const lastSavedRef = useRef<string>('');
@@ -926,7 +936,7 @@ export default function InvoiceDetailsPage() {
         if (prev && sorted.some((w) => w.id === prev.id)) return prev;
         return sorted[0] ?? null;
       });
-    } catch (e) {
+    } catch {
       setWarehouses([]);
       setSelectedWarehouse(null);
     } finally {
@@ -979,8 +989,11 @@ export default function InvoiceDetailsPage() {
       });
       lastSavedRef.current = snap;
       setDirty(false);
-    } catch (e: any) {
-      setError(e?.response?.data?.message?.join?.('\n') || e?.message || 'Помилка завантаження');
+    } catch (e: unknown) {
+      const ex = e as { response?: { data?: { message?: string | string[] } }; message?: string };
+      const m = ex?.response?.data?.message;
+      const msg = Array.isArray(m) ? m.join('\n') : typeof m === 'string' ? m : ex?.message || 'Помилка завантаження';
+      setError(msg);
     } finally {
       if (!silent) setLoading(false);
     }
@@ -1036,8 +1049,9 @@ export default function InvoiceDetailsPage() {
     try {
       const atts = await listAttachments({ entityType: 'invoice', entityId: Number(invoice.id) });
       setAttachments(Array.isArray(atts) ? atts : []);
-    } catch (e: any) {
-      setAttError(e?.response?.data?.message || e?.message || 'Помилка завантаження файлів');
+    } catch (e: unknown) {
+      const ex = e as { response?: { data?: { message?: string } }; message?: string };
+      setAttError(ex?.response?.data?.message || ex?.message || 'Помилка завантаження файлів');
     } finally {
       setAttLoading(false);
     }
@@ -1051,8 +1065,9 @@ export default function InvoiceDetailsPage() {
       // uploadAttachment(meta, file)
       await uploadAttachment({ entityType: 'invoice', entityId: Number(invoice.id) }, file);
       await refreshAttachments();
-    } catch (e: any) {
-      setAttError(e?.response?.data?.message || e?.message || 'Помилка завантаження файлу');
+    } catch (e: unknown) {
+      const ex = e as { response?: { data?: { message?: string } }; message?: string };
+      setAttError(ex?.response?.data?.message || ex?.message || 'Помилка завантаження файлу');
     } finally {
       setAttUploading(false);
     }
@@ -1065,20 +1080,23 @@ export default function InvoiceDetailsPage() {
     try {
       await deleteAttachment(attId);
       await refreshAttachments();
-    } catch (e: any) {
-      setAttError(e?.response?.data?.message || e?.message || 'Помилка видалення файлу');
+    } catch (e: unknown) {
+      const ex = e as { response?: { data?: { message?: string } }; message?: string };
+      setAttError(ex?.response?.data?.message || ex?.message || 'Помилка видалення файлу');
     } finally {
       setAttDeleting(null);
     }
   }
 
-  async function handleDownloadAttachment(attId: number) {
+  async function _handleDownloadAttachment(attId: number) {
     try {
       await downloadAttachment(attId);
-    } catch (e: any) {
-      setAttError(e?.response?.data?.message || e?.message || 'Помилка завантаження');
+    } catch (e: unknown) {
+      const ex = e as { response?: { data?: { message?: string } }; message?: string };
+      setAttError(ex?.response?.data?.message || ex?.message || 'Помилка завантаження');
     }
   }
+  void _handleDownloadAttachment;
   const materialsById = useMemo(() => {
     const m = new Map<number, MaterialDto>();
     for (const x of materials) {
@@ -1086,6 +1104,7 @@ export default function InvoiceDetailsPage() {
     }
     return m;
   }, [materials]);
+  void materialsById;
 
   const totals = useMemo(() => {
     const supplier = sheetTotals.cost;
@@ -1179,7 +1198,7 @@ export default function InvoiceDetailsPage() {
     );
   }
 
-  function addRow() {
+  function _addRow() {
     const nextId = rows.length ? Math.max(...rows.map((r) => r.id)) + 1 : 1;
     setRows((prev) => [
       ...prev,
@@ -1195,6 +1214,7 @@ export default function InvoiceDetailsPage() {
       },
     ]);
   }
+  void _addRow;
 
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
@@ -1215,12 +1235,13 @@ export default function InvoiceDetailsPage() {
     setSelectedIds(rows.map((r) => r.id));
   }
 
-  function removeSelected() {
+  function _removeSelected() {
     if (!selectedIds.length) return;
     const s = new Set(selectedIds);
     setRows((prev) => prev.filter((r) => !s.has(r.id)));
     setSelectedIds([]);
   }
+  void _removeSelected;
 
   async function changeStatus(next: InvoiceStatus) {
     if (!invoice) return;
@@ -1233,12 +1254,12 @@ export default function InvoiceDetailsPage() {
 
     // підтвердження для незворотніх/важливих переходів
     if (target === 'paid') {
-      // eslint-disable-next-line no-alert
+       
       const ok = window.confirm('Позначити накладну як “Оплачено”? Після цього редагування позицій буде заблоковано.');
       if (!ok) return;
     }
     if (current === 'paid' && target !== 'paid') {
-      // eslint-disable-next-line no-alert
+       
       const ok = window.confirm('Накладна вже “Оплачено”. Повернути у попередній статус?');
       if (!ok) return;
     }
@@ -1249,14 +1270,17 @@ export default function InvoiceDetailsPage() {
       const updated = await updateInvoice(invoice.id, { status: target } as any);
       setInvoice(updated);
       setStatus((String(updated.status ?? target) as InvoiceStatus) || target);
-    } catch (e: any) {
-      setError(e?.response?.data?.message?.join?.('\n') || e?.message || 'Не вдалося змінити статус');
+    } catch (e: unknown) {
+      const ex = e as { response?: { data?: { message?: string | string[] } }; message?: string };
+      const m = ex?.response?.data?.message;
+      const msg = Array.isArray(m) ? m.join('\n') : typeof m === 'string' ? m : ex?.message || 'Не вдалося змінити статус';
+      setError(msg);
     } finally {
       setSaving(false);
     }
   }
 
-  async function onSave(opts?: { silent?: boolean }) {
+  async function onSave(_opts?: { silent?: boolean }) {
     if (!invoice) return;
     if (!canEdit) return;
 
@@ -1293,8 +1317,11 @@ export default function InvoiceDetailsPage() {
         items: toApiItems(raw.map((it, idx) => normalizeItem(it, idx + 1))),
       });
       setDirty(false);
-    } catch (e: any) {
-      setError(e?.response?.data?.message?.join?.('\n') || e?.message || 'Не вдалося зберегти');
+    } catch (e: unknown) {
+      const ex = e as { response?: { data?: { message?: string | string[] } }; message?: string };
+      const m = ex?.response?.data?.message;
+      const msg = Array.isArray(m) ? m.join('\n') : typeof m === 'string' ? m : ex?.message || 'Не вдалося зберегти';
+      setError(msg);
     } finally {
       setSaving(false);
     }
@@ -1304,7 +1331,7 @@ export default function InvoiceDetailsPage() {
     return n(v, 0);
   }
 
-  async function onPushToWarehouseDraft() {
+  async function _onPushToWarehouseDraft() {
     if (!invoice) return;
     if (!canWarehouseRead) {
       setPushToWarehouseError('Немає доступу warehouse:read.');
@@ -1354,14 +1381,18 @@ export default function InvoiceDetailsPage() {
       });
 
       navigate(`/warehouses/${selectedWarehouse.id}?openCreate=1&tab=movements`);
-    } catch (e: any) {
-      setPushToWarehouseError(e?.response?.data?.message?.join?.('\n') || e?.message || 'Не вдалося створити чернетку для складу.');
+    } catch (e: unknown) {
+      const ex = e as { response?: { data?: { message?: string | string[] } }; message?: string };
+      const m = ex?.response?.data?.message;
+      const msg = Array.isArray(m) ? m.join('\n') : typeof m === 'string' ? m : ex?.message || 'Не вдалося створити чернетку для складу.';
+      setPushToWarehouseError(msg);
     } finally {
       setPushToWarehouseLoading(false);
     }
   }
+  void _onPushToWarehouseDraft;
 
-  async function onInternalWarehouseDraft() {
+  async function _onInternalWarehouseDraft() {
     if (!invoice) return;
     if (!canWarehouseRead) {
       setPushToWarehouseError('Немає доступу warehouse:read.');
@@ -1414,12 +1445,16 @@ export default function InvoiceDetailsPage() {
       });
 
       navigate(`/warehouses/${invoiceWarehouse.id}?openCreate=1&tab=movements`);
-    } catch (e: any) {
-      setPushToWarehouseError(e?.response?.data?.message?.join?.('\n') || e?.message || 'Не вдалося створити чернетку для складу.');
+    } catch (e: unknown) {
+      const ex = e as { response?: { data?: { message?: string | string[] } }; message?: string };
+      const m = ex?.response?.data?.message;
+      const msg = Array.isArray(m) ? m.join('\n') : typeof m === 'string' ? m : ex?.message || 'Не вдалося створити чернетку для складу.';
+      setPushToWarehouseError(msg);
     } finally {
       setPushToWarehouseLoading(false);
     }
   }
+  void _onInternalWarehouseDraft;
 
   async function onPdf(view: 'client' | 'internal') {
     if (!invoice) return;
@@ -1450,8 +1485,8 @@ export default function InvoiceDetailsPage() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setError(e?.message || 'Не вдалося згенерувати PDF');
+    } catch (e: unknown) {
+      setError((e as { message?: string })?.message || 'Не вдалося згенерувати PDF');
     } finally {
       setSaving(false);
     }
@@ -1637,14 +1672,14 @@ export default function InvoiceDetailsPage() {
       };
 
       iframe.onload = () => {
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+         
         doPrint();
       };
 
       // Use srcdoc if available
       (iframe as any).srcdoc = html;
       return;
-    } catch (_e) {
+    } catch {
       // fallback: popup window
       const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
       const url = URL.createObjectURL(blob);
