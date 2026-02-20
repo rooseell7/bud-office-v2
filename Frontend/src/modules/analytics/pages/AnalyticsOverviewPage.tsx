@@ -201,8 +201,8 @@ const AnalyticsOverviewPage: React.FC = () => {
                       <LineChart data={data.cashflowSeries.map((r) => ({ ...r, date: r.dateBucket?.slice(0, 10) }))}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                        <Tooltip formatter={(v: number) => formatUAH(v)} labelFormatter={(l) => l} />
+                        <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number | undefined) => `${((v ?? 0) / 1000).toFixed(0)}k`} />
+                        <Tooltip formatter={(v: number | undefined) => formatUAH(v ?? 0)} labelFormatter={(l) => l} />
                         <Legend />
                         <Line type="monotone" dataKey="incomeUAH" name="Прихід" stroke="#4caf50" strokeWidth={2} dot={false} />
                         <Line type="monotone" dataKey="expenseUAH" name="Витрати" stroke="#f44336" strokeWidth={2} dot={false} />
@@ -227,13 +227,13 @@ const AnalyticsOverviewPage: React.FC = () => {
                           cx="50%"
                           cy="50%"
                           outerRadius={80}
-                          label={({ categoryName, amountUAH }) => `${categoryName}: ${formatUAH(amountUAH)}`}
+                          label={(props) => { const p = props as unknown as { categoryName?: string; amountUAH?: number }; return `${p.categoryName ?? ''}: ${formatUAH(p.amountUAH ?? 0)}`; }}
                         >
                           {data.expenseByCategory.map((_, i) => (
                             <Cell key={i} fill={COLORS[i % COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(v: number) => formatUAH(v)} />
+                        <Tooltip formatter={(v: number | undefined) => formatUAH(v ?? 0)} />
                       </PieChart>
                     </ResponsiveContainer>
                   </CardContent>
@@ -249,10 +249,10 @@ const AnalyticsOverviewPage: React.FC = () => {
                     <ResponsiveContainer width="100%" height={280}>
                       <BarChart data={data.revenueByProject} layout="vertical" margin={{ left: 120 }}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis type="number" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                        <XAxis type="number" tickFormatter={(v: number | undefined) => `${((v ?? 0) / 1000).toFixed(0)}k`} />
                         <YAxis type="category" dataKey="projectName" width={110} tick={{ fontSize: 11 }} />
-                        <Tooltip formatter={(v: number) => formatUAH(v)} />
-                        <Bar dataKey="incomeUAH" name="Виручка" fill="#2196f3" onClick={(payload: { projectId?: number }) => payload?.projectId != null && navigate(`/analytics/projects?projectId=${payload.projectId}`)} />
+                        <Tooltip formatter={(v: number | undefined) => formatUAH(v ?? 0)} />
+                        <Bar dataKey="incomeUAH" name="Виручка" fill="#2196f3" onClick={(data) => { const p = data as unknown as { projectId?: number }; if (p?.projectId != null) navigate(`/analytics/projects?projectId=${p.projectId}`); }} />
                       </BarChart>
                     </ResponsiveContainer>
                   </CardContent>
