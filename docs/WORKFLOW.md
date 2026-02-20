@@ -30,6 +30,8 @@
 
 Якщо E2E креденшіали не задані — run-gates.bat виконає Backend + Frontend і підкаже, як запустити E2E вручну.
 
+Увімкнути typecheck у gates: перед запуском встановити `ENABLE_TYPECHECK=1`, потім `Deployment\run-gates.bat`. За замовчуванням typecheck пропускається.
+
 ## Якщо щось падає
 
 - **STOP.** Малий фікс → прогнати тест/checks знову. Не накопичувати зміни.

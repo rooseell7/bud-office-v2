@@ -29,6 +29,22 @@ if errorlevel 1 (
 echo [OK] Frontend build passed.
 echo.
 
+:: 2.5 Optional typecheck (opt-in)
+if "%ENABLE_TYPECHECK%"=="1" (
+  echo [Typecheck] Frontend: npm run typecheck...
+  cd /d "%ROOT%\Frontend"
+  call npm run typecheck
+  if errorlevel 1 (
+    echo [FAIL] Frontend typecheck failed.
+    exit /b 1
+  )
+  echo [OK] Frontend typecheck passed.
+  echo.
+) else (
+  echo Typecheck skipped. Set ENABLE_TYPECHECK=1 to enable.
+  echo.
+)
+
 :: 3. E2E smoke (nginx mode)
 if "%E2E_EMAIL%"=="" (
   echo [SKIP] E2E: Set E2E_EMAIL and E2E_PASSWORD before running e2e.
