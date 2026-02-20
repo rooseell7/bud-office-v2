@@ -153,8 +153,8 @@ export function InvoicesPage() {
         field: 'objectId',
         headerName: 'Обʼєкт',
         width: 220,
-        valueGetter: (p) => {
-          const oid = p.row.objectId ?? p.row.projectId;
+        valueGetter: (_value, row) => {
+          const oid = row.objectId ?? row.projectId;
           const found = objects.find((o) => o.id === oid);
           return found ? found.name : oid ?? '';
         },
@@ -168,7 +168,7 @@ export function InvoicesPage() {
         width: 120,
         align: 'right',
         headerAlign: 'right',
-        valueGetter: (p) => money(p.row.total),
+        valueGetter: (_value, row) => money(row.total),
       },
     ],
     [objects],
