@@ -32,6 +32,16 @@
 
 - **STOP.** Малий фікс → прогнати тест/checks знову. Не накопичувати зміни.
 
+## Auth Source of Truth
+
+- **Canonical AuthContext (реалізація + useAuth):** `Frontend/src/modules/auth/context/AuthContext.tsx`
+- **Canonical AuthProvider:** той самий файл (експорт `AuthProvider`); підключається в `main.tsx`.
+- **Canonical ProtectedRoute:** `Frontend/src/modules/auth/ProtectedRoute.tsx` — використовується в `App.tsx`.
+- **Canonical LoginPage:** `Frontend/src/modules/auth/LoginPage.tsx` — використовується в `App.tsx`.
+- **Canonical Router entry:** `Frontend/src/App.tsx` (всі маршрути); точка входу — `main.tsx` → `App`.
+
+Не імпортувати auth/ProtectedRoute/Login з **legacy** шляхів: `src/auth/*`, `src/_legacy_routes/*`. Зміни в авторизації — тільки через канонічні файли вище.
+
 ## Нагадування
 
 - Без змін у **Frontend/src/sheet/** без окремого ТЗ.
