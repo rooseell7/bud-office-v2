@@ -659,6 +659,10 @@ export default function DeliveryActDetailsPage() {
     markDirty();
   }
 
+  void _copySelectionToClipboard;
+  void _clearSelectionCells;
+  void _pasteTsv;
+
   function startFill(r: number, c: GridColKey) {
     if (!canWrite) return;
     const ai = gridRowIndices[r];
