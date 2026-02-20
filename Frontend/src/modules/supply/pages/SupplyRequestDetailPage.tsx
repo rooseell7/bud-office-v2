@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -28,7 +28,6 @@ import {
   Snackbar,
   Alert,
   Menu,
-  ListItemText,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddIcon from '@mui/icons-material/Add';
@@ -68,6 +67,12 @@ import type { SupplyRequestDto, SupplyRequestItemDto } from '../../../api/supply
 
 const statusLabels: Record<string, string> = { draft: 'Чернетка', submitted: 'Передано', closed: 'Закрито', cancelled: 'Скасовано' };
 const priorityLabels: Record<string, string> = { low: 'Низький', normal: 'Звичайний', high: 'Високий' };
+const foremanDisplayName: Record<string, string> = { Admin: 'Адміністратор', admin: 'Адміністратор' };
+function formatForemanName(name: string | null | undefined): string {
+  if (!name || typeof name !== 'string') return '';
+  const trimmed = name.trim();
+  return foremanDisplayName[trimmed] ?? trimmed;
+}
 
 type ItemRow = {
   customName: string;
@@ -169,8 +174,9 @@ export default function SupplyRequestDetailPage() {
     try {
       const p = await getPurchasePlan(data.id, data.projectId);
       setPlan(p);
-    } catch (e: any) {
-      setPlanError(e?.response?.data?.message || 'Не вдалося завантажити план');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Не вдалося завантажити план';
+      setPlanError(msg);
     } finally {
       setPlanLoading(false);
     }
@@ -187,9 +193,10 @@ export default function SupplyRequestDetailPage() {
       setPlanModalOpen(false);
       setSnackOpen(true);
       await load();
-    } catch (e: any) {
-      if (e?.response?.status === 409) {
-        setPlanError(e?.response?.data?.message || 'Для цієї заявки вже створені замовлення.');
+    } catch (e: unknown) {
+      const ex = e as { response?: { status?: number; data?: { message?: string } } };
+      if (ex?.response?.status === 409) {
+        setPlanError(ex?.response?.data?.message || 'Для цієї заявки вже створені замовлення.');
         try {
           const refreshed = await getSupplyRequest(data.id);
           setConflictOrders(refreshed.linkedOrders ?? []);
@@ -198,7 +205,7 @@ export default function SupplyRequestDetailPage() {
           setConflictOrders(data.linkedOrders ?? []);
         }
       } else {
-        setPlanError(e?.response?.data?.message || 'Помилка створення замовлень');
+        setPlanError(ex?.response?.data?.message || 'Помилка створення замовлень');
       }
     } finally {
       setCreatePlanBusy(false);
@@ -323,8 +330,9 @@ export default function SupplyRequestDetailPage() {
         items: validItems,
       });
       navigate(`/supply/requests/${created.id}`);
-    } catch (e: any) {
-      setCreateError(e?.response?.data?.message || 'Помилка створення заявки');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Помилка створення заявки';
+      setCreateError(msg);
     } finally {
       setBusy(false);
     }
@@ -619,8 +627,9 @@ export default function SupplyRequestDetailPage() {
     try {
       await deleteSupplyRequest(data.id);
       navigate('/supply/requests');
-    } catch (e: any) {
-      setDeleteError(e?.response?.data?.message || 'Помилка видалення');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Помилка видалення';
+      setDeleteError(msg);
     } finally {
       setDeleteBusy(false);
     }
@@ -758,7 +767,10 @@ export default function SupplyRequestDetailPage() {
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
         <Button size="small" startIcon={<ArrowBackIcon />} onClick={() => navigate('/supply/requests')}>Назад</Button>
         <Typography variant="h6">Заявка №{data.id}</Typography>
-        <Typography color="text.secondary">Об'єкт: {projectMap[data.projectId] ?? `Об'єкт ${data.projectId}`}</Typography>
+        <Typography color="text.secondary">Об'єкт: {data.projectName ?? projectMap[data.projectId] ?? `Об'єкт ${data.projectId}`}</Typography>
+        {data.foremanName && (
+          <Typography color="text.secondary">Виконроб: {formatForemanName(data.foremanName)}</Typography>
+        )}
         <Typography color="text.secondary">Дата потреби: {data.neededAt ?? '—'}</Typography>
         <Typography color="text.secondary">Статус: {statusLabels[data.status] ?? data.status}</Typography>
       </Box>
@@ -775,8 +787,8 @@ export default function SupplyRequestDetailPage() {
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="caption" color="text.secondary" display="block">Оберіть етапи</Typography>
                     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
-                      <Button size="small" variant="outlined" onClick={selectAllStages}>Select all</Button>
-                      <Button size="small" variant="outlined" onClick={clearStages}>Clear</Button>
+                      <Button size="small" variant="outlined" onClick={selectAllStages}>Обрати всі</Button>
+                      <Button size="small" variant="outlined" onClick={clearStages}>Очистити</Button>
                       {quoteStagesData.stages.map((s) => (
                         <FormControlLabel
                           key={s.stageId}
@@ -807,9 +819,9 @@ export default function SupplyRequestDetailPage() {
                             sx={{ mb: 1, display: 'block' }}
                           />
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                            <Button size="small" variant="outlined" onClick={selectAllMaterials}>Select all</Button>
-                            <Button size="small" variant="outlined" onClick={selectAllRemaining}>Select all remaining</Button>
-                            <Button size="small" variant="outlined" onClick={clearMaterials}>Clear</Button>
+                            <Button size="small" variant="outlined" onClick={selectAllMaterials}>Обрати всі</Button>
+                            <Button size="small" variant="outlined" onClick={selectAllRemaining}>Обрати всі з залишком</Button>
+                            <Button size="small" variant="outlined" onClick={clearMaterials}>Очистити</Button>
                             <Button
                               variant="contained"
                               size="small"
@@ -925,7 +937,7 @@ export default function SupplyRequestDetailPage() {
       ) : (
         <>
           {data.comment && <Typography variant="body2" sx={{ mb: 1 }}>Коментар: {data.comment}</Typography>}
-          <TableContainer component={Paper} sx={{ mb: 2 }}>
+          <TableContainer sx={{ mb: 2 }}>
             <Table size="small">
               <TableHead>
                 <TableRow>
@@ -942,7 +954,7 @@ export default function SupplyRequestDetailPage() {
                     <TableCell>{row.customName ?? `Матеріал ${row.materialId ?? '—'}`}</TableCell>
                     <TableCell>{row.unit}</TableCell>
                     <TableCell>{row.qty}</TableCell>
-                    <TableCell>{row.priority ?? 'normal'}</TableCell>
+                    <TableCell>{priorityLabels[row.priority ?? 'normal'] ?? (row.priority ?? 'normal')}</TableCell>
                     <TableCell>{row.note ?? '—'}</TableCell>
                   </TableRow>
                 ))}

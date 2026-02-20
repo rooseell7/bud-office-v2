@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box, Button, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
@@ -108,8 +108,9 @@ export default function SupplyOrderDetailPage() {
     try {
       await deleteSupplyOrder(Number(id));
       navigate('/supply/orders');
-    } catch (e: any) {
-      setDeleteError(e?.response?.data?.message || 'Помилка видалення');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Помилка видалення';
+      setDeleteError(msg);
     } finally {
       setDeleteBusy(false);
     }
@@ -121,8 +122,8 @@ export default function SupplyOrderDetailPage() {
     try {
       const { receiptId } = await createReceiptQuickFromOrder(Number(id), { mode: 'remaining', includeZeroLines: false });
       navigate(`/supply/receipts/${receiptId}`, { state: { createdFromQuick: true } });
-    } catch (e: any) {
-      const msg = e?.response?.data?.message || 'Помилка створення швидкого приходу';
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Помилка створення швидкого приходу';
       setToastMessage(msg);
     } finally {
       setBusy(false);
@@ -186,8 +187,9 @@ export default function SupplyOrderDetailPage() {
       setSelectedItemIds([]);
       setData(res.fromOrder);
       await load();
-    } catch (e: any) {
-      setMoveError(e?.response?.data?.message || 'Помилка переміщення');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Помилка переміщення';
+      setMoveError(msg);
     } finally {
       setBusy(false);
     }
@@ -216,14 +218,16 @@ export default function SupplyOrderDetailPage() {
       setMergeModalOpen(false);
       setData(res.sourceOrder);
       await load();
-    } catch (e: any) {
-      setMergeError(e?.response?.data?.message || 'Помилка злиття');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Помилка злиття';
+      setMergeError(msg);
     } finally {
       setBusy(false);
     }
   };
 
   const moveTargetOrder = moveToOrderId !== '' ? targetOrderList.find((o) => o.id === moveToOrderId) : null;
+  void moveTargetOrder;
   const mergeTargetOrder = mergeTargetOrderId !== '' ? targetOrderList.find((o) => o.id === mergeTargetOrderId) : null;
   const differentSupplierWarning = (data?.supplierId != null && mergeTargetOrder?.supplierId != null && data.supplierId !== mergeTargetOrder.supplierId);
 

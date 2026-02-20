@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Box, Button, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TextField, Dialog, DialogTitle, DialogContent, MenuItem, Select, FormControl, InputLabel, Chip } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -204,8 +204,9 @@ export default function SupplyReceiptDetailPage() {
       setData(updated);
       setSubstitutionModalOpen(false);
       load();
-    } catch (e: any) {
-      setSubstitutionError(e?.response?.data?.message || 'Помилка збереження заміни');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Помилка збереження заміни';
+      setSubstitutionError(msg);
     } finally {
       setBusy(false);
     }

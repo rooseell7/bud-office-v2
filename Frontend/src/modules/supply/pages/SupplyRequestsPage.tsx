@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box, Button, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
@@ -86,8 +86,9 @@ export default function SupplyRequestsPage() {
       });
       setTemplateModalOpen(false);
       navigate(`/supply/requests/${requestId}`);
-    } catch (e: any) {
-      setCreateError(e?.response?.data?.message || 'Помилка створення заявки');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Помилка створення заявки';
+      setCreateError(msg);
     } finally {
       setCreateBusy(false);
     }
@@ -104,8 +105,9 @@ export default function SupplyRequestsPage() {
       await deleteSupplyRequest(requestId);
       setDeleteConfirmId(null);
       load();
-    } catch (e: any) {
-      setDeleteError(e?.response?.data?.message || 'Помилка видалення');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Помилка видалення';
+      setDeleteError(msg);
     } finally {
       setDeleteBusy(false);
     }

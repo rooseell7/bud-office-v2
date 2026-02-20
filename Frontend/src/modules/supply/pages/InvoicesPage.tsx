@@ -233,14 +233,17 @@ export function InvoicesPage() {
       await clearDraftData();
       setEditOpen(false);
       await load();
-    } catch (e: any) {
-      setErr(e?.response?.data?.message?.join?.(', ') ?? e?.response?.data?.message ?? String(e));
+    } catch (e: unknown) {
+      const ex = e as { response?: { data?: { message?: string | string[] } }; message?: string };
+      const m = ex?.response?.data?.message;
+      const msg = Array.isArray(m) ? m.join(', ') : typeof m === 'string' ? m : ex?.message ?? String(e);
+      setErr(msg);
     }
   }, [form, items, editId, auth.user?.id, clearDraftData]);
 
   async function onDelete(id: number) {
     if (!canWrite) return;
-    // eslint-disable-next-line no-alert
+     
     const ok = window.confirm('Видалити накладну?');
     if (!ok) return;
     await deleteInvoice(id);
@@ -393,6 +396,7 @@ export function InvoicesPage() {
             {items.map((it, idx) => {
               const mat = it.materialId ? materialById.get(it.materialId) : undefined;
               const matName = it.materialName ?? mat?.name ?? '';
+              void matName;
               return (
                 <Stack
                   key={idx}

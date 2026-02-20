@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
@@ -20,6 +20,7 @@ export default function SupplyOrdersPage() {
   const isAdmin = Array.isArray(roles) && roles.map((r) => String(r).toLowerCase()).includes('admin');
   const [list, setList] = useState<SupplyOrderDto[]>([]);
   const [projectId, setProjectId] = useState<number | ''>('');
+  void setProjectId;
   const [status, setStatus] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
@@ -53,8 +54,9 @@ export default function SupplyOrdersPage() {
       await deleteSupplyOrder(orderId);
       setDeleteConfirmId(null);
       load();
-    } catch (e: any) {
-      setDeleteError(e?.response?.data?.message || 'Помилка видалення');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setDeleteError(msg || 'Помилка видалення');
     } finally {
       setDeleteBusy(false);
     }
