@@ -1,0 +1,67 @@
+---
+description: "Typecheck burndown (Frontend) — канонічний шаблон для STABILITY STEP 2.X (batch N). Ліміт файлів: ≤20 для TS1484/TS6133, ≤10 для TS2339."
+globs:
+  - "Frontend/src/modules/**/*"
+alwaysApply: false
+---
+
+# STABILITY STEP 2.X (batch N) — Typecheck burndown (Frontend) з нульовим ризиком
+
+## CONTEXT / GOAL
+- Проєкт: BUD_OFFICE v2.1. Головна ціль: СТАБІЛЬНІСТЬ (нічого не ламати).
+- Малими кроками: 1 логічна зміна = 1 коміт/1 diff. Масові зміни — STOP.
+- /sheet НЕ ЧІПАТИ. auth core / router core / collab(ws) / deployment/nginx НЕ ЧІПАТИ.
+- Тести не "підганяти". DONE тільки після PASS усіх checks.
+- Активні правила: 00-budoffice-global, 40-tests-and-regression, 50-done-gate, 60-nazar-rules.
+
+## SCOPE (ЖОРСТКО)
+- Обрати ОДИН модуль: `Frontend/src/modules/<MODULE>/**` (одна коренева папка).
+- **Ліміт файлів:**
+  - Якщо PATTERN = **TS1484** або **TS6133** → **≤20 файлів**.
+  - Якщо PATTERN = **TS2339** (type narrowing) → **≤10 файлів**.
+- Заборонені зони:
+  - Frontend/src/sheet/**
+  - Frontend/src/modules/auth/** (core)
+  - router core / shared env resolver / ws-collab glue / deployment конфіги
+  - будь-які UI/UX зміни, стилі, верстка, "рефактор" за власною ініціативою
+  - будь-які зміни Playwright тестів/селекторів/флоу
+
+## PATTERN (ОДИН НА БАТЧ, НЕ МІКСУВАТИ)
+Пріоритет:
+1) **TS1484** → type-only imports:
+   - усе, що використовується тільки як тип: `import type { X } from "...";`
+   - якщо в одному імпорті змішані value+type — розділити на два.
+   - НЕ чистити unused у цьому патерні.
+2) Якщо TS1484 у MODULE майже немає/не дає прогресу — **TS6133** → unused:
+   - прибирати лише очевидно unused imports/locals;
+   - unused params: якщо callback/override/інтерфейс і прибрати не можна — `void param;` на початку функції (без зміни поведінки).
+   - НЕ робити перейменувань/масових змін сигнатур.
+3) Якщо не дає прогресу — **TS2339** (type narrowing union) локально перед доступом до властивостей, без зміни контрактів/API і без UI змін. **(≤10 файлів)**
+
+## METRIC (ОБОВ'ЯЗКОВО)
+- BEFORE: `cd Frontend && npm run typecheck` → Total errors = X, MODULE errors = Xm.
+- AFTER: `npm run typecheck` → Total errors = Y, MODULE errors = Ym.
+- У фіналі ОБОВ'ЯЗКОВО: `Typecheck errors: X → Y (MODULE <MODULE>: Xm → Ym)`.
+
+## EXECUTION PLAN (СТРОГО)
+1) Baseline: `cd Frontend && npm run typecheck`; обрати <MODULE> з помилками, який НЕ в заборонених зонах.
+2) Обрати ОДИН патерн (TS1484 або TS6133 або TS2339) — не міксувати.
+3) Виправити помилки у межах ліміту файлів (≤20 для TS1484/TS6133, ≤10 для TS2339) в `src/modules/<MODULE>/**`, мінімально і точково.
+4) AFTER typecheck + метрика X→Y, Xm→Ym.
+5) RUN CHECKS / GATES (обов'язково):
+   - cd Backend && npm test
+   - cd Frontend && npm run build
+   - Deployment/run-online.bat (nginx mode: http://localhost)
+   - E2E smoke: E2E_BASE_URL=http://localhost, E2E_EMAIL=..., E2E_PASSWORD=..., cd Frontend && npm run e2e
+   - Очікування: 2 smoke тести PASS (sales/quotes renders + invoices renders).
+6) DONE тільки якщо все PASS.
+
+## STOP CONDITIONS
+- Якщо потрібно змінювати API/контракти/бізнес-логіку/роути, або торкатися /sheet/collab/deployment — STOP.
+- У STOP-відповіді: причина + 2–3 варіанти мінімального рішення (без реалізації).
+
+## REPORT (ОДНИМ ПОВІДОМЛЕННЯМ)
+- **CHANGES:** MODULE, PATTERN, FILES (≤20 або ≤10), що зроблено (1–3 буліти).
+- **CHECKS RUN:** typecheck BEFORE X / AFTER Y (MODULE Xm→Ym), Backend npm test, Frontend npm run build, E2E smoke — PASS/FAIL.
+- **RISK NOTES:** підтвердити, що /sheet/auth/router/collab/deployment не змінювались.
+- **FINAL:** Typecheck errors X → Y (MODULE: Xm → Ym); Commit &lt;hash&gt; (message: `chore(typecheck): reduce TS errors (batch N, <MODULE>)`); Push origin/main.
