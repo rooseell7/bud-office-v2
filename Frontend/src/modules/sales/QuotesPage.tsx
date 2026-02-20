@@ -1,9 +1,6 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 
 import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
   Alert,
   Autocomplete,
   Box,
@@ -25,7 +22,6 @@ import {
   Typography,
 } from '@mui/material';
 
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -133,6 +129,7 @@ export default function QuotesPage() {
   const selectedTemplate = useMemo(() => {
     return templates.find((t) => t.id === templateId) ?? templates[0] ?? null;
   }, [templates, templateId]);
+  void selectedTemplate;
 
   function showLoadError(scope: string, e: unknown) {
     const msg = e instanceof Error ? e.message : String(e ?? '');
@@ -216,6 +213,7 @@ export default function QuotesPage() {
     }, 0);
     return { total: f2(total), issues };
   }, [stageTotalsList, stages]);
+  void totalKp;
 
   const onPickDoc = useCallback(
     (nextId: number | '') => {
@@ -303,6 +301,7 @@ export default function QuotesPage() {
       return next;
     });
   }
+  void applyRecalcForStage;
 
   function setStageField(stageIdx: number, key: keyof Pick<Stage, 'name' | 'areaM2' | 'lengthLm'>, value: string) {
     setStagesT((prev) => {
@@ -311,6 +310,7 @@ export default function QuotesPage() {
       return next;
     });
   }
+  void setStageField;
 
   function addStage(afterIdx?: number) {
     setStagesT((prev) => {
@@ -336,6 +336,7 @@ export default function QuotesPage() {
       return next;
     });
   }
+  void addRow;
 
   function deleteRow(stageIdx: number, kind: 'work' | 'material', rowId: string) {
     setStagesT((prev) => {
@@ -450,6 +451,7 @@ export default function QuotesPage() {
       return next;
     });
   }
+  void addPercent;
 
   function deletePercent(stageIdx: number, id: string) {
     setStagesT((prev) => {
@@ -460,6 +462,7 @@ export default function QuotesPage() {
       return next;
     });
   }
+  void deletePercent;
 
   function setPercentCell(stageIdx: number, idx: number, key: keyof PercentRow, value: string) {
     setStagesT((prev) => {
@@ -472,6 +475,7 @@ export default function QuotesPage() {
       return next;
     });
   }
+  void setPercentCell;
 
   function createFromTemplate() {
     setErr('');
@@ -564,6 +568,7 @@ function onPrint() {
       </Stack>
     );
   }
+  void stageHeader;
 
   function RowTable({
     stageIdx,
@@ -1515,6 +1520,7 @@ function onPrint() {
       </Box>
     );
   }
+  void RowTable;
 
   return (
     <Box>
