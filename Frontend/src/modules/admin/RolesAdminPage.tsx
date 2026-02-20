@@ -1,7 +1,7 @@
 // src/modules/admin/RolesAdminPage.tsx
 import React from 'react';
 import api from '../../api/client';
-import { Role } from './types';
+import type { Role } from './types';
 
 const RolesAdminPage: React.FC = () => {
   const [roles, setRoles] = React.useState<Role[]>([]);
@@ -13,8 +13,9 @@ const RolesAdminPage: React.FC = () => {
       setLoading(true);
       const res = await api.get<Role[]>('/roles');
       setRoles(res.data);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || 'Помилка завантаження ролей');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(msg || 'Помилка завантаження ролей');
     } finally {
       setLoading(false);
     }

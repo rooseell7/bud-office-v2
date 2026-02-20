@@ -1,7 +1,7 @@
 // src/modules/admin/UsersAdminPage.tsx
 import React from 'react';
 import api from '../../api/client';
-import { User, Role } from './types';
+import type { User, Role } from './types';
 
 interface CreateUserForm {
   email: string;
@@ -34,8 +34,9 @@ const UsersAdminPage: React.FC = () => {
       ]);
       setUsers(usersRes.data);
       setRoles(rolesRes.data);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || 'Помилка завантаження користувачів');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(msg || 'Помилка завантаження користувачів');
     } finally {
       setLoading(false);
     }
@@ -66,8 +67,9 @@ const UsersAdminPage: React.FC = () => {
       await api.post<User>('/users', form);
       setForm(emptyForm);
       await load();
-    } catch (err: any) {
-      setError(err?.response?.data?.message || 'Не вдалося створити користувача');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(msg || 'Не вдалося створити користувача');
     } finally {
       setLoading(false);
     }
