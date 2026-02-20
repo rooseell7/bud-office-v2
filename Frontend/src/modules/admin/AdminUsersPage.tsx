@@ -32,7 +32,7 @@ function generatePassword(): string {
 type AdminUser = User & { isActive?: boolean };
 
 const AdminUsersPage: React.FC = () => {
-  const { user: currentUser, refreshMe } = useAuth();
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(false);
@@ -104,8 +104,9 @@ const AdminUsersPage: React.FC = () => {
       });
       setCreateOpen(false);
       await loadData();
-    } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? 'Помилка при створенні користувача.';
+    } catch (e: unknown) {
+      const ex = e as { response?: { data?: { message?: string } }; message?: string };
+      const msg = ex?.response?.data?.message ?? ex?.message ?? 'Помилка при створенні користувача.';
       setError(msg);
     } finally {
       setLoading(false);
@@ -116,7 +117,7 @@ const AdminUsersPage: React.FC = () => {
     setEditUser(u);
     setEditFullName(u.fullName);
     setEditIsActive(u.isActive !== false);
-    setEditRoles((u.roles ?? []).map((r) => r.code));
+    setEditRoles((u.roles ?? []).map((r) => (typeof r === 'string' ? r : r.code)));
     setError(null);
   };
 
@@ -136,8 +137,9 @@ const AdminUsersPage: React.FC = () => {
       if (isSelf) {
         setSaveMsg('Права оновлено. Рекомендується перезайти для застосування змін.');
       }
-    } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? 'Помилка при збереженні.';
+    } catch (e: unknown) {
+      const ex = e as { response?: { data?: { message?: string } }; message?: string };
+      const msg = ex?.response?.data?.message ?? ex?.message ?? 'Помилка при збереженні.';
       setError(msg);
     } finally {
       setLoading(false);
@@ -206,7 +208,7 @@ const AdminUsersPage: React.FC = () => {
                 <TableRow key={u.id}>
                   <TableCell>{u.email}</TableCell>
                   <TableCell>{u.fullName}</TableCell>
-                  <TableCell>{(u.roles ?? []).map((r) => r.name).join(', ') || '—'}</TableCell>
+                  <TableCell>{(u.roles ?? []).map((r) => (typeof r === 'string' ? r : r.name)).join(', ') || '—'}</TableCell>
                   <TableCell>{u.isActive !== false ? 'Активний' : 'Вимкнений'}</TableCell>
                   <TableCell align="right">
                     <Button size="small" startIcon={<EditIcon />} onClick={() => openEdit(u)}>
