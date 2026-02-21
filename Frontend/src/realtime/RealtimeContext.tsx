@@ -19,7 +19,6 @@ import {
   reducePresenceState,
   emptyPresenceState,
   type PresenceState,
-  type PresenceUser,
 } from '../shared/realtime/usePresence';
 import type { PresenceStatePayload, EditStatePayload } from './realtimeClient';
 
