@@ -126,6 +126,7 @@ const NotificationsPage: React.FC = () => {
             <List dense disablePadding>
               {items.map((n) => {
                 const route = entityToRoute(n);
+                void route;
                 return (
                   <ListItem
                     key={n.id}
