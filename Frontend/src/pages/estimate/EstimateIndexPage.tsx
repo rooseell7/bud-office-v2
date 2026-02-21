@@ -53,7 +53,7 @@ function formatDate(s: string | undefined): string {
 
 export const EstimateIndexPage: React.FC = () => {
   const navigate = useNavigate();
-  const { can, roles, user } = useAuth();
+  const { can, roles } = useAuth();
   const rolesNormalized = (roles ?? []).map((r) => String(r).toLowerCase());
   const isAdmin = rolesNormalized.includes('admin') || rolesNormalized.includes('superadmin');
   const canDeleteKp =
@@ -123,8 +123,9 @@ export const EstimateIndexPage: React.FC = () => {
     try {
       const { id } = await createEstimate({ projectId: selectedProjectId });
       navigate(`/estimate/${id}`, { state: { from: '/estimate' } });
-    } catch (e: any) {
-      setError(e?.response?.data?.message || 'Не вдалося створити КП');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Не вдалося створити КП';
+      setError(msg);
     } finally {
       setCreating(false);
     }
@@ -144,9 +145,10 @@ export const EstimateIndexPage: React.FC = () => {
       setProjectEstimates((prev) => prev.filter((e) => e.id !== id));
       setRecentEstimates((prev) => prev.filter((e) => e.id !== id));
       setToast('КП видалено');
-    } catch (e: any) {
-      const status = e?.response?.status;
-      const msg = e?.response?.data?.message;
+    } catch (e: unknown) {
+      const ex = e as { response?: { status?: number; data?: { message?: string } } };
+      const status = ex?.response?.status;
+      const msg = ex?.response?.data?.message;
       if (status === 403) setToast('Недостатньо прав');
       else if (status === 404) {
         setToast('КП не знайдено (фантом)');
