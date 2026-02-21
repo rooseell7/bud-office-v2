@@ -15,15 +15,17 @@ export function patchHistoryEventsOnce() {
     window.dispatchEvent(new PopStateEvent('popstate', { state }));
   }
 
+  type HistoryStateArgs = [state: any, title: string, url?: string | URL | null];
+
   window.history.pushState = function (...args: any[]) {
-    const ret = originalPushState(...args);
+    const ret = originalPushState(...(args as HistoryStateArgs));
     const state = args?.[0];
     dispatchLocationChange('pushstate', state);
     return ret;
   } as any;
 
   window.history.replaceState = function (...args: any[]) {
-    const ret = originalReplaceState(...args);
+    const ret = originalReplaceState(...(args as HistoryStateArgs));
     const state = args?.[0];
     dispatchLocationChange('replacestate', state);
     return ret;
