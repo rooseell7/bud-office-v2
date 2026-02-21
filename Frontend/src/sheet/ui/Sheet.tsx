@@ -87,7 +87,7 @@ export const Sheet: React.FC<SheetProps> = ({
   } = useSheetController({
     config,
     initialSnapshot,
-    adapter,
+    adapter: adapter ?? undefined,
     onPersistableAction: (actionType) => persistRef.current?.onLocalChange?.({ type: actionType }),
   });
 
@@ -103,12 +103,16 @@ export const Sheet: React.FC<SheetProps> = ({
 
   const handleVersionsRestore = React.useCallback(
     (snapshot?: Record<string, any>) => {
-      if (snapshot) {
-        hydrate(snapshot);
+      if (snapshot && 'values' in snapshot) {
+        hydrate(snapshot as SheetSnapshot);
         return;
       }
+      if (snapshot) return;
       adapter?.loadSnapshot?.().then((snap) => {
-        if (snap) hydrate(snap);
+        const toHydrate = snap && typeof snap === 'object' && 'snapshot' in snap
+          ? (snap as { snapshot: SheetSnapshot }).snapshot
+          : snap;
+        if (toHydrate) hydrate(toHydrate);
       });
     },
     [adapter, hydrate],
@@ -379,7 +383,7 @@ export const Sheet: React.FC<SheetProps> = ({
           documentId={documentId ?? null}
           state={state}
           onRestore={handleVersionsRestore}
-          onPreview={isPreview ? undefined : handlePreviewVersion}
+          onPreview={isPreview ? undefined : (snap: Record<string, any>) => { if (snap && 'values' in snap) handlePreviewVersion(snap as SheetSnapshot); }}
           disabled={isPreview}
         />
         <ExportButton documentId={documentId ?? null} disabled={isPreview} />
