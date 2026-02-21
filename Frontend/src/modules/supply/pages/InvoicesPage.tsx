@@ -324,7 +324,7 @@ export function InvoicesPage() {
             {hasDraft && !draftLoading ? (
               <Alert severity="info">
                 Є збережена чернетка.{' '}
-                <Button size="small" onClick={() => restoreFromDraft((p) => { setForm(p.form); setItems(p.items); })}>
+                <Button size="small" onClick={() => restoreFromDraft((p: { form: typeof form; items: InvoiceItem[] }) => { setForm(p.form); setItems(p.items); })}>
                   Відновити
                 </Button>
                 {' / '}
