@@ -435,7 +435,7 @@ export default function QuotesPage() {
       };
       // apply auto qty if needed
       const qty = materialQtyByMode(r, s, matsById);
-      rows[rowIdx] = recalcRow({ ...r, qty });
+      rows[rowIdx] = recalcRow({ ...r, qty, markupPct: r.markupPct ?? '0' });
       s.materials = rows;
       next[stageIdx] = s;
       return next;
@@ -485,9 +485,7 @@ export default function QuotesPage() {
 
     setTitle(normalized.title || 'Комерційна пропозиція');
     setStagesT(normalized.stages);
-    setDocId(null);
-    setDocNo('');
-    setStatus('draft');
+    setDocId('');
   }
 
   function saveAsTemplate() {
