@@ -73,11 +73,10 @@ const PERSISTABLE_ACTIONS = new Set([
 
 export function useSheetController(options: UseSheetControllerOptions = {}) {
   const config = { ...DEFAULT_CONFIG, ...options.config };
-  const { rowCount, colCount } = config;
   const onPersistableRef = useRef(options.onPersistableAction);
   onPersistableRef.current = options.onPersistableAction;
 
-  const [state, dispatchBase] = useReducer<React.Reducer<SheetState, SheetAction>>(
+  const [state, dispatchBase]: [SheetState, React.Dispatch<SheetAction>] = useReducer(
     sheetReducer,
     { config, snapshot: options.initialSnapshot ?? null },
     (init: { config: SheetConfig; snapshot: SheetSnapshot | null }) => {
