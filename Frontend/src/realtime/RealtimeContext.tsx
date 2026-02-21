@@ -26,6 +26,8 @@ const DEBOUNCE_MS = 400;
 const INVALIDATE_DEBOUNCE_MS = 200; // Batch invalidate queries within 200ms
 const LS_LAST_EVENT_ID = 'bud.realtime.lastEventId';
 
+declare const require: (id: string) => any;
+
 // Try to get React Query client (optional)
 let queryClient: any = null;
 try {
