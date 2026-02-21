@@ -5,6 +5,7 @@
 
 import { useCallback } from 'react';
 import { useRealtime } from '../../realtime/RealtimeContext';
+import type { PresenceStatePayload } from '../../realtime/realtimeClient';
 
 export type PresenceUser = {
   userId: number;
