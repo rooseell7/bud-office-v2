@@ -8,7 +8,6 @@ import { createTheme } from '@mui/material/styles';
 const accent = '#7AC854';
 const accentDark = '#63B944';
 const bgDefault = '#12151B';
-const bgBottom = '#0C0F14';
 const surface = 'rgba(24, 28, 35, 0.72)';
 const surfaceStrong = 'rgba(24, 28, 35, 0.84)';
 const line = 'rgba(255, 255, 255, 0.1)';
