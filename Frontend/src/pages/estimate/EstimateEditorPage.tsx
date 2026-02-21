@@ -148,8 +148,9 @@ export const EstimateEditorPage: React.FC = () => {
         if (validId && next.size > 0) lsSetJson(LS_EXPANDED_STAGES(validId), [...next]);
         return next;
       });
-    } catch (e: any) {
-      setError(e?.response?.data?.message || 'Помилка завантаження');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Помилка завантаження';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -535,7 +536,7 @@ export const EstimateEditorPage: React.FC = () => {
         doc?.stages?.map((stage) => (
           <Box
             key={stage.id}
-            ref={(el) => {
+            ref={(el: HTMLDivElement | null) => {
               if (el) stageRefs.current[stage.id] = el;
               else delete stageRefs.current[stage.id];
             }}
@@ -709,7 +710,7 @@ function StageAccordion({
     : baseConfig;
   const configWithAutocomplete = {
     ...config,
-    autocompleteForColumn: { colIndex: 1, type: sheetType },
+    autocompleteForColumn: { colIndex: 1, type: sheetType as 'works' | 'materials' },
     hiddenColumns: hideCost ? [6, 7] : undefined,
     allowCellComments: true,
     allowFreeze: true,
