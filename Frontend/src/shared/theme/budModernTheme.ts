@@ -1,4 +1,5 @@
 import { createTheme } from '@mui/material/styles';
+import type {} from '@mui/x-data-grid/themeAugmentation';
 
 /**
  * BUD Office — Premium dark-gray + glass (ref_primary_dashboard.png)
