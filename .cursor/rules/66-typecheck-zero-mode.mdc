@@ -1,0 +1,28 @@
+---
+description: "Typecheck Zero — канонічні правила марафону доведення typecheck до 0. 1 батч = 1 коміт, max 10 файлів, один патерн."
+globs:
+  - "Frontend/**"
+  - "Backend/**"
+alwaysApply: false
+---
+
+# Typecheck Zero Mode (source of truth)
+
+## Hard constraints
+- 1 батч = 1 коміт = 1 diff, **max 10 файлів**
+- **1 патерн на батч** (TS1484 або TS6133 або TS7006 або TS2322/TS2345/TS2339 тощо) — не міксувати
+- **NO** UI/UX changes, **NO** refactors, **NO** test edits (включно Playwright)
+- **STOP** якщо ризик для /sheet, collab, deployment, router core або якщо треба >10 файлів
+
+## Mandatory gates before DONE
+- `cd Frontend && npm run typecheck` (BEFORE/AFTER метрика)
+- `cd Backend && npm test`
+- `cd Frontend && npm run build`
+- `Deployment/run-online.bat` (nginx mode: http://localhost)
+- E2E smoke: E2E_BASE_URL=http://localhost, E2E_EMAIL, E2E_PASSWORD, `cd Frontend && npm run e2e` — **2 tests PASS**
+
+## Report format
+- **CHANGES:** area, pattern, files (≤10), що зроблено
+- **CHECKS RUN:** typecheck X→Y (area Xm→Ym), Backend test, Frontend build, E2E — PASS/FAIL
+- **RISK NOTES:** підтвердити, що /sheet, modules (за scope), deployment, tests не чіпались
+- **FINAL:** Typecheck errors X → Y (area: Xm → Ym); Commit; Push
