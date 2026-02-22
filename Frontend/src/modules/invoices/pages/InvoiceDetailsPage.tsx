@@ -393,7 +393,7 @@ export default function InvoiceDetailsPage() {
     };
   }
 
-  function openEditor(ri: number, col: ColKey, initial?: { replace: boolean; ch?: string }) {
+  function openEditor(ri: number, col: ColKey, opts?: { replace?: boolean; ch?: string }) {
     if (!isCellEditable(col)) return;
 
     selectCell(ri, col);
@@ -401,7 +401,7 @@ export default function InvoiceDetailsPage() {
     if (col !== 'name') {
       const row = rows[ri];
       const current = row ? String(getCellValue(row, col) ?? '') : '';
-      const next = initial?.replace ? String(initial?.ch ?? '') : current;
+      const next = opts?.replace ? String(opts?.ch ?? '') : current;
       setEditorValue(next);
     }
 
@@ -1763,7 +1763,7 @@ export default function InvoiceDetailsPage() {
   // Attachments
   useEffect(() => {
     if (!invoice?.id) return;
-    refreshAttachments(Number(invoice.id));
+    refreshAttachments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoice?.id]);
 
