@@ -4,6 +4,7 @@ export type MaterialDto = {
   id: number;
   name: string;
   unit?: string | null;
+  unitRef?: { code?: string } | null;
   basePrice?: number | string | null;
   consumptionPerM2?: number | string | null;
   consumptionPerLm?: number | string | null;
@@ -28,7 +29,7 @@ type PagedMaterialsResponse = {
 // Якщо в бекенді інший шлях — просто змінимо URL тут, а UI залишиться.
 export async function getMaterials(): Promise<MaterialDto[]> {
   const res = await api.get<MaterialDto[] | PagedMaterialsResponse>('/materials');
-  const data: any = res.data;
+  const data = res.data;
   if (Array.isArray(data)) return data;
   if (data && Array.isArray(data.items)) return data.items;
   return [];
@@ -38,9 +39,9 @@ export async function searchMaterials(q: string): Promise<{ id: number; name: st
   const res = await api.get<MaterialDto[] | PagedMaterialsResponse>('/materials', {
     params: { q: q.trim(), limit: 20 },
   });
-  const data: any = res.data;
-  const items = Array.isArray(data) ? data : data?.items ?? [];
-  return items.map((m: any) => ({
+  const data = res.data;
+  const items = Array.isArray(data) ? data : (data as PagedMaterialsResponse)?.items ?? [];
+  return items.map((m: MaterialDto) => ({
     id: m.id,
     name: m.name,
     unit: m.unit ?? m.unitRef?.code ?? null,

@@ -21,7 +21,7 @@ const WarehouseDetailsPage = React.lazy(() =>
 // Lazy-load деталки операції
 const MovementDetailsPage = React.lazy(() =>
   import('../../pages/warehouse/MovementDetailsPage').then((m) => ({
-    default: m.MovementDetailsPage,
+    default: m.default,
   })),
 );
 
