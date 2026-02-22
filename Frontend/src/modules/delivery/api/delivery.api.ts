@@ -6,6 +6,26 @@ function toNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function toId(value: unknown): Id {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') return value;
+  return toNumber(value, 0);
+}
+
+function toIdOrNull(value: unknown): Id | null {
+  if (value === null || value === undefined) return null;
+  return toId(value);
+}
+
+function toStringOrUndefined(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function toNote(value: unknown): string | null | undefined {
+  if (value === null || value === undefined) return null;
+  return typeof value === 'string' ? value : undefined;
+}
+
 function ensureIsoDate(value: unknown): string {
   // приймаємо ISO або Date-string; якщо пусто — сьогодні
   const s = typeof value === 'string' ? value : '';
@@ -14,24 +34,24 @@ function ensureIsoDate(value: unknown): string {
   return new Date().toISOString();
 }
 
-function mapWorkLog(raw: any): WorkLog {
+function mapWorkLog(raw: Record<string, unknown>): WorkLog {
   const qty = toNumber(raw?.qty ?? raw?.quantity, 0);
   const price = toNumber(raw?.price ?? raw?.unitPrice, 0);
   const total = toNumber(raw?.total ?? (qty * price), qty * price);
 
   return {
-    id: raw?.id,
-    projectId: raw?.projectId ?? raw?.project_id ?? raw?.project,
-    stageId: raw?.stageId ?? raw?.stage_id ?? null,
+    id: toId(raw?.id),
+    projectId: toId(raw?.projectId ?? raw?.project_id ?? raw?.project),
+    stageId: toIdOrNull(raw?.stageId ?? raw?.stage_id ?? null),
     title: String(raw?.title ?? raw?.name ?? raw?.workName ?? ''),
     qty,
     unit: String(raw?.unit ?? raw?.unitName ?? ''),
     price,
     total,
     workDate: ensureIsoDate(raw?.workDate ?? raw?.work_date ?? raw?.date),
-    note: raw?.note ?? raw?.comment ?? null,
-    createdAt: raw?.createdAt ?? raw?.created_at,
-    updatedAt: raw?.updatedAt ?? raw?.updated_at,
+    note: toNote(raw?.note ?? raw?.comment ?? null),
+    createdAt: toStringOrUndefined(raw?.createdAt ?? raw?.created_at),
+    updatedAt: toStringOrUndefined(raw?.updatedAt ?? raw?.updated_at),
   };
 }
 
