@@ -27,6 +27,20 @@ type Props = {
   canDelete?: boolean;
 };
 
+/** Локальна нормалізація для відображення: WorkLog → поля таблиці (без cast до Record). */
+function toDisplayRow(r: WorkLog): { name: string; qty: number; unit: string; price: number; amount: number; status: string } {
+  type WithStatus = WorkLog & { status?: string };
+  const statusStr = 'status' in r ? (r as WithStatus).status : undefined;
+  return {
+    name: r.title ?? '',
+    qty: r.qty,
+    unit: r.unit ?? '',
+    price: r.price,
+    amount: r.total,
+    status: statusStr === 'done' ? 'done' : 'draft',
+  };
+}
+
 export default function WorkLogsTable({
   items,
   onEdit,
@@ -51,37 +65,34 @@ export default function WorkLogsTable({
       </TableHead>
 
       <TableBody>
-        {items.map((r) => (
-          <TableRow key={String(r.id)}>
-            <TableCell>{(r as any).name ?? ''}</TableCell>
-            <TableCell align="right">{n((r as any).qty).toFixed(3)}</TableCell>
-            <TableCell>{(r as any).unit ?? ''}</TableCell>
-            <TableCell align="right">{n((r as any).price).toFixed(2)}</TableCell>
-            <TableCell align="right">
-              {n((r as any).amount ?? n((r as any).qty) * n((r as any).price)).toFixed(2)}
-            </TableCell>
-            <TableCell>
-              <Chip
-                size="small"
-                label={(r as any).status === 'done' ? 'done' : 'draft'}
-                variant="outlined"
-              />
-            </TableCell>
+        {items.map((r) => {
+          const row = toDisplayRow(r);
+          return (
+            <TableRow key={String(r.id)}>
+              <TableCell>{row.name}</TableCell>
+              <TableCell align="right">{n(row.qty).toFixed(3)}</TableCell>
+              <TableCell>{row.unit}</TableCell>
+              <TableCell align="right">{n(row.price).toFixed(2)}</TableCell>
+              <TableCell align="right">{n(row.amount).toFixed(2)}</TableCell>
+              <TableCell>
+                <Chip size="small" label={row.status} variant="outlined" />
+              </TableCell>
 
-            <TableCell align="right">
-              {canEdit && (
-                <IconButton size="small" onClick={() => onEdit(r)} title="Редагувати">
-                  <EditIcon />
-                </IconButton>
-              )}
-              {canDelete && (
-                <IconButton size="small" onClick={() => onDelete(r.id)} title="Видалити">
-                  <DeleteIcon />
-                </IconButton>
-              )}
-            </TableCell>
-          </TableRow>
-        ))}
+              <TableCell align="right">
+                {canEdit && (
+                  <IconButton size="small" onClick={() => onEdit(r)} title="Редагувати">
+                    <EditIcon />
+                  </IconButton>
+                )}
+                {canDelete && (
+                  <IconButton size="small" onClick={() => onDelete(r.id)} title="Видалити">
+                    <DeleteIcon />
+                  </IconButton>
+                )}
+              </TableCell>
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
   );
