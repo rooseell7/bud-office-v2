@@ -1783,7 +1783,7 @@ return (
           <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigate('/invoices')}>
             До списку
           </Button>
-          <Button variant="outlined" onClick={load} disabled={loading || saving}>
+          <Button variant="outlined" onClick={() => void load()} disabled={loading || saving}>
             Оновити
           </Button>
           <Button
@@ -1821,7 +1821,7 @@ return (
           <Button
             variant="contained"
             startIcon={<SaveOutlinedIcon />}
-            onClick={onSave}
+            onClick={() => void onSave()}
             disabled={!canEdit || saving || loading}
           >
             Зберегти
