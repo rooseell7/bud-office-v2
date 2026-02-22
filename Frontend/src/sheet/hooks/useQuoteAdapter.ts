@@ -19,6 +19,9 @@ import {
   getInitialQuoteSnapshot,
 } from '../adapters/quoteAdapter';
 
+/** Meta shape for document sheet persistence (doc.meta is unknown in DocumentDto). */
+type SheetDocMeta = Record<string, unknown> & { sheetSnapshot?: unknown; sheetRevision?: number };
+
 export type DocumentsAdapterMode = 'loading' | 'edit' | 'readonly';
 
 const HEARTBEAT_INTERVAL_MS = 25000;
@@ -41,9 +44,11 @@ export function useQuoteAdapter(documentId: number | null) {
     (async () => {
       try {
         const doc = await getDocument(documentId);
-        const snap = doc?.meta?.sheetSnapshot;
-        if (snap && typeof snap === 'object' && (snap.rawValues?.length || snap.values?.length)) {
-          if (mounted) setInitialSnapshot(snap as SheetSnapshot);
+        const meta = doc?.meta as SheetDocMeta | undefined;
+        const snap = meta?.sheetSnapshot;
+        const snapObj = snap && typeof snap === 'object' ? (snap as SheetSnapshot) : null;
+        if (snapObj && (snapObj.rawValues?.length || snapObj.values?.length)) {
+          if (mounted) setInitialSnapshot(snapObj);
         } else {
           if (mounted) setInitialSnapshot(getInitialQuoteSnapshot());
         }
@@ -52,10 +57,11 @@ export function useQuoteAdapter(documentId: number | null) {
         if (!mounted) return;
         tokenRef.current = session.token;
         setMode('edit');
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (!mounted) return;
-        const status = e?.response?.status;
-        const data = e?.response?.data;
+        const err = e as { response?: { status?: number; data?: { holderUserId?: unknown } } };
+        const status = err?.response?.status;
+        const data = err?.response?.data;
         if (status === 409 || status === 423) {
           setMode('readonly');
           setHolderName(data?.holderUserId ? `User ${data.holderUserId}` : null);
@@ -95,11 +101,13 @@ export function useQuoteAdapter(documentId: number | null) {
     loadSnapshot: async () => {
       if (!documentId) return null;
       const doc = await getDocument(documentId);
-      const snap = doc?.meta?.sheetSnapshot;
-      const rev = (doc?.meta as any)?.sheetRevision;
+      const meta = doc?.meta as SheetDocMeta | undefined;
+      const snap = meta?.sheetSnapshot;
+      const rev = meta?.sheetRevision;
+      const snapObj = snap && typeof snap === 'object' ? (snap as SheetSnapshot) : null;
       const snapshot =
-        snap && typeof snap === 'object' && (snap.rawValues?.length || snap.values?.length)
-          ? (snap as SheetSnapshot)
+        snapObj && (snapObj.rawValues?.length || snapObj.values?.length)
+          ? snapObj
           : getInitialQuoteSnapshot();
       return { snapshot, revision: rev };
     },
@@ -111,14 +119,15 @@ export function useQuoteAdapter(documentId: number | null) {
       if (!documentId) throw new Error('No document');
       const quoteTotals = computeQuoteTotals(snapshot);
       const doc = await getDocument(documentId);
-      const currentRev = (doc?.meta as any)?.sheetRevision ?? 0;
+      const prevMeta = doc?.meta as SheetDocMeta | undefined;
+      const currentRev = prevMeta?.sheetRevision ?? 0;
       if (expectedRevision !== undefined && currentRev !== expectedRevision) {
         throw new Error('CONFLICT');
       }
       try {
         const updated = await updateDocument(documentId, {
           meta: {
-            ...(doc?.meta ?? {}),
+            ...(prevMeta && typeof prevMeta === 'object' ? prevMeta : {}),
             sheetSnapshot: snapshot,
             sheetRevision: currentRev + 1,
             quoteTotals,
@@ -126,10 +135,12 @@ export function useQuoteAdapter(documentId: number | null) {
           expectedRevision: currentRev,
           editSessionToken: tokenRef.current ?? undefined,
         });
-        return { revision: (updated?.meta as any)?.sheetRevision ?? currentRev + 1 };
-      } catch (e: any) {
-        if (e?.response?.status === 409) throw new Error('CONFLICT');
-        if (e?.response?.status === 423) throw new Error('LOCKED');
+        const updatedMeta = updated?.meta as SheetDocMeta | undefined;
+        return { revision: updatedMeta?.sheetRevision ?? currentRev + 1 };
+      } catch (e: unknown) {
+        const ex = e as { response?: { status?: number } };
+        if (ex?.response?.status === 409) throw new Error('CONFLICT');
+        if (ex?.response?.status === 423) throw new Error('LOCKED');
         throw e;
       }
     },

@@ -13,6 +13,9 @@ import {
 import { draftKey } from '../adapters/localDraftAdapter';
 import type { SheetSnapshot } from '../engine/types';
 
+/** Meta shape for document sheet persistence (doc.meta is unknown in DocumentDto). */
+type SheetDocMeta = Record<string, unknown> & { sheetSnapshot?: unknown; sheetRevision?: number };
+
 export type DocumentsAdapterMode = 'loading' | 'edit' | 'readonly';
 
 const HEARTBEAT_INTERVAL_MS = 25000;
@@ -37,20 +40,22 @@ export function useDocumentsAdapter(documentId: number | null, docType = 'sheet'
     (async () => {
       try {
         const doc = await getDocument(documentId);
-        const snap = doc?.meta?.sheetSnapshot;
+        const meta = doc?.meta as SheetDocMeta | undefined;
+        const snap = meta?.sheetSnapshot;
         if (snap && typeof snap === 'object') {
           setInitialSnapshot(snap as SheetSnapshot);
         }
-        revisionRef.current = (doc?.meta as any)?.sheetRevision ?? 0;
+        revisionRef.current = meta?.sheetRevision ?? 0;
 
         const session = await acquireEditSession(documentId);
         if (!mounted) return;
         tokenRef.current = session.token;
         setMode('edit');
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (!mounted) return;
-        const status = e?.response?.status;
-        const data = e?.response?.data;
+        const err = e as { response?: { status?: number; data?: { holderUserId?: unknown } } };
+        const status = err?.response?.status;
+        const data = err?.response?.data;
         if (status === 409 || status === 423) {
           setMode('readonly');
           setHolderName(data?.holderUserId ? `User ${data.holderUserId}` : null);
@@ -94,9 +99,10 @@ export function useDocumentsAdapter(documentId: number | null, docType = 'sheet'
     loadSnapshot: async () => {
       if (!documentId) return null;
       const doc = await getDocument(documentId);
-      const snap = doc?.meta?.sheetSnapshot;
+      const meta = doc?.meta as SheetDocMeta | undefined;
+      const snap = meta?.sheetSnapshot;
       if (!snap || typeof snap !== 'object') return null;
-      const rev = (doc?.meta as any)?.sheetRevision ?? 0;
+      const rev = meta?.sheetRevision ?? 0;
       revisionRef.current = rev;
       return { snapshot: snap as SheetSnapshot, revision: rev };
     },
@@ -107,25 +113,28 @@ export function useDocumentsAdapter(documentId: number | null, docType = 'sheet'
     ): Promise<{ revision?: number }> => {
       if (!documentId) throw new Error('No document');
       const doc = await getDocument(documentId);
-      const currentRev = (doc?.meta as any)?.sheetRevision ?? 0;
+      const prevMeta = doc?.meta as SheetDocMeta | undefined;
+      const currentRev = prevMeta?.sheetRevision ?? 0;
       if (expectedRevision !== undefined && currentRev !== expectedRevision) {
         throw new Error('CONFLICT');
       }
       try {
         const updated = await updateDocument(documentId, {
           meta: {
-            ...doc?.meta,
+            ...(prevMeta && typeof prevMeta === 'object' ? prevMeta : {}),
             sheetSnapshot: snapshot,
             sheetRevision: currentRev + 1,
           },
           expectedRevision: currentRev,
           editSessionToken: tokenRef.current ?? undefined,
         });
-        revisionRef.current = (updated?.meta as any)?.sheetRevision ?? currentRev + 1;
+        const updatedMeta = updated?.meta as SheetDocMeta | undefined;
+        revisionRef.current = updatedMeta?.sheetRevision ?? currentRev + 1;
         return { revision: revisionRef.current };
-      } catch (e: any) {
-        if (e?.response?.status === 409) throw new Error('CONFLICT');
-        if (e?.response?.status === 423) throw new Error('LOCKED');
+      } catch (e: unknown) {
+        const ex = e as { response?: { status?: number } };
+        if (ex?.response?.status === 409) throw new Error('CONFLICT');
+        if (ex?.response?.status === 423) throw new Error('LOCKED');
         throw e;
       }
     },
