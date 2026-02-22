@@ -1,0 +1,30 @@
+BUD_OFFICE v2.1 — ZERO TS VERIFY (Z1) — doc-only, no code changes
+================================================================
+
+Date: 2026-02-19 (session)
+Baseline commit: aba13f6 (A34-sheet final)
+
+GATES RUN:
+----------
+1) Frontend typecheck (cd Frontend && npm run typecheck): PASS (exit 0, 0 errors)
+2) Backend npm test (cd Backend && npm test): PASS (2 suites, 5 tests)
+3) Frontend npm run build (cd Frontend && npm run build): PASS (built in ~18s)
+4) Nginx/prod smoke (http://localhost, http://localhost/login): FAIL — connection refused (run-online.bat not started in this session; server not running)
+5) E2E smoke (npm run e2e): FAIL — net::ERR_CONNECTION_REFUSED at http://localhost/login (same cause)
+
+SUMMARY:
+--------
+- Total TS errors: 0 (confirmed by typecheck).
+- Code changes: none (Z1 is doc-only).
+- Gates 1–3: PASS. Gates 4–5: FAIL (environment — start run-online.bat then re-run 4 and 5).
+- Commit/push: none.
+
+To fully verify gates 4–5: run Deployment/run-online.bat, then re-check localhost + /login and run E2E.
+
+----------------------------------------------------------------------------
+Z2 (doc-only, finish gates 4–5) — run-online.bat started, then gates re-run
+----------------------------------------------------------------------------
+- run-online.bat: started; waited for nginx+backend startup.
+- Nginx/prod smoke (http://localhost, http://localhost/login): PASS (200, 200)
+- E2E smoke (npm run e2e): PASS (2 passed: smoke-invoices, smoke-sales-quotes)
+- ZERO TS VERIFIED: YES. Code changes: none. Commit/push: none.
