@@ -17,18 +17,25 @@ export type CollabEvent =
   | { type: 'PRESENCE_BROADCAST'; docId: number; presence: any[] }
   | { type: 'LOCKS_UPDATED'; docId: number; locks: any };
 
+const PING_INTERVAL_MS = 12_000;
+const PONG_TIMEOUT_MS = 4_000;
+
 export type CollabClientOptions = {
   url?: string;
   token: string | null;
   onEvent?: (ev: CollabEvent) => void;
   /** Якщо задано, після connect автоматично викликається joinDoc(docId, mode), щоб JOIN_DOC не втрачався до встановлення WS. */
   joinDocOnConnect?: { docId: number; mode?: 'edit' | 'readonly' };
+  /** Викликається при pong timeout — перехід у REST fallback (collabConnected=false). */
+  onUnhealthy?: () => void;
 };
 
 export class CollabClient {
   private socket: Socket | null = null;
   private options: CollabClientOptions;
   private pendingOps = new Map<string, { resolve: (v: number) => void; reject: (e: any) => void }>();
+  private pingIntervalId: ReturnType<typeof setInterval> | null = null;
+  private pongTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   constructor(options: CollabClientOptions) {
     this.options = options;
@@ -48,6 +55,13 @@ export class CollabClient {
       console.info('[collab] connected', { transport, socketId: this.socket?.id });
       const join = this.options.joinDocOnConnect;
       if (join) this.joinDoc(join.docId, join.mode ?? 'edit');
+      this.startWatchdog();
+    });
+    this.socket.on('pong', () => {
+      if (this.pongTimeoutId) {
+        clearTimeout(this.pongTimeoutId);
+        this.pongTimeoutId = null;
+      }
     });
     const engine = this.socket.io?.engine;
     if (engine) {
@@ -56,6 +70,7 @@ export class CollabClient {
       });
     }
     this.socket.on('disconnect', (reason: string) => {
+      this.stopWatchdog();
       console.info('[collab] disconnect', { reason });
       if (reason === 'io server disconnect' || /unauthorized|invalid|token/i.test(reason)) {
         localStorage.removeItem('accessToken');
@@ -67,6 +82,7 @@ export class CollabClient {
       console.info('[collab] reconnect_attempt', { attempt });
     });
     this.socket.on('reconnect_failed', () => {
+      this.stopWatchdog();
       console.info('[collab] reconnect_failed');
     });
     this.socket.on('auth_error', () => {
@@ -110,7 +126,37 @@ export class CollabClient {
     });
   }
 
+  private startWatchdog(): void {
+    this.stopWatchdog();
+    this.pingIntervalId = setInterval(() => {
+      if (!this.socket?.connected) return;
+      if (this.pongTimeoutId) {
+        clearTimeout(this.pongTimeoutId);
+        this.pongTimeoutId = null;
+      }
+      this.socket.emit('ping');
+      this.pongTimeoutId = setTimeout(() => {
+        this.pongTimeoutId = null;
+        this.stopWatchdog();
+        console.warn('[collab] ws unhealthy (pong timeout), fallback to REST');
+        this.options.onUnhealthy?.();
+      }, PONG_TIMEOUT_MS);
+    }, PING_INTERVAL_MS);
+  }
+
+  private stopWatchdog(): void {
+    if (this.pingIntervalId) {
+      clearInterval(this.pingIntervalId);
+      this.pingIntervalId = null;
+    }
+    if (this.pongTimeoutId) {
+      clearTimeout(this.pongTimeoutId);
+      this.pongTimeoutId = null;
+    }
+  }
+
   disconnect(): void {
+    this.stopWatchdog();
     this.socket?.disconnect();
     this.socket = null;
   }

@@ -61,6 +61,7 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
         url: wsBaseUrl,
         token,
         joinDocOnConnect: { docId: documentId, mode: 'edit' },
+        onUnhealthy: () => setConnected(false),
         onEvent: (ev: CollabEvent) => {
         if (ev.type === 'DOC_STATE') {
           const socketId = client.socketId ?? null;
