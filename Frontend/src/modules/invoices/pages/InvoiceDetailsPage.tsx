@@ -775,7 +775,7 @@ export default function InvoiceDetailsPage() {
   function clearSelectionCells() {
     if (!sel) return;
     const s = normalizeRange(sel);
-    forEachCellInRange(s, COLS, (ri, _ci, col) => {
+    forEachCellInRange(s, COLS, (ri: number, _ci: number, col: ColKey) => {
       const row = rows[ri];
       if (!row) return;
       if (col === 'name') updateRow(row.id, { name: '', materialId: undefined });
@@ -790,11 +790,11 @@ export default function InvoiceDetailsPage() {
         startC,
         tsv,
         cols: COLS,
-        ensureRowAt: (rowsArg, targetIndex) => {
+        ensureRowAt: (rowsArg: InvoiceItemRow[], targetIndex: number) => {
           let next = rowsArg;
           if (targetIndex < 0) return { rows: next, index: targetIndex };
           if (targetIndex >= next.length) {
-            let maxId = next.reduce((m, r) => Math.max(m, Number((r as any).id) || 0), 0);
+            let maxId = next.reduce((m: number, r: InvoiceItemRow) => Math.max(m, Number(r.id) || 0), 0);
             const nn = [...next];
             while (nn.length <= targetIndex) {
               maxId += 1;
@@ -813,14 +813,14 @@ export default function InvoiceDetailsPage() {
           }
           return { rows: next, index: targetIndex };
         },
-        normalizeValue: (col, raw) => {
+        normalizeValue: (col: ColKey, raw: string) => {
           return col !== 'name' && col !== 'unit' ? cleanNumInput(raw) : raw;
         },
-        setCell: (row, col, value) => {
+        setCell: (row: InvoiceItemRow, col: ColKey, value: string) => {
           if (col === 'name') return { ...(row as any), name: value, materialId: undefined };
           return { ...(row as any), [col]: value } as any;
         },
-        afterRow: (row) => recompute(row as any) as any,
+        afterRow: (row: InvoiceItemRow) => recompute(row as any) as any,
       }),
     );
   }
