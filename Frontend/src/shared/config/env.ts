@@ -35,6 +35,9 @@ function resolveApiBaseUrl(): string {
     if (envApi.startsWith('/')) return envApi;
     return stripTrailingSlash(envApi);
   }
+  if (typeof window !== 'undefined' && !isDevOrigin()) {
+    return origin ? `${origin}/api` : '/api';
+  }
   return 'http://localhost:3000/api';
 }
 
@@ -61,7 +64,6 @@ function resolveWsBaseUrl(): string {
     if (isDevOrigin()) return 'http://localhost:3000';
     return origin || '';
   }
-
   return '';
 }
 
