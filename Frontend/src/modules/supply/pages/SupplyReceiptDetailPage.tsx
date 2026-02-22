@@ -81,9 +81,9 @@ export default function SupplyReceiptDetailPage() {
     try {
       const payload = {
         items: itemsLocal.map((i) => ({
-          sourceOrderItemId: i.sourceOrderItemId,
-          materialId: i.materialId,
-          customName: i.customName,
+          sourceOrderItemId: i.sourceOrderItemId ?? undefined,
+          materialId: i.materialId ?? undefined,
+          customName: i.customName ?? undefined,
           unit: i.unit,
           qtyReceived: Number(i.qtyReceived) || 0,
           unitPrice: i.unitPrice != null ? Number(i.unitPrice) : undefined,

@@ -227,7 +227,17 @@ export function InvoicesPage() {
           projectId: oid,
         } as any);
       } else {
-        await updateInvoice(editId, dto);
+        await updateInvoice(editId, {
+          objectId: dto.objectId ?? undefined,
+          type: dto.type ?? undefined,
+          internalDirection: dto.internalDirection ?? undefined,
+          warehouseId: dto.warehouseId ?? undefined,
+          supplierName: dto.supplierName ?? undefined,
+          customerName: dto.customerName ?? undefined,
+          status: dto.status,
+          items: dto.items,
+          notes: dto.notes ?? undefined,
+        });
       }
 
       await clearDraftData();

@@ -1301,8 +1301,8 @@ export default function InvoiceDetailsPage() {
       const warehouseId = invoiceType === 'internal' ? (invoiceWarehouse?.id ?? fallbackWarehouseId) : null;
       const dto = {
         type: invoiceType,
-        internalDirection: invoiceType === 'internal' ? internalDirection : null,
-        warehouseId,
+        internalDirection: invoiceType === 'internal' ? internalDirection : undefined,
+        warehouseId: warehouseId ?? undefined,
         supplierName: supplierName.trim() || undefined,
         status: (String(status) as any) || undefined,
         items: Array.isArray(fresh.items) ? fresh.items : [],
