@@ -262,7 +262,7 @@ export default function InvoiceDetailsPage() {
 
   // === STEP 1.7–1.9: Google-Sheets-like UX polish ===
   // Column metadata (labels + default widths) + lightweight column resizing.
-  const COL_META: { key: ColKey; label: string; defaultWidth: number; align?: 'left' | 'center' | 'right' }[] = [
+  const COL_META: { key: ColKey; label: string; defaultWidth: number; align?: 'left' | 'center' | 'right'; minWidth?: number; maxWidth?: number }[] = [
     { key: 'name', label: 'Найменування', defaultWidth: 320, align: 'left' },
     { key: 'unit', label: 'Од.', defaultWidth: 90, align: 'center' },
     { key: 'qty', label: 'К-сть', defaultWidth: 110, align: 'right' },
