@@ -256,7 +256,7 @@ const MainLayout: React.FC = () => {
                   key={item.to}
                   component={NavLink}
                   to={item.to}
-                  className={({ isActive }) => `boNavItem ${isActive ? 'isActive' : ''}`}
+                  className={(({ isActive }: { isActive: boolean }) => `boNavItem ${isActive ? 'isActive' : ''}`) as unknown as string}
                   onClick={(e) => {
                     if (/^\/estimate\/\d+$/.test(loc.pathname) || /^\/delivery\/acts\/\d+$/.test(loc.pathname) || /^\/estimate\/acts\/\d+$/.test(loc.pathname)) {
                       e.preventDefault();
