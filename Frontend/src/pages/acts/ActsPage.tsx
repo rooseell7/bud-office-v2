@@ -55,8 +55,8 @@ function safeJsonParse(value: string): { ok: true; data: any } | { ok: false; er
   try {
     const parsed = JSON.parse(s);
     return { ok: true, data: parsed };
-  } catch (e: any) {
-    return { ok: false, error: e?.message ?? 'Невалідний JSON' };
+  } catch (e: unknown) {
+    return { ok: false, error: (e as { message?: string })?.message ?? 'Невалідний JSON' };
   }
 }
 
@@ -130,7 +130,7 @@ export const ActsPage: React.FC = () => {
       projectId: Number.isFinite(pid) && pid > 0 ? pid : 0,
       entityId: edit.mode === 'edit' && edit.id != null ? String(edit.id) : null,
     });
-  }, [edit.open, edit.projectId, edit.mode, edit.id]);
+  }, [edit.open, edit.open ? edit.projectId : undefined, edit.open ? edit.mode : undefined, edit.open ? edit.id : undefined]);
 
   const {
     hasDraft,
@@ -141,9 +141,9 @@ export const ActsPage: React.FC = () => {
   } = useDraft<EditState & { open: true }>({
     key: draftKey,
     enabled: edit.open && !!draftKey,
-    projectId: Number(edit.projectId) > 0 ? Number(edit.projectId) : undefined,
+    projectId: edit.open && Number(edit.projectId) > 0 ? Number(edit.projectId) : undefined,
     entityType: 'act',
-    entityId: edit.mode === 'edit' && edit.id != null ? String(edit.id) : undefined,
+    entityId: edit.open && edit.mode === 'edit' && edit.id != null ? String(edit.id) : undefined,
     scopeType: 'project',
   });
 
@@ -155,7 +155,7 @@ export const ActsPage: React.FC = () => {
     if (Number.isFinite(pid) && pid > 0) {
       setFilterProject(String(pid));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [searchParams]);
 
   useEffect(() => {
@@ -197,7 +197,7 @@ export const ActsPage: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, [edit.open, edit.mode, edit.projectId]);
+  }, [edit.open, edit.open ? edit.mode : undefined, edit.open ? edit.projectId : undefined]);
 
   const load = async () => {
     if (!canRead) {
@@ -209,7 +209,7 @@ export const ActsPage: React.FC = () => {
     try {
       const data = await getActs();
       setRows(Array.isArray(data) ? data : []);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setError(getAxiosErrorMessage(e, 'Помилка завантаження актів.'));
     } finally {
       setLoading(false);
@@ -223,8 +223,9 @@ export const ActsPage: React.FC = () => {
 
   useEffect(() => {
     if (!edit.open || !draftKey) return;
-    saveDraftData({ ...edit } as any);
-  }, [edit.open, draftKey, edit.projectId, edit.foremanId, edit.quoteId, edit.actDate, edit.status, edit.itemsJson, saveDraftData]);
+    const e = edit;
+    saveDraftData({ ...e });
+  }, [edit.open, draftKey, edit.open ? edit.projectId : undefined, edit.open ? edit.foremanId : undefined, edit.open ? edit.quoteId : undefined, edit.open ? edit.actDate : undefined, edit.open ? edit.status : undefined, edit.open ? edit.itemsJson : undefined, saveDraftData]);
 
   useEffect(() => {
     if (!realtime) return;
@@ -345,7 +346,7 @@ export const ActsPage: React.FC = () => {
         closeDialog();
         await load();
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       setDialogError(getAxiosErrorMessage(e, 'Помилка збереження акту.'));
     } finally {
       setSaving(false);
@@ -358,14 +359,14 @@ export const ActsPage: React.FC = () => {
       return;
     }
     // просте підтвердження через native confirm
-    // eslint-disable-next-line no-alert
+     
     if (!window.confirm(`Видалити акт #${id}?`)) return;
     setLoading(true);
     setError(null);
     try {
       await deleteAct(id);
       await load();
-    } catch (e: any) {
+    } catch (e: unknown) {
       setError(getAxiosErrorMessage(e, 'Помилка видалення акту.'));
     } finally {
       setLoading(false);
