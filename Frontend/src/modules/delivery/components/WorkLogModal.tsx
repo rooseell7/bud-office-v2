@@ -49,7 +49,7 @@ export default function WorkLogModal({
     }
   }, [can]);
 
-  const isEdit = Boolean(editItem && (editItem as Record<string, unknown>).id);
+  const isEdit = Boolean(editItem && (editItem as unknown as Record<string, unknown>).id);
 
   // ✅ поля зберігаємо як у твоєму UI, але читаємо з editItem через any
   const [date, setDate] = useState<string>('');
@@ -74,7 +74,7 @@ export default function WorkLogModal({
     setErr(null);
 
     if (editItem) {
-      const it = editItem as Record<string, unknown>;
+      const it = editItem as unknown as Record<string, unknown>;
       setDate(String(it.date ?? it.workDate ?? it.performedAt ?? '').slice(0, 10));
       setTitle(String(it.title ?? it.name ?? it.workName ?? ''));
       setComment(String(it.comment ?? it.note ?? it.notes ?? ''));
@@ -130,8 +130,8 @@ export default function WorkLogModal({
         note: comment.trim() || undefined,
       };
 
-      if (isEdit && editItem && (editItem as Record<string, unknown>).id != null) {
-        await onUpdate((editItem as Record<string, unknown>).id as Id, dto);
+      if (isEdit && editItem && (editItem as unknown as Record<string, unknown>).id != null) {
+        await onUpdate((editItem as unknown as Record<string, unknown>).id as Id, dto);
       } else {
         await onCreate(dto);
       }
