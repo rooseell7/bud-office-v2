@@ -75,11 +75,7 @@ const ForemanObjectPage: React.FC = () => {
   const { can } = useAuth();
   const id = Number(objectId ?? 0);
 
-  if (!can('foreman:read')) {
-    return <Navigate to="/403" replace />;
-  }
-
-  const [project, setProject] = useState<any>(null);
+  const [project, setProject] = useState<Awaited<ReturnType<typeof getForemanObject>> | null>(null);
   const [events, setEvents] = useState<ForemanEventDto[]>([]);
   const [tasks, setTasks] = useState<ForemanTaskDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,6 +84,10 @@ const ForemanObjectPage: React.FC = () => {
   const [workDialogOpen, setWorkDialogOpen] = useState(false);
   const [materialDialogOpen, setMaterialDialogOpen] = useState(false);
   const [issueDialogOpen, setIssueDialogOpen] = useState(false);
+
+  if (!can('foreman:read')) {
+    return <Navigate to="/403" replace />;
+  }
 
   const load = useCallback(async () => {
     if (!id || !Number.isFinite(id)) return;
@@ -102,8 +102,9 @@ const ForemanObjectPage: React.FC = () => {
       setProject(proj);
       setEvents(evts);
       setTasks(taskList);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || 'Помилка завантаження');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Помилка завантаження';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -339,27 +340,30 @@ const ForemanObjectPage: React.FC = () => {
                       {formatDate(ev.createdAt)}
                     </Typography>
                   </Stack>
-                  {ev.type === 'WORK_LOG' && ev.payload && (
-                    <Typography variant="body2">
-                      {String(ev.payload.workName || '')}
-                      {ev.payload.qty != null && ` — ${ev.payload.qty} ${ev.payload.unit || ''}`}
-                      {ev.payload.comment && ` (${ev.payload.comment})`}
-                    </Typography>
-                  )}
-                  {ev.type === 'MATERIAL_RECEIPT' && ev.payload && (
-                    <Typography variant="body2">
-                      {ev.payload.supplierName} — {ev.payload.status}
-                      {ev.payload.invoiceNumber && ` (${ev.payload.invoiceNumber})`}
-                      {ev.payload.comment && ` — ${ev.payload.comment}`}
-                    </Typography>
-                  )}
-                  {ev.type === 'ISSUE' && ev.payload && (
-                    <Typography variant="body2">
-                      <strong>{ev.payload.title}</strong>
-                      {ev.payload.description && ` — ${ev.payload.description}`}
-                      {ev.payload.priority && ` [${ev.payload.priority}]`}
-                    </Typography>
-                  )}
+                  {ev.type === 'WORK_LOG' && ev.payload && (() => {
+                    const p = ev.payload as Record<string, unknown>;
+                    const s = String(p.workName || '')
+                      + (p.qty != null ? ` — ${String(p.qty)} ${String(p.unit || '')}` : '')
+                      + (p.comment ? ` (${String(p.comment)})` : '');
+                    return <Typography variant="body2">{s}</Typography>;
+                  })()}
+                  {ev.type === 'MATERIAL_RECEIPT' && ev.payload && (() => {
+                    const p = ev.payload as Record<string, unknown>;
+                    const s = String(p.supplierName ?? '') + ' — ' + String(p.status ?? '')
+                      + (p.invoiceNumber ? ` (${String(p.invoiceNumber)})` : '')
+                      + (p.comment ? ` — ${String(p.comment)}` : '');
+                    return <Typography variant="body2">{s}</Typography>;
+                  })()}
+                  {ev.type === 'ISSUE' && ev.payload && (() => {
+                    const p = ev.payload as Record<string, unknown>;
+                    return (
+                      <Typography variant="body2">
+                        <strong>{String(p.title ?? '')}</strong>
+                        {p.description ? ` — ${String(p.description)}` : ''}
+                        {p.priority ? ` [${String(p.priority)}]` : ''}
+                      </Typography>
+                    );
+                  })()}
                   {ev.type === 'COMMENT' && ev.payload && (
                     <Typography variant="body2">{String(ev.payload.content || '')}</Typography>
                   )}
