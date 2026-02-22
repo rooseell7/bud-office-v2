@@ -13,9 +13,12 @@ import { formatUaNumber, formatUaMoney, formatUaPercent } from '../locale/uaForm
  * Value can be normalized number string or raw with ₴/%.
  * @param decimalPlaces optional override (0-6) for number/uah/percent
  */
+/** Display format: plain/number/uah/percent from config; 'text' treated like plain for compatibility. */
+export type FormatForDisplayKind = 'plain' | 'number' | 'uah' | 'percent' | 'text';
+
 export function formatForDisplay(
   value: string,
-  numberFormat: 'plain' | 'number' | 'uah' | 'percent',
+  numberFormat: FormatForDisplayKind,
   locale: LocaleSettings = defaultLocale,
   decimalPlaces?: number,
 ): string {
@@ -41,6 +44,7 @@ export function formatForDisplay(
       return formatUaMoney(n, locale, dec);
     case 'percent':
       return formatUaPercent(n, dec, locale);
+    case 'text':
     case 'plain':
     default:
       return formatUaNumber(n, dec, locale);
