@@ -28,7 +28,7 @@ import {
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
 import api from '../../api/client';
-import { getForemanCandidates, updateObject, type ForemanCandidate } from '../../api/objects';
+import { getForemanCandidates, updateObject, type ForemanCandidate, type ObjectStatus } from '../../api/objects';
 import { useAuth } from '../auth/AuthContext';
 import { getActs, type ActDto } from '../../api/acts';
 import { listInvoices, type Invoice } from '../invoices/api/invoices.api';
@@ -150,8 +150,9 @@ const ProjectDetailsPage: React.FC = () => {
             setFinanceTransactions([]);
           }
         }
-      } catch (e: any) {
-        setError(e?.response?.data?.message || e?.message || 'Помилка завантаження обʼєкта');
+      } catch (e: unknown) {
+        const ex = e as { response?: { data?: { message?: string } }; message?: string };
+        setError(ex?.response?.data?.message || ex?.message || 'Помилка завантаження обʼєкта');
       } finally {
         setLoading(false);
       }
@@ -302,7 +303,7 @@ const ProjectDetailsPage: React.FC = () => {
                                 await updateObject(objectId, {
                                   name: editName.trim() || obj.name,
                                   address: editAddress.trim() || null,
-                                  status: editStatus || undefined,
+                                  status: (editStatus ?? undefined) as ObjectStatus | undefined,
                                   type: editType || null,
                                 });
                                 setObj((o) =>
@@ -317,8 +318,9 @@ const ProjectDetailsPage: React.FC = () => {
                                     : null
                                 );
                                 setIsEditing(false);
-                              } catch (e: any) {
-                                setError(e?.response?.data?.message || 'Помилка збереження');
+                              } catch (e: unknown) {
+                                const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Помилка збереження';
+                                setError(msg);
                               } finally {
                                 setSavingMain(false);
                               }
@@ -383,8 +385,9 @@ const ProjectDetailsPage: React.FC = () => {
                             try {
                               await updateObject(objectId, { foremanId: foremanId === '' ? null : foremanId });
                               setObj((o) => (o ? { ...o, foremanId: foremanId === '' ? null : foremanId } : null));
-                            } catch (e: any) {
-                              setError(e?.response?.data?.message || 'Помилка збереження');
+                            } catch (e: unknown) {
+                              const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Помилка збереження';
+                              setError(msg);
                             } finally {
                               setSavingForeman(false);
                             }

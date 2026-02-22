@@ -84,12 +84,13 @@ const CreateTaskModal: React.FC<Props> = ({ open, onClose, onSubmit, projectId }
     try {
       await onSubmit({
         ...form,
-        stageId: form.stageId || null,
-        dueDate: form.dueDate ? form.dueDate : undefined,
+        stageId: form.stageId ?? null,
+        dueDate: form.dueDate || '',
       });
       onClose();
-    } catch (e: any) {
-      setError(e?.response?.data?.message || 'Помилка збереження');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Помилка збереження';
+      setError(msg);
     } finally {
       setLoading(false);
     }

@@ -97,7 +97,7 @@ export function applyTsvPasteToRows<T, C>(prevRows: T[], opts: ApplyPasteOptions
 
       const raw = String(vals[cc] ?? '');
       const value = normalizeValue ? normalizeValue(col, raw) : raw;
-      row = setCell(row, col, value);
+      row = setCell(row, col, value) as T & ({} | null);
     }
 
     rows[idx] = afterRow ? afterRow(row) : row;

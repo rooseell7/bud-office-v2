@@ -207,7 +207,7 @@ export function InvoicesPage() {
         objectId: oid,
         supplierName: form.supplierName,
         customerName: form.customerName,
-        status: form.status,
+        status: form.status as Invoice['status'],
         items: items
           .filter((it) => it.materialId || it.materialName)
           .map((it) => ({
