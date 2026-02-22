@@ -11,17 +11,17 @@ const HEARTBEAT_INTERVAL_MS = 10_000;
 type CellLock = { userId: number; expiresAt: number };
 type DocLock = { userId: number; expiresAt: number };
 type PresenceUser = { userId: number | null; cursor?: { row: number; col: number } };
-type JoinInfo = { docId: number; userId: number | null; mode: 'edit' | 'readonly' };
+type JoinInfo = { docId: number | string; userId: number | null; mode: 'edit' | 'readonly' };
 
 @Injectable()
 export class CollabService {
   private readonly logger = new Logger(CollabService.name);
 
   private cellLocks = new Map<string, CellLock>();
-  private docLocks = new Map<number, DocLock>();
+  private docLocks = new Map<number | string, DocLock>();
   private presence = new Map<string, PresenceUser>();
-  private joins = new Map<string, Map<number, JoinInfo>>();
-  private docToSockets = new Map<number, Set<string>>();
+  private joins = new Map<string, Map<number | string, JoinInfo>>();
+  private docToSockets = new Map<number | string, Set<string>>();
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -48,11 +48,11 @@ export class CollabService {
     }, HEARTBEAT_INTERVAL_MS);
   }
 
-  private cellKey(docId: number, row: number, col: number): string {
+  private cellKey(docId: number | string, row: number, col: number): string {
     return `${docId}:${row}:${col}`;
   }
 
-  joinDoc(socketId: string, docId: number, userId: number | null, mode: 'edit' | 'readonly') {
+  joinDoc(socketId: string, docId: number | string, userId: number | null, mode: 'edit' | 'readonly') {
     let byDoc = this.joins.get(socketId);
     if (!byDoc) {
       byDoc = new Map();
@@ -68,7 +68,7 @@ export class CollabService {
     sockets.add(socketId);
   }
 
-  leaveDoc(socketId: string, docId: number) {
+  leaveDoc(socketId: string, docId: number | string) {
     this.joins.get(socketId)?.delete(docId);
     this.docToSockets.get(docId)?.delete(socketId);
     this.presence.delete(`${socketId}:${docId}`);
@@ -90,36 +90,36 @@ export class CollabService {
     }
   }
 
-  canLock(socketId: string, docId: number): boolean {
+  canLock(socketId: string, docId: number | string): boolean {
     const info = this.joins.get(socketId)?.get(docId);
     return info?.mode === 'edit';
   }
 
-  lockCell(docId: number, row: number, col: number, userId: number | null) {
+  lockCell(docId: number | string, row: number, col: number, userId: number | null) {
     if (userId == null) return;
     const key = this.cellKey(docId, row, col);
     this.cellLocks.set(key, { userId, expiresAt: Date.now() + LOCK_TTL_MS });
   }
 
-  unlockCell(socketId: string, docId: number, row: number, col: number) {
+  unlockCell(socketId: string, docId: number | string, row: number, col: number) {
     const key = this.cellKey(docId, row, col);
     this.cellLocks.delete(key);
   }
 
-  lockDoc(docId: number, userId: number | null) {
+  lockDoc(docId: number | string, userId: number | null) {
     if (userId == null) return;
     this.docLocks.set(docId, { userId, expiresAt: Date.now() + LOCK_TTL_MS });
   }
 
-  unlockDoc(socketId: string, docId: number) {
+  unlockDoc(socketId: string, docId: number | string) {
     this.docLocks.delete(docId);
   }
 
-  updatePresence(socketId: string, docId: number, userId: number | null, cursor?: { row: number; col: number }) {
+  updatePresence(socketId: string, docId: number | string, userId: number | null, cursor?: { row: number; col: number }) {
     this.presence.set(`${socketId}:${docId}`, { userId, cursor });
   }
 
-  getLocks(docId: number): { cellLocks: Record<string, number>; docLock: number | null } {
+  getLocks(docId: number | string): { cellLocks: Record<string, number>; docLock: number | null } {
     const cellLocks: Record<string, number> = {};
     const now = Date.now();
     for (const [key, lock] of this.cellLocks) {
@@ -132,7 +132,7 @@ export class CollabService {
     return { cellLocks, docLock };
   }
 
-  getPresence(docId: number): PresenceUser[] {
+  getPresence(docId: number | string): PresenceUser[] {
     const sockets = this.docToSockets.get(docId);
     if (!sockets) return [];
     const result: PresenceUser[] = [];

@@ -11,11 +11,11 @@ const DEV = import.meta.env?.DEV ?? false;
 const DEBUG = typeof localStorage !== 'undefined' && localStorage.getItem('DEBUG_COLLAB') === '1';
 
 export type CollabEvent =
-  | { type: 'DOC_STATE'; docId: number; snapshot: any; version: number; locks: any; presence: any[] }
-  | { type: 'OP_APPLIED'; docId: number; version: number; op: any; opId: number; clientOpId?: string }
-  | { type: 'OP_REJECTED'; docId: number; clientOpId?: string; reason: string; details?: string }
-  | { type: 'PRESENCE_BROADCAST'; docId: number; presence: any[] }
-  | { type: 'LOCKS_UPDATED'; docId: number; locks: any };
+  | { type: 'DOC_STATE'; docId: number | string; snapshot: any; version: number; locks: any; presence: any[] }
+  | { type: 'OP_APPLIED'; docId: number | string; version: number; op: any; opId: number; clientOpId?: string }
+  | { type: 'OP_REJECTED'; docId: number | string; clientOpId?: string; reason: string; details?: string }
+  | { type: 'PRESENCE_BROADCAST'; docId: number | string; presence: any[] }
+  | { type: 'LOCKS_UPDATED'; docId: number | string; locks: any };
 
 const PING_INTERVAL_MS = 15_000;
 const PONG_TIMEOUT_MS = 12_000;
@@ -26,7 +26,7 @@ export type CollabClientOptions = {
   token: string | null;
   onEvent?: (ev: CollabEvent) => void;
   /** Якщо задано, після connect автоматично викликається joinDoc(docId, mode), щоб JOIN_DOC не втрачався до встановлення WS. */
-  joinDocOnConnect?: { docId: number; mode?: 'edit' | 'readonly' };
+  joinDocOnConnect?: { docId: number | string; mode?: 'edit' | 'readonly' };
   /** Викликається при 2+ послідовних pong timeout — перехід у REST fallback (collabConnected=false). */
   onUnhealthy?: () => void;
   /** Викликається при disconnect (socket відключено). */
@@ -42,7 +42,7 @@ export class CollabClient {
   private missedPongs = 0;
   private lastPingSentAt = 0;
   /** Idempotent join: skip re-send if already in room (cleared on disconnect so reconnect re-joins). */
-  private joinedDocIds = new Set<number>();
+  private joinedDocIds = new Set<number | string>();
 
   constructor(options: CollabClientOptions) {
     this.options = options;
@@ -190,7 +190,7 @@ export class CollabClient {
     this.socket = null;
   }
 
-  joinDoc(docId: number, mode: 'edit' | 'readonly' = 'edit'): void {
+  joinDoc(docId: number | string, mode: 'edit' | 'readonly' = 'edit'): void {
     const room = `sheet:${docId}`;
     if (this.joinedDocIds.has(docId) && this.socket?.connected) {
       console.info('[collab] join_doc skip (already joined)', { docId, room });
@@ -201,25 +201,25 @@ export class CollabClient {
     this.joinedDocIds.add(docId);
   }
 
-  leaveDoc(docId: number): void {
+  leaveDoc(docId: number | string): void {
     this.joinedDocIds.delete(docId);
     this.socket?.emit('collab', { type: 'LEAVE_DOC', docId });
   }
 
-  presence(docId: number, cursor?: { row: number; col: number }): void {
+  presence(docId: number | string, cursor?: { row: number; col: number }): void {
     this.socket?.emit('collab', { type: 'PRESENCE', docId, cursor });
   }
 
-  lockCell(docId: number, row: number, col: number): void {
+  lockCell(docId: number | string, row: number, col: number): void {
     this.socket?.emit('collab', { type: 'LOCK_CELL', docId, row, col });
   }
 
-  unlockCell(docId: number, row: number, col: number): void {
+  unlockCell(docId: number | string, row: number, col: number): void {
     this.socket?.emit('collab', { type: 'UNLOCK_CELL', docId, row, col });
   }
 
   applyOp(
-    docId: number,
+    docId: number | string,
     baseVersion: number,
     clientOpId: string,
     op: { type: string; payload: Record<string, any> },

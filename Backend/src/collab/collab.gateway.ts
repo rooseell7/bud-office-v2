@@ -24,16 +24,16 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 
 export type CollabPayload =
-  | { type: 'JOIN_DOC'; docId: number; mode?: 'edit' | 'readonly' }
-  | { type: 'LEAVE_DOC'; docId: number }
-  | { type: 'PRESENCE'; docId: number; cursor?: { row: number; col: number } }
-  | { type: 'LOCK_CELL'; docId: number; row: number; col: number }
-  | { type: 'UNLOCK_CELL'; docId: number; row: number; col: number }
-  | { type: 'LOCK_DOC'; docId: number }
-  | { type: 'UNLOCK_DOC'; docId: number }
+  | { type: 'JOIN_DOC'; docId: number | string; mode?: 'edit' | 'readonly' }
+  | { type: 'LEAVE_DOC'; docId: number | string }
+  | { type: 'PRESENCE'; docId: number | string; cursor?: { row: number; col: number } }
+  | { type: 'LOCK_CELL'; docId: number | string; row: number; col: number }
+  | { type: 'UNLOCK_CELL'; docId: number | string; row: number; col: number }
+  | { type: 'LOCK_DOC'; docId: number | string }
+  | { type: 'UNLOCK_DOC'; docId: number | string }
   | {
       type: 'APPLY_OP';
-      docId: number;
+      docId: number | string;
       baseVersion: number;
       clientOpId: string;
       op: { type: string; payload: Record<string, any> };
@@ -482,7 +482,7 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect, 
 
   private async handleJoin(
     client: any,
-    docId: number,
+    docId: number | string,
     mode: 'edit' | 'readonly',
     userId: number | null,
   ) {
@@ -491,7 +491,10 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect, 
     this.collabService.joinDoc(client.id, docId, userId, mode);
     this.logger.log(`[WS] join docId=${docId} room=${room} socketId=${client.id} userId=${userId ?? 'anonymous'}`);
 
-    const state = await this.collabService.getDocState(docId);
+    const state =
+      typeof docId === 'string' && docId.startsWith('act:')
+        ? await this.getActDocState(docId)
+        : await this.collabService.getDocState(docId as number);
     client.emit('collab', {
       type: 'DOC_STATE',
       docId,
@@ -503,17 +506,76 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect, 
     // this.broadcastPresence(docId); — вимкнено
   }
 
+  /** Build sheet snapshot for act section (docId = "act:actId:sectionKey"). Broadcast-only; no Document entity. */
+  private async getActDocState(docId: string): Promise<{ snapshot: Record<string, any>; version: number } | null> {
+    const parts = docId.split(':');
+    if (parts.length !== 3 || parts[0] !== 'act') return null;
+    const actId = parseInt(parts[1], 10);
+    const sectionKey = parts[2];
+    if (!Number.isFinite(actId) || !sectionKey) return null;
+    const act = await this.actRepo.findOne({ where: { id: actId } });
+    if (!act || !Array.isArray(act.items)) return null;
+    const works = act.items.filter(
+      (r: any) => (r?.rowType ?? r?.type) === 'work' && (r?.sectionKey === sectionKey || !sectionKey),
+    );
+    const rowCount = Math.max(works.length, 20);
+    const colCount = 9;
+    const rawValues: string[][] = [];
+    const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : Number(String(v ?? '').replace(',', '.')) || 0);
+    for (let r = 0; r < rowCount; r++) {
+      const w = works[r];
+      rawValues[r] = [
+        '',
+        String(w?.name ?? w?.title ?? ''),
+        String(w?.unit ?? ''),
+        String(n(w?.qty)),
+        String(n(w?.price)),
+        '',
+        String(n(w?.costPrice ?? w?.cost)),
+        '',
+        String(w?.note ?? ''),
+      ];
+    }
+    return {
+      snapshot: { rawValues, values: rawValues.map((row) => [...row]), rowCount, colCount },
+      version: 0,
+    };
+  }
+
   private async handleApplyOp(
     client: any,
     payload: Extract<CollabPayload, { type: 'APPLY_OP' }>,
     userId: number | null,
   ) {
     const room = `sheet:${payload.docId}`;
-    const docState = await this.collabService.getDocState(payload.docId);
-    const currentVersion = docState?.version ?? -1;
     this.logger.log(
       `[WS] op_in docId=${payload.docId} room=${room} socketId=${client.id} userId=${userId ?? 'anon'} opType=${payload.op?.type} clientOpId=${payload.clientOpId?.slice(0, 8)}`,
     );
+    if (typeof payload.docId === 'string' && payload.docId.startsWith('act:')) {
+      const opPayload = {
+        type: 'OP_APPLIED' as const,
+        docId: payload.docId,
+        version: 0,
+        op: payload.op,
+        opId: 0,
+        clientOpId: payload.clientOpId,
+      };
+      let recipientsCount = 0;
+      try {
+        const roomSockets = await this.server.in(room).fetchSockets();
+        recipientsCount = roomSockets?.length ?? 0;
+      } catch {
+        /* ignore */
+      }
+      this.logger.log(
+        `[WS] op_out broadcast docId=${payload.docId} room=${room} fromSocket=${client.id} (exclude sender) opType=${payload.op?.type} clientOpId=${payload.clientOpId?.slice(0, 8)} recipientsInRoom=${recipientsCount} [act broadcast-only]`,
+      );
+      client.emit('collab', opPayload);
+      client.to(room).emit('collab', opPayload);
+      return;
+    }
+    const docState = await this.collabService.getDocState(payload.docId as number);
+    const currentVersion = docState?.version ?? -1;
     try {
       const result = await this.collabService.applyOp(
         payload.docId,
@@ -569,7 +631,7 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect, 
     }
   }
 
-  private broadcastPresence(docId: number) {
+  private broadcastPresence(docId: number | string) {
     // Не показувати онлайн інших користувачів — завжди пустий масив
     this.server.to(`sheet:${docId}`).emit('collab', {
       type: 'PRESENCE_BROADCAST',
@@ -578,7 +640,7 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect, 
     });
   }
 
-  private broadcastLocks(docId: number) {
+  private broadcastLocks(docId: number | string) {
     const locks = this.collabService.getLocks(docId);
     this.server.to(`sheet:${docId}`).emit('collab', {
       type: 'LOCKS_UPDATED',

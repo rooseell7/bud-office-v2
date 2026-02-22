@@ -20,7 +20,7 @@ function generateClientOpId(): string {
 }
 
 export type UseSheetCollabOptions = {
-  documentId: number | null;
+  documentId: number | string | null;
   token: string | null;
   onRemoteUpdate?: (snapshot: SheetSnapshot, version?: number) => void;
   /** Resync: load server snapshot, hydrate, returns new revision. We set serverVersion from it. */

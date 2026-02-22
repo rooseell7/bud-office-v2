@@ -27,7 +27,7 @@ export type SheetProps = {
   config?: Partial<SheetConfig>;
   initialSnapshot?: SheetSnapshot | null;
   adapter?: SheetAdapter | null;
-  documentId?: number | null;
+  documentId?: number | string | null;
   readonly?: boolean;
   /** Explicit mode: 'readonly' shows preview badge, disables all edit */
   sheetMode?: SheetMode;
@@ -380,13 +380,13 @@ export const Sheet: React.FC<SheetProps> = ({
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, borderBottom: 1, borderColor: 'divider', px: 0.5 }}>
         <Toolbar state={state} onApplyStyles={applyStyles} readonly={isPreview} />
         <VersionsButton
-          documentId={documentId ?? null}
+          documentId={documentId != null && typeof documentId === 'number' ? documentId : null}
           state={state}
           onRestore={handleVersionsRestore}
           onPreview={isPreview ? undefined : (snap: Record<string, any>) => { if (snap && 'values' in snap) handlePreviewVersion(snap as SheetSnapshot); }}
           disabled={isPreview}
         />
-        <ExportButton documentId={documentId ?? null} disabled={isPreview} />
+        <ExportButton documentId={documentId != null && typeof documentId === 'number' ? documentId : null} disabled={isPreview} />
       </Box>
       <Grid
       state={state}

@@ -78,10 +78,6 @@ export const ActEditorPage: React.FC = () => {
   const actId = id ? parseInt(id, 10) : NaN;
   const validId = Number.isFinite(actId) && actId > 0 ? actId : null;
 
-  useEffect(() => {
-    if (validId != null) console.info('[ActEditor] docId=null actId=', validId);
-  }, [validId]);
-
   const [act, setAct] = useState<ActDto | null>(null);
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,6 +88,11 @@ export const ActEditorPage: React.FC = () => {
   const [totalsBySection, setTotalsBySection] = useState<Record<string, SheetTotals>>({});
 
   const canWrite = can('delivery:write') || can('estimates:write');
+
+  useEffect(() => {
+    if (validId != null && act != null)
+      console.info('[ActEditor] actId=', validId, 'projectId=', act.projectId, 'docId=act sections (per section)');
+  }, [validId, act]);
 
   useEffect(() => {
     if (!validId) return;
@@ -391,6 +392,7 @@ function ActSectionAccordion({
 
   const { adapter, initialSnapshot } = useActSheetAdapter(actId, section.sectionKey, items, onItemsRefresh ?? undefined);
   const [sectionTotals, setSectionTotals] = React.useState<SheetTotals>({ sum: 0, cost: 0, profit: 0 });
+  const actDocId = actId != null && section.sectionKey ? `act:${actId}:${section.sectionKey}` : null;
 
   React.useEffect(() => {
     onTotalsChange(sectionTotals);
@@ -422,7 +424,7 @@ function ActSectionAccordion({
           <Sheet
             config={configWithAutocomplete}
             adapter={adapter ?? undefined}
-            documentId={null}
+            documentId={actDocId}
             initialSnapshot={initialSnapshot}
             readonly={!canEdit}
             totalsConfig={{ sumCol: W_COL.TOTAL, costCol: W_COL.COST_TOTAL }}
