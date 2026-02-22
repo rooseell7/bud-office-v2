@@ -30,12 +30,12 @@ export async function getForemanCandidates(): Promise<ForemanCandidate[]> {
 //   GET /api/objects?department=sales|delivery (якщо бек таке підтримує)
 // Якщо параметру нема — UI все одно працює, просто покаже загальний список.
 export async function getObjects(params?: { department?: 'sales' | 'delivery' }): Promise<ObjectDto[]> {
-  const res = await api.get<any>('/objects', { params });
+  const res = await api.get<ObjectDto[] | { items: ObjectDto[] } | { data: ObjectDto[] }>('/objects', { params });
   const data = res.data;
-  // Підтримуємо кілька форматів відповіді (масив або {items}):
+  // Підтримуємо кілька форматів відповіді (масив або {items} або {data}):
   if (Array.isArray(data)) return data as ObjectDto[];
-  if (data && Array.isArray(data.items)) return data.items as ObjectDto[];
-  if (data && Array.isArray(data.data)) return data.data as ObjectDto[];
+  if (data && typeof data === 'object' && 'items' in data && Array.isArray(data.items)) return data.items;
+  if (data && typeof data === 'object' && 'data' in data && Array.isArray(data.data)) return data.data;
   return [];
 }
 
