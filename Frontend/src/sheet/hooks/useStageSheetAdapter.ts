@@ -3,7 +3,7 @@
  * REST only — no collab for staged estimates (phase 1).
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getSheetByDocKey, saveSheetByDocKey } from '../../api/estimates';
 import type { SheetSnapshot } from '../engine/types';
 
@@ -65,8 +65,8 @@ export function useStageSheetAdapter(
           expectedRevision,
         );
         return { revision };
-      } catch (e: any) {
-        if (e?.response?.status === 409) throw new Error('CONFLICT');
+      } catch (e: unknown) {
+        if ((e as { response?: { status?: number } })?.response?.status === 409) throw new Error('CONFLICT');
         throw e;
       }
     },

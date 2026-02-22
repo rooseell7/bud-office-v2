@@ -2,7 +2,6 @@
  * Shift all formula refs in rawValues. Canonical sheet: src/sheet/**
  */
 
-import type { SheetState } from '../state';
 import type { ShiftOp } from './shiftRefs';
 import { shiftFormulaRefs } from './shiftRefs';
 
@@ -14,8 +13,8 @@ export type FormulaDiff = { r: number; c: number; prevRaw: string; nextRaw: stri
  */
 export function shiftAllFormulas(
   rawValues: string[][],
-  rowCount: number,
-  colCount: number,
+  _rowCount: number,
+  _colCount: number,
   op: ShiftOp,
 ): { rawValues: string[][]; formulaDiffs: FormulaDiff[] } {
   const formulaDiffs: FormulaDiff[] = [];

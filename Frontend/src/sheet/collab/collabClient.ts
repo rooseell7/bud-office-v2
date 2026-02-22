@@ -5,7 +5,7 @@
  */
 
 import { io, Socket } from 'socket.io-client';
-import { wsBaseUrl, apiBaseUrl } from './env';
+import { wsBaseUrl } from './env';
 
 const DEV = import.meta.env?.DEV ?? false;
 const DEBUG = typeof localStorage !== 'undefined' && localStorage.getItem('DEBUG_COLLAB') === '1';

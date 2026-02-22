@@ -79,6 +79,7 @@ export function useSaveOrchestrator(options: UseSaveOrchestratorOptions) {
     ackedRevRef.current = Math.max(ackedRevRef.current, v);
     onServerVersion?.(v);
   }, [onServerVersion]);
+  void syncServerVersion;
 
   useEffect(() => {
     if (typeof serverVersion === 'number' && serverVersion >= 0) {
@@ -103,6 +104,7 @@ export function useSaveOrchestrator(options: UseSaveOrchestratorOptions) {
     const snapshot = serialize(currentState);
     const baseVersion = ackedRevRef.current;
     const targetRev = localRevRef.current;
+    void targetRev;
 
     try {
       if (useWs) {
@@ -135,8 +137,8 @@ export function useSaveOrchestrator(options: UseSaveOrchestratorOptions) {
           setUiState((s) => (s.status === 'saved' ? { ...s, status: 'clean' } : s));
         }, 2000);
       }
-    } catch (e: any) {
-      const msg = e?.message ?? String(e);
+    } catch (e: unknown) {
+      const msg = (e as { message?: string })?.message ?? String(e);
       setUiState((s) => ({
         ...s,
         status: 'error',

@@ -40,7 +40,7 @@ function detectArgSeparator(formula: string, locale: LocaleSettings): ';' | ',' 
 }
 
 /** Tokenizer: refs, numbers (with comma), ops, parens, ; , : */
-function tokenize(formula: string, locale: LocaleSettings): string[] {
+function tokenize(formula: string, _locale: LocaleSettings): string[] {
   const s = (formula || '').replace(/\s+/g, ' ').trim();
   const tokens: string[] = [];
   let i = 0;

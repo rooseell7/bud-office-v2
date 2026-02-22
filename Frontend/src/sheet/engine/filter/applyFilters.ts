@@ -3,7 +3,6 @@
  */
 
 import type { SheetState } from '../state';
-import type { FilterSpec } from '../types';
 import { parseNumericCell } from '../number/parseCellValue';
 
 /**
@@ -28,8 +27,6 @@ export function computeRowVisibility(state: SheetState): boolean[] {
 
       const raw = rawValues[r]?.[colIdx] ?? '';
       const display = values[r]?.[colIdx] ?? '';
-      const col = cols[colIdx];
-      const colType = col?.type ?? 'text';
       const isEmpty = (raw || '').trim() === '';
 
       if (spec.type === 'text') {

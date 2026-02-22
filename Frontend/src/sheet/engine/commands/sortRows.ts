@@ -51,7 +51,7 @@ export function createSortRowsCommand(
     do(state: SheetState): SheetState {
       if (state.isEditing) return state;
 
-      const { rowCount, colCount, rawValues, values, rowHeights, rowIds } = state;
+      const { rowCount, colCount, rawValues, values: _values, rowHeights: _rowHeights, rowIds } = state;
       const indices = Array.from({ length: rowCount }, (_, i) => i);
 
       indices.sort((a, b) => {

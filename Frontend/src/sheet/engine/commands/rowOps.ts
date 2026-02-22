@@ -10,7 +10,7 @@ import { shiftAllFormulas, type FormulaDiff } from '../formulas/shiftAllFormulas
 
 function remapRowHeights(
   rowHeights: Record<number, number>,
-  rowDelta: number,
+  _rowDelta: number,
   atRow: number,
   isInsert: boolean,
 ): Record<number, number> {
@@ -33,7 +33,7 @@ function remapRowHeights(
 
 function remapCellStyles(
   cellStyles: Record<string, import('../types').CellStyle>,
-  rowDelta: number,
+  _rowDelta: number,
   atRow: number,
   isInsert: boolean,
 ): Record<string, import('../types').CellStyle> {
@@ -126,7 +126,7 @@ export function createInsertRowCommand(insertAtIndex: number): SheetCommand {
       const deleteIdx = cmd._insertIdx ?? insertAtIndex;
       const rowCount = state.rowCount - 1;
       const rawValues = state.rawValues.filter((_, i) => i !== deleteIdx);
-      let restored = rawValues.map((r) => [...r]);
+      const restored = rawValues.map((r) => [...r]);
       const diffs = cmd._formulaDiffs ?? [];
       for (const { r, c, prevRaw } of diffs) {
         const targetRow = r > deleteIdx ? r - 1 : r;

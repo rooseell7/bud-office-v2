@@ -12,8 +12,8 @@ export const CellEditor: React.FC<CellEditorProps> = ({
   value,
   onChange,
   onBlur,
-  rowHeight,
-  colWidth,
+  rowHeight: _rowHeight,
+  colWidth: _colWidth,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
 

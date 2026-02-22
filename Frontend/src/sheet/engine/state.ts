@@ -4,7 +4,6 @@
 
 import type { CellCoord, SelectionRange, CellStyle, SheetColumn, CellError } from './types';
 import type { SheetSnapshot } from './types';
-import { buildColumnsFromConfig } from './columnUtils';
 import type { SheetCommand } from './commands/types';
 import type { LocaleSettings } from '../configs/types';
 import type { ComputedColumnDef } from '../configs/types';
