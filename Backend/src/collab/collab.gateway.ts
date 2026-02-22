@@ -118,7 +118,7 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect, 
     if (userId != null) {
       const origin = client.handshake?.headers?.origin ?? '';
       const transport = client.conn?.protocol ?? '';
-      this.logger.log(`[WS] connected socketId=${client.id} userId=${userId} origin=${origin || '-'} transport=${transport || '-'}`);
+      this.logger.log(`[WS] connect socketId=${client.id} userId=${userId} origin=${origin || '-'} transport=${transport || '-'} path=/socket.io`);
       this.presenceService.seen(userId);
     }
   }
@@ -489,7 +489,7 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect, 
     const room = `sheet:${docId}`;
     await client.join(room);
     this.collabService.joinDoc(client.id, docId, userId, mode);
-    this.logger.log(`[WS] join_doc room=${room} socketId=${client.id} userId=${userId ?? 'anonymous'}`);
+    this.logger.log(`[WS] join docId=${docId} room=${room} socketId=${client.id} userId=${userId ?? 'anonymous'}`);
 
     const state = await this.collabService.getDocState(docId);
     client.emit('collab', {
@@ -530,17 +530,19 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect, 
         } catch {
           /* ignore */
         }
-        this.logger.log(
-          `[WS] op_out broadcast room=${room} docId=${payload.docId} version=${result.version} opType=${payload.op?.type} recipientsCount=${recipientsCount}`,
-        );
-        this.server.to(room).emit('collab', {
-          type: 'OP_APPLIED',
+        const opPayload = {
+          type: 'OP_APPLIED' as const,
           docId: payload.docId,
           version: result.version,
           op: payload.op,
           opId: result.opId,
           clientOpId: payload.clientOpId,
-        });
+        };
+        this.logger.log(
+          `[WS] op_out broadcast room=${room} fromSocket=${client.id} (exclude sender) opType=${payload.op?.type} clientOpId=${payload.clientOpId?.slice(0, 8)} recipientsInRoom=${recipientsCount}`,
+        );
+        client.emit('collab', opPayload);
+        client.to(room).emit('collab', opPayload);
       } else {
         this.logger.log(
           `[collab] applyOp rejected { reason=${result.reason} expected=${payload.baseVersion} got=${currentVersion} details=${result.details ?? '-'} }`,

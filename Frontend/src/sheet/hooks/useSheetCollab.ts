@@ -62,7 +62,7 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
         token,
         joinDocOnConnect: { docId: documentId, mode: 'edit' },
         onUnhealthy: () => {
-          if (DEV || DEBUG) console.log('[sheetCollab] connected=false', { reason: 'unhealthy' });
+          console.info('[sheetCollab] connected=false', { reason: 'unhealthy' });
           setConnected(false);
         },
         onEvent: (ev: CollabEvent) => {
@@ -78,7 +78,7 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
           setServerVersion(v);
           setLocks(ev.locks ?? { cellLocks: {}, docLock: null });
           setConnected(true);
-          if (DEV || DEBUG) console.log('[sheetCollab] connected=true', { reason: 'connect', docId: ev.docId });
+          console.info('[sheetCollab] connected=true', { reason: 'connect', docId: ev.docId });
           onDocState?.(v);
           if (DEV || DEBUG) {
             console.log('[collab] DOC_STATE docId=', ev.docId, 'serverVersion=', v);
@@ -139,7 +139,7 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
       clientRef.current = client;
       client.connect();
       setConnected(client.connected);
-      if (DEV || DEBUG && !client.connected) console.log('[sheetCollab] connected=false', { reason: 'manual', note: 'waiting for connect+DOC_STATE' });
+      if (!client.connected) console.info('[sheetCollab] connected=false', { reason: 'manual', note: 'waiting for connect+DOC_STATE' });
 
       if (DEBUG) console.log('[collab] connect initiated, joinDoc will run on connect', documentId);
     })();
@@ -152,7 +152,7 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
         c.disconnect();
         clientRef.current = null;
         setConnected(false);
-        if (DEV || DEBUG) console.log('[sheetCollab] connected=false', { reason: 'manual', note: 'cleanup' });
+        console.info('[sheetCollab] connected=false', { reason: 'manual', note: 'cleanup' });
         if (DEBUG) console.log('[collab] leave doc', documentId);
       }
     };

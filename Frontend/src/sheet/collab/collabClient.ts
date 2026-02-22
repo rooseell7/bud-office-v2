@@ -108,8 +108,9 @@ export class CollabClient {
           console.log('[collab] event OP_APPLIED (remote)', { docId: ev.docId, version: ev.version, opType: ev.op?.type });
         }
       }
-      if ((DEV || DEBUG) && ev.type === 'DOC_STATE') {
-        console.log('[collab] event DOC_STATE', { docId: ev.docId, version: (ev as any).version });
+      if (ev.type === 'DOC_STATE') {
+        console.info('[collab] join_doc ok', { docId: ev.docId });
+        if (DEV || DEBUG) console.log('[collab] event DOC_STATE', { docId: ev.docId, version: (ev as any).version });
       }
       if (ev.type === 'OP_APPLIED' && ev.clientOpId) {
         const key = `${ev.docId}:${ev.clientOpId}`;
@@ -171,7 +172,7 @@ export class CollabClient {
 
   joinDoc(docId: number, mode: 'edit' | 'readonly' = 'edit'): void {
     const room = `sheet:${docId}`;
-    if (DEV || DEBUG) console.log('[collab] joinDoc', { docId, room, mode });
+    console.info('[collab] join_doc out', { docId, room, mode });
     this.socket?.emit('collab', { type: 'JOIN_DOC', docId, mode });
   }
 
