@@ -565,7 +565,7 @@ export default function DeliveryActDetailsPage() {
 
     setRows((prev) => {
       const next = [...prev];
-      const g = buildGridRowIndices(next);
+      let g = buildGridRowIndices(next);
 
       const baseAi = g[startR];
       if (baseAi === undefined) return prev;
