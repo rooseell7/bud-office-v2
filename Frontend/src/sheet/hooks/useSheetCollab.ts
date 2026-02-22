@@ -65,6 +65,10 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
           console.info('[sheetCollab] connected=false', { reason: 'unhealthy' });
           setConnected(false);
         },
+        onDisconnect: () => {
+          console.info('[sheetCollab] connected=false', { reason: 'disconnect' });
+          setConnected(false);
+        },
         onEvent: (ev: CollabEvent) => {
         if (ev.type === 'DOC_STATE') {
           const socketId = client.socketId ?? null;

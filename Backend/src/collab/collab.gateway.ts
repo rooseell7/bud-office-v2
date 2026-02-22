@@ -140,7 +140,7 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect, 
   @SubscribeMessage('ping')
   handlePing(client: any): void {
     const userId = (client as any).userId ?? null;
-    this.logger.debug(`[WS] ping socketId=${client.id} userId=${userId}`);
+    this.logger.debug(`[WS] ping socketId=${client.id} userId=${userId} -> pong`);
     client.emit('pong');
   }
 
