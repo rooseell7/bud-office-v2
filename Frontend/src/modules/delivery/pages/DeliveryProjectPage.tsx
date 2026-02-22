@@ -94,8 +94,8 @@ export default function DeliveryProjectPage() {
     try {
       const data = await getWorkLogs(pid as unknown as WorkId);
       setWorkLogs(Array.isArray(data) ? data : []);
-    } catch (e: any) {
-      setErr(e?.message ?? 'Помилка завантаження робіт');
+    } catch (e: unknown) {
+      setErr((e as { message?: string })?.message ?? 'Помилка завантаження робіт');
     } finally {
       setLoading(false);
     }
@@ -110,8 +110,8 @@ export default function DeliveryProjectPage() {
     try {
       const data = await getActs(pid as unknown as ActId);
       setActs(Array.isArray(data) ? data : []);
-    } catch (e: any) {
-      setErr(e?.message ?? 'Помилка завантаження актів');
+    } catch (e: unknown) {
+      setErr((e as { message?: string })?.message ?? 'Помилка завантаження актів');
     } finally {
       setLoading(false);
     }
@@ -149,8 +149,8 @@ export default function DeliveryProjectPage() {
       await refreshWorkLogs();
       setOpenWorkModal(false);
       setEditWork(null);
-    } catch (e: any) {
-      setErr(e?.message ?? 'Помилка створення роботи');
+    } catch (e: unknown) {
+      setErr((e as { message?: string })?.message ?? 'Помилка створення роботи');
     } finally {
       setLoading(false);
     }
@@ -166,8 +166,8 @@ export default function DeliveryProjectPage() {
       await refreshWorkLogs();
       setOpenWorkModal(false);
       setEditWork(null);
-    } catch (e: any) {
-      setErr(e?.message ?? 'Помилка оновлення роботи');
+    } catch (e: unknown) {
+      setErr((e as { message?: string })?.message ?? 'Помилка оновлення роботи');
     } finally {
       setLoading(false);
     }
@@ -182,8 +182,8 @@ export default function DeliveryProjectPage() {
     try {
       await deleteWorkLog(id);
       await refreshWorkLogs();
-    } catch (e: any) {
-      setErr(e?.message ?? 'Помилка видалення роботи');
+    } catch (e: unknown) {
+      setErr((e as { message?: string })?.message ?? 'Помилка видалення роботи');
     } finally {
       setLoading(false);
     }
@@ -209,8 +209,8 @@ export default function DeliveryProjectPage() {
 
       await refreshActs();
       if (created?.id) nav(`/delivery/acts/${created.id}`);
-    } catch (e: any) {
-      setErr(e?.message ?? 'Помилка створення акту');
+    } catch (e: unknown) {
+      setErr((e as { message?: string })?.message ?? 'Помилка створення акту');
     } finally {
       setLoading(false);
     }
@@ -225,8 +225,8 @@ export default function DeliveryProjectPage() {
     try {
       await deleteAct(id);
       await refreshActs();
-    } catch (e: any) {
-      setErr(e?.message ?? 'Помилка видалення акту');
+    } catch (e: unknown) {
+      setErr((e as { message?: string })?.message ?? 'Помилка видалення акту');
     } finally {
       setLoading(false);
     }
@@ -322,7 +322,7 @@ export default function DeliveryProjectPage() {
 
           <WorkLogModal
             open={openWorkModal}
-            initial={editWork}
+            editItem={editWork}
             onClose={() => {
               setOpenWorkModal(false);
               setEditWork(null);
