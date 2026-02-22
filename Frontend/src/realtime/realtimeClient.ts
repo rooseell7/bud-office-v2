@@ -68,6 +68,7 @@ export class RealtimeClient {
   connect(): void {
     if (this.socket?.connected) return;
     const url = this.options.url ?? wsBaseUrl;
+    console.info('[realtime] connect wsUrl=', url || '(current origin)', 'path=/socket.io');
     this.socket = io(url, {
       auth: { token: this.options.token },
       path: '/socket.io',
@@ -75,6 +76,7 @@ export class RealtimeClient {
     });
     this.visibilityUnsub = this.attachVisibilityListener();
     this.socket.on('connect', () => {
+      console.info('[realtime] connected', { socketId: this.socket?.id });
       const rooms: string[] = ['global', 'presence:global'];
       if (this.options.userId != null) rooms.push(`user:${this.options.userId}`);
       this.socket?.emit('bo:join', { rooms });
@@ -82,10 +84,20 @@ export class RealtimeClient {
       this.startPresenceHeartbeat();
       this.options.onConnect?.();
     });
-    this.socket.on('disconnect', () => {
+    this.socket.on('disconnect', (reason: string) => {
+      console.info('[realtime] disconnect', { reason });
       this.stopPresencePing();
       this.stopPresenceHeartbeat();
       this.options.onDisconnect?.();
+    });
+    this.socket.on('connect_error', (err: Error) => {
+      console.info('[realtime] connect_error', { message: err?.message ?? String(err) });
+    });
+    this.socket.on('reconnect_attempt', (attempt: number) => {
+      console.info('[realtime] reconnect_attempt', { attempt });
+    });
+    this.socket.on('reconnect_failed', () => {
+      console.info('[realtime] reconnect_failed');
     });
     this.socket.on('bo:presence:state', (payload: PresenceStatePayload) => {
       this.options.onPresenceState?.(payload);

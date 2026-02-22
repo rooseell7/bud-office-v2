@@ -110,18 +110,21 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect, 
     const userId = getUserIdFromHandshake(client.handshake, this.jwtService, secret);
     (client as any).userId = userId;
     if (token && userId == null) {
-      this.logger.warn(`Collab connect rejected: invalid token`);
+      this.logger.warn('WS connect rejected: auth failure (invalid token)');
       client.emit('auth_error', { reason: 'Invalid token' });
       client.disconnect(true);
+      return;
     }
     if (userId != null) {
+      this.logger.log(`WS connected socketId=${client.id} userId=${userId}`);
       this.presenceService.seen(userId);
     }
   }
 
   async handleDisconnect(client: any) {
-    const userId = (client as any).userId;
-    this.collabService.leaveAll(client.id, userId);
+    const userId = (client as any).userId as number | undefined;
+    this.logger.log(`WS disconnect socketId=${client.id} userId=${userId ?? 'anonymous'}`);
+    this.collabService.leaveAll(client.id, userId ?? null);
     const prev = await this.presenceStore.removeAsync(client.id);
     if (prev) {
       await this.broadcastPresenceStateThrottled('global', undefined);
@@ -129,6 +132,11 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect, 
       if (prev.context.entityType && prev.context.entityId)
         await this.broadcastPresenceStateThrottled('entity', `${prev.context.entityType}:${prev.context.entityId}`);
     }
+  }
+
+  @SubscribeMessage('ping')
+  handlePing(client: any): void {
+    client.emit('pong');
   }
 
   @SubscribeMessage('collab')
@@ -180,16 +188,23 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect, 
     switch (payload.type) {
       case 'JOIN_PROJECT': {
         if (userId == null) break;
-        const project = await this.projectRepo.findOne({
+        // Allow if user is project owner OR has access to an act in this project (delivery/estimate context)
+        const asOwner = await this.projectRepo.findOne({
           where: { id: payload.projectId, userId },
         });
-        if (!project) {
+        const hasActAccess =
+          !asOwner &&
+          (await this.actRepo.findOne({
+            where: { projectId: payload.projectId },
+            select: ['id'],
+          }));
+        if (!asOwner && !hasActAccess) {
           this.logger.debug(`[realtime] join project:${payload.projectId} denied for user ${userId}`);
           break;
         }
         const room = `project:${payload.projectId}`;
         await client.join(room);
-        this.logger.debug(`[realtime] join room=${room} userId=${userId}`);
+        this.logger.debug(`[bo:join] room=${room} userId=${userId}`);
         break;
       }
       case 'LEAVE_PROJECT': {

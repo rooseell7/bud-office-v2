@@ -37,9 +37,7 @@ export class CollabClient {
   connect(): void {
     if (this.socket?.connected) return;
     const url = this.options.url ?? wsBaseUrl;
-    if (DEV || DEBUG) {
-      console.log('[collab] connect url=', url || '(current origin)', 'path=/socket.io');
-    }
+    console.info('[collab] connect wsUrl=', url || '(current origin)', 'path=/socket.io');
     this.socket = io(url, {
       auth: { token: this.options.token },
       path: '/socket.io',
@@ -47,7 +45,7 @@ export class CollabClient {
     });
     this.socket.on('connect', () => {
       const transport = (this.socket as any)?.io?.engine?.transport?.name ?? 'unknown';
-      if (DEV || DEBUG) console.log('[collab] connected', { transport, socketId: this.socket?.id });
+      console.info('[collab] connected', { transport, socketId: this.socket?.id });
       const join = this.options.joinDocOnConnect;
       if (join) this.joinDoc(join.docId, join.mode ?? 'edit');
     });
@@ -57,22 +55,28 @@ export class CollabClient {
         console.debug('[collab] upgraded', { transport: t?.name ?? 'websocket' });
       });
     }
-    this.socket.on('disconnect', (reason) => {
-      if (DEV || DEBUG) console.log('[collab] disconnect', { reason });
+    this.socket.on('disconnect', (reason: string) => {
+      console.info('[collab] disconnect', { reason });
       if (reason === 'io server disconnect' || /unauthorized|invalid|token/i.test(reason)) {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('user');
         window.dispatchEvent(new CustomEvent('auth:logout', { detail: { reason: 'ws_unauthorized' } }));
       }
     });
+    this.socket.on('reconnect_attempt', (attempt: number) => {
+      console.info('[collab] reconnect_attempt', { attempt });
+    });
+    this.socket.on('reconnect_failed', () => {
+      console.info('[collab] reconnect_failed');
+    });
     this.socket.on('auth_error', () => {
-      if (DEV || DEBUG) console.log('[collab] auth_error from server');
+      console.info('[collab] auth_error from server');
       localStorage.removeItem('accessToken');
       localStorage.removeItem('user');
       window.dispatchEvent(new CustomEvent('auth:logout', { detail: { reason: 'ws_unauthorized' } }));
     });
     this.socket.on('connect_error', (err: Error) => {
-      if (DEV || DEBUG) console.log('[collab] connect_error:', err?.message);
+      console.info('[collab] connect_error', { message: err?.message ?? String(err) });
       if (/401|unauthorized|invalid|token|auth/i.test(err?.message ?? '')) {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('user');
