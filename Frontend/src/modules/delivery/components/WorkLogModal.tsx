@@ -49,7 +49,7 @@ export default function WorkLogModal({
     }
   }, [can]);
 
-  const isEdit = Boolean((editItem as any)?.id);
+  const isEdit = Boolean(editItem && (editItem as Record<string, unknown>).id);
 
   // ✅ поля зберігаємо як у твоєму UI, але читаємо з editItem через any
   const [date, setDate] = useState<string>('');
@@ -74,7 +74,7 @@ export default function WorkLogModal({
     setErr(null);
 
     if (editItem) {
-      const it: any = editItem;
+      const it = editItem as Record<string, unknown>;
       setDate(String(it.date ?? it.workDate ?? it.performedAt ?? '').slice(0, 10));
       setTitle(String(it.title ?? it.name ?? it.workName ?? ''));
       setComment(String(it.comment ?? it.note ?? it.notes ?? ''));
@@ -119,26 +119,26 @@ export default function WorkLogModal({
     try {
       setBusy(true);
 
-      // ✅ HOTFIX: якщо CreateWorkLogDto не містить date — TS не дозволяє.
-      // Тому збираємо як any. Далі ми приведемо це строго під твої DTO.
-      const baseDto: any = {
-        date,
+      const workDate = date ? date.slice(0, 10) : new Date().toISOString().slice(0, 10);
+      const dto: CreateWorkLogDto = {
+        projectId: 0,
         title: title.trim(),
-        comment: comment.trim(),
         qty: toNum(qty),
         unit: unit.trim(),
         price: toNum(price),
+        workDate,
+        note: comment.trim() || undefined,
       };
 
-      if (isEdit && (editItem as any)?.id != null) {
-        await onUpdate((editItem as any).id as Id, baseDto);
+      if (isEdit && editItem && (editItem as Record<string, unknown>).id != null) {
+        await onUpdate((editItem as Record<string, unknown>).id as Id, dto);
       } else {
-        await onCreate(baseDto);
+        await onCreate(dto);
       }
 
       onClose();
-    } catch (e: any) {
-      setErr(e?.message ?? 'Помилка збереження.');
+    } catch (e: unknown) {
+      setErr((e as Error)?.message ?? 'Помилка збереження.');
     } finally {
       setBusy(false);
     }
