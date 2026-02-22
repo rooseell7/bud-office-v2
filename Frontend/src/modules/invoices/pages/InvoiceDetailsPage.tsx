@@ -204,7 +204,7 @@ export default function InvoiceDetailsPage() {
   const [attLoading, setAttLoading] = useState(false);
   const [attUploading, setAttUploading] = useState(false);
   const [attError, setAttError] = useState<string | null>(null);
-  const [attDeleting, setAttDeleting] = useState<number | null>(null);
+  const [_attDeleting, setAttDeleting] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [error, setError] = useState<string | null>(null);
