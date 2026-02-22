@@ -23,8 +23,8 @@ import {
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
 
 import { useAuth } from '../../auth/context/AuthContext';
-import { getObjects, type ProjectObject } from '../../../api/objects';
-import { getMaterials, type Material } from '../../../api/materials';
+import { getObjects, type ObjectDto } from '../../../api/objects';
+import { getMaterials, type MaterialDto } from '../../../api/materials';
 import {
   createInvoice,
   deleteInvoice,
@@ -35,8 +35,8 @@ import {
   updateInvoice,
 } from '../../../api/invoices';
 
-import { buildDraftKey } from '../../shared/drafts/draftsApi';
-import { useDraft } from '../../shared/drafts/useDraft';
+import { buildDraftKey } from '../../../shared/drafts/draftsApi';
+import { useDraft } from '../../../shared/drafts/useDraft';
 import { formatFixed, n } from '../../shared/sheet/utils';
 
 function money(v: unknown): string {
@@ -54,8 +54,8 @@ export function InvoicesPage() {
   const [rows, setRows] = useState<Invoice[]>([]);
   const [q, setQ] = useState('');
 
-  const [objects, setObjects] = useState<ProjectObject[]>([]);
-  const [materials, setMaterials] = useState<Material[]>([]);
+  const [objects, setObjects] = useState<ObjectDto[]>([]);
+  const [materials, setMaterials] = useState<MaterialDto[]>([]);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
@@ -110,7 +110,7 @@ export function InvoicesPage() {
   );
 
   const materialById = useMemo(() => {
-    const m = new Map<number, Material>();
+    const m = new Map<number, MaterialDto>();
     for (const it of materials) m.set(it.id, it);
     return m;
   }, [materials]);
