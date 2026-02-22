@@ -68,7 +68,15 @@ import {
   SHEET_GOOGLE_HEADER_BORDER,
   SHEET_HEADER_BG,
 } from '../../shared/sheet/constants';
-import { useSheetSelection } from '../../shared/sheet/engine';
+import {
+  useSheetSelection,
+  isInRange,
+  normalizeRange,
+  forEachCellInRange,
+  copyRangeToClipboard,
+  applyTsvPasteToRows,
+  handleSheetsGridKeyDown,
+} from '../../shared/sheet/engine';
 
 import { Sheet, type SheetTotals } from '../../../sheet';
 import { invoiceMaterialsSheetConfig } from '../../../sheet/configs/invoiceMaterialsSheetConfig';
@@ -196,6 +204,7 @@ export default function InvoiceDetailsPage() {
   const [attLoading, setAttLoading] = useState(false);
   const [attUploading, setAttUploading] = useState(false);
   const [attError, setAttError] = useState<string | null>(null);
+  const [attDeleting, setAttDeleting] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [error, setError] = useState<string | null>(null);
