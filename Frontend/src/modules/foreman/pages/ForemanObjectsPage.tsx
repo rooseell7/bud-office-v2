@@ -14,6 +14,9 @@ import {
 
 import { getForemanObjects, type ForemanObjectDto } from '../../../api/foreman';
 
+/** Розширення для опційних полів, які бекенд може повертати. */
+type ForemanObjectRow = ForemanObjectDto & { openTasksCount?: number; overdueTasksCount?: number };
+
 const statusLabels: Record<string, string> = {
   planned: 'Планується',
   in_progress: 'В роботі',
@@ -34,8 +37,9 @@ const ForemanObjectsPage: React.FC = () => {
     try {
       const list = await getForemanObjects();
       setObjects(list);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || 'Помилка завантаження');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Помилка завантаження';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -75,46 +79,49 @@ const ForemanObjectsPage: React.FC = () => {
         </Typography>
       ) : (
         <Stack spacing={2}>
-          {objects.map((obj) => (
-            <Card key={obj.id} variant="outlined">
-              <CardActionArea onClick={() => navigate(`/foreman/objects/${obj.id}`)}>
-                <CardContent>
-                  <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1}>
-                    <Box>
-                      <Typography variant="h6">{obj.name}</Typography>
-                      {obj.address && (
-                        <Typography variant="body2" color="text.secondary">
-                          {obj.address}
-                        </Typography>
-                      )}
-                    </Box>
-                    <Stack direction="row" gap={1} alignItems="center">
-                      <Chip
-                        size="small"
-                        label={statusLabels[obj.status] ?? obj.status}
-                        variant="outlined"
-                      />
-                      {obj.openIssuesCount != null && obj.openIssuesCount > 0 && (
-                        <Chip size="small" color="warning" label={`Проблеми: ${obj.openIssuesCount}`} />
-                      )}
-                      {obj.openTasksCount != null && obj.openTasksCount > 0 && (
-                        <Chip size="small" color="primary" label={`Задач: ${obj.openTasksCount}`} />
-                      )}
-                      {obj.overdueTasksCount != null && obj.overdueTasksCount > 0 && (
-                        <Chip size="small" color="error" label={`Прострочено: ${obj.overdueTasksCount}`} />
-                      )}
-                      {obj.todayWorkLogsCount != null && obj.todayWorkLogsCount > 0 && (
-                        <Chip size="small" color="info" label={`Сьогодні робіт: ${obj.todayWorkLogsCount}`} />
-                      )}
+          {objects.map((obj) => {
+            const row: ForemanObjectRow = obj;
+            return (
+              <Card key={obj.id} variant="outlined">
+                <CardActionArea onClick={() => navigate(`/foreman/objects/${obj.id}`)}>
+                  <CardContent>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1}>
+                      <Box>
+                        <Typography variant="h6">{obj.name}</Typography>
+                        {obj.address && (
+                          <Typography variant="body2" color="text.secondary">
+                            {obj.address}
+                          </Typography>
+                        )}
+                      </Box>
+                      <Stack direction="row" gap={1} alignItems="center">
+                        <Chip
+                          size="small"
+                          label={statusLabels[obj.status] ?? obj.status}
+                          variant="outlined"
+                        />
+                        {obj.openIssuesCount != null && obj.openIssuesCount > 0 && (
+                          <Chip size="small" color="warning" label={`Проблеми: ${obj.openIssuesCount}`} />
+                        )}
+                        {row.openTasksCount != null && row.openTasksCount > 0 && (
+                          <Chip size="small" color="primary" label={`Задач: ${row.openTasksCount}`} />
+                        )}
+                        {row.overdueTasksCount != null && row.overdueTasksCount > 0 && (
+                          <Chip size="small" color="error" label={`Прострочено: ${row.overdueTasksCount}`} />
+                        )}
+                        {obj.todayWorkLogsCount != null && obj.todayWorkLogsCount > 0 && (
+                          <Chip size="small" color="info" label={`Сьогодні робіт: ${obj.todayWorkLogsCount}`} />
+                        )}
+                      </Stack>
                     </Stack>
-                  </Stack>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                    Оновлено: {new Date(obj.updatedAt).toLocaleString('uk-UA')}
-                  </Typography>
-                </CardContent>
-              </CardActionArea>
-            </Card>
-          ))}
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                      Оновлено: {new Date(obj.updatedAt).toLocaleString('uk-UA')}
+                    </Typography>
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+            );
+          })}
         </Stack>
       )}
     </Box>
