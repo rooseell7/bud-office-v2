@@ -114,9 +114,10 @@ export default function MaterialsPage() {
           name: String(m.name ?? ''),
           unit: String(m.unit ?? ''),
           supplierName: meta[Number(m.id)]?.supplierName ?? '',
-          basePrice: String((m as any).basePrice ?? 0),
-          consumptionPerM2: String((m as any).consumptionPerM2 ?? 0),
-          consumptionPerLm: String((m as any).consumptionPerLm ?? 0),
+          basePrice: String(m.basePrice ?? 0),
+          weightKg: String(m.weightKg ?? ''),
+          consumptionPerM2: String(m.consumptionPerM2 ?? 0),
+          consumptionPerLm: String(m.consumptionPerLm ?? 0),
           isActive: Boolean(m.isActive),
         })),
       );
@@ -174,9 +175,10 @@ export default function MaterialsPage() {
           name: String(created.name ?? ''),
           unit: String(created.unit ?? ''),
           supplierName,
-          basePrice: String((created as any).basePrice ?? 0),
-          consumptionPerM2: String((created as any).consumptionPerM2 ?? 0),
-          consumptionPerLm: String((created as any).consumptionPerLm ?? 0),
+          basePrice: String(created.basePrice ?? 0),
+          weightKg: String(created.weightKg ?? ''),
+          consumptionPerM2: String(created.consumptionPerM2 ?? 0),
+          consumptionPerLm: String(created.consumptionPerLm ?? 0),
           isActive: Boolean(created.isActive),
         },
         ...prev,
@@ -208,19 +210,20 @@ export default function MaterialsPage() {
       const supplierName = (edit.supplierName ?? '').trim();
       const unit = (edit.unit ?? '').trim();
       const basePrice = Number(edit.basePrice);
-      const weightKg = Number((edit as any).weightKg);
+      const weightKg = Number(edit.weightKg);
       const c2 = Number(edit.consumptionPerM2);
       const clm = Number(edit.consumptionPerLm);
 
-      const updated = await updateMaterial(edit.id, {
+      const updatePayload: Parameters<typeof updateMaterial>[1] = {
         name: edit.name.trim(),
-        ...(unit ? { unit } : { unit: null }),
+        unit: unit || null,
         basePrice: Number.isFinite(basePrice) ? basePrice : 0,
-        ...((String((edit as any).weightKg ?? '').trim()) ? { weightKg: Number.isFinite(weightKg) ? weightKg : undefined } : { weightKg: null }),
         consumptionPerM2: Number.isFinite(c2) ? c2 : 0,
         consumptionPerLm: Number.isFinite(clm) ? clm : 0,
         isActive: !!edit.isActive,
-      });
+      };
+      if (String(edit.weightKg ?? '').trim() && Number.isFinite(weightKg)) updatePayload.weightKg = weightKg;
+      const updated = await updateMaterial(edit.id, updatePayload);
 
       // supplierName зберігаємо локально (LS)
       const meta = loadMaterialMeta();
@@ -240,10 +243,11 @@ export default function MaterialsPage() {
                 name: String(updated.name ?? ''),
                 unit: String(updated.unit ?? ''),
                 supplierName,
-                basePrice: String((updated as any).basePrice ?? 0),
-                consumptionPerM2: String((updated as any).consumptionPerM2 ?? 0),
-                consumptionPerLm: String((updated as any).consumptionPerLm ?? 0),
-                isActive: Boolean((updated as any).isActive),
+                basePrice: String(updated.basePrice ?? 0),
+                weightKg: String(updated.weightKg ?? edit.weightKg ?? ''),
+                consumptionPerM2: String(updated.consumptionPerM2 ?? 0),
+                consumptionPerLm: String(updated.consumptionPerLm ?? 0),
+                isActive: Boolean(updated.isActive),
               }
             : it,
         ),
@@ -290,9 +294,11 @@ export default function MaterialsPage() {
           id: Number(m.id),
           name: String(m.name ?? ''),
           unit: String(m.unit ?? ''),
-          basePrice: String((m as any).basePrice ?? 0),
-          consumptionPerM2: String((m as any).consumptionPerM2 ?? 0),
-          consumptionPerLm: String((m as any).consumptionPerLm ?? 0),
+          supplierName: '',
+          basePrice: String(m.basePrice ?? 0),
+          weightKg: String(m.weightKg ?? ''),
+          consumptionPerM2: String(m.consumptionPerM2 ?? 0),
+          consumptionPerLm: String(m.consumptionPerLm ?? 0),
           isActive: Boolean(m.isActive),
         });
       }
