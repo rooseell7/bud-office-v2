@@ -138,10 +138,10 @@ export function useInvoiceSheetAdapter(invoiceId: number | null, items: InvoiceI
       const inv = await getInvoice(invoiceId);
       const newItems = snapshotToItems(snapshot);
       await updateInvoice(invoiceId, {
-        objectId: inv.objectId,
-        type: inv.type,
-        warehouseId: inv.warehouseId,
-        supplierName: inv.supplierName,
+        objectId: inv.objectId ?? undefined,
+        type: inv.type ?? undefined,
+        warehouseId: inv.warehouseId ?? undefined,
+        supplierName: inv.supplierName ?? undefined,
         status: inv.status,
         items: newItems,
       });

@@ -858,7 +858,8 @@ export const Grid: React.FC<GridProps> = ({
                 }
                 onAutocompleteSelect={
                   config?.autocompleteForColumn?.colIndex === c && onAutocompleteSelect
-                    ? (name, unit, materialId) => onAutocompleteSelect(r, name, unit, materialId)
+                    ? (name: string, unit?: string | null, materialId?: number) =>
+                        onAutocompleteSelect(r, name, unit, materialId)
                     : undefined
                 }
               />

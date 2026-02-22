@@ -68,11 +68,14 @@ export const CellEditorWithAutocomplete: React.FC<CellEditorWithAutocompleteProp
     debounceRef.current = setTimeout(() => fetchOptions(v), 250);
   };
 
-  const handleChange = (_: unknown, opt: { id: number; name: string; unit?: string | null } | null) => {
-    if (opt) {
-      setInputValue(opt.name);
-      onChange(opt.name);
-      onSelectWithUnit?.(opt.name, opt.unit ?? null, opt.id);
+  const handleChange = (
+    _: unknown,
+    value: string | { id: number; name: string; unit?: string | null } | null,
+  ) => {
+    if (value != null && typeof value === 'object') {
+      setInputValue(value.name);
+      onChange(value.name);
+      onSelectWithUnit?.(value.name, value.unit ?? null, value.id);
     }
   };
 
