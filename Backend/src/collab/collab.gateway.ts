@@ -539,7 +539,7 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect, 
           clientOpId: payload.clientOpId,
         };
         this.logger.log(
-          `[WS] op_out broadcast room=${room} fromSocket=${client.id} (exclude sender) opType=${payload.op?.type} clientOpId=${payload.clientOpId?.slice(0, 8)} recipientsInRoom=${recipientsCount}`,
+          `[WS] op_out broadcast docId=${payload.docId} room=${room} fromSocket=${client.id} (exclude sender) opType=${payload.op?.type} clientOpId=${payload.clientOpId?.slice(0, 8)} recipientsInRoom=${recipientsCount}`,
         );
         client.emit('collab', opPayload);
         client.to(room).emit('collab', opPayload);

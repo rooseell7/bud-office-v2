@@ -25,7 +25,9 @@ import { worksSheetConfig } from '../../sheet/configs/worksSheetConfig';
 import { W_COL } from '../../sheet/configs/worksSheetConfig';
 import { useActSheetAdapter } from '../../sheet/hooks/useActSheetAdapter';
 import { useAuth } from '../../modules/auth/context/AuthContext';
-import { getAct, updateAct, type ActDto } from '../../api/acts';
+import { useRealtime } from '../../realtime/RealtimeContext';
+import { subscribeInvalidate } from '../../realtime/invalidateBus';
+import { getAct, type ActDto } from '../../api/acts';
 import { lsGetJson, lsSetJson } from '../../shared/localStorageJson';
 
 const ACT_LOCK_COLUMNS = true;
@@ -72,8 +74,13 @@ export const ActEditorPage: React.FC = () => {
   }, [loc.state]);
 
   const { can } = useAuth();
+  const realtime = useRealtime();
   const actId = id ? parseInt(id, 10) : NaN;
   const validId = Number.isFinite(actId) && actId > 0 ? actId : null;
+
+  useEffect(() => {
+    if (validId != null) console.info('[ActEditor] docId=null actId=', validId);
+  }, [validId]);
 
   const [act, setAct] = useState<ActDto | null>(null);
   const [items, setItems] = useState<any[]>([]);
@@ -119,8 +126,9 @@ export const ActEditorPage: React.FC = () => {
         }
         return new Set(sections.slice(0, 1).map((s) => s.sectionKey));
       });
-    } catch (e: any) {
-      setError(e?.message || 'Помилка завантаження');
+    } catch (e: unknown) {
+      const msg = (e as { message?: string })?.message || 'Помилка завантаження';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -133,6 +141,40 @@ export const ActEditorPage: React.FC = () => {
     }
     loadAct();
   }, [validId, loadAct]);
+
+  // Live: join project room to receive bo:invalidate when act is updated by others
+  useEffect(() => {
+    if (!realtime || !act?.projectId) return;
+    const pid = Number(act.projectId);
+    if (!Number.isFinite(pid) || pid <= 0) return;
+    realtime.joinProject(pid);
+    return () => {
+      realtime.leaveProject(pid);
+    };
+  }, [realtime, act?.projectId]);
+
+  // Presence: tell server we're viewing/editing this act
+  useEffect(() => {
+    if (!realtime?.sendPresenceHello || !act) return;
+    realtime.sendPresenceHello({
+      projectId: act.projectId ?? null,
+      entityType: 'act',
+      entityId: String(act.id),
+      route: `/delivery/acts/${act.id}`,
+      mode: canWrite && !viewMode ? 'edit' : 'view',
+    });
+  }, [realtime, act?.id, act?.projectId, canWrite, viewMode]);
+
+  // Live: refetch act when bo:invalidate for this act is received
+  useEffect(() => {
+    if (!validId || !realtime) return;
+    const unsub = subscribeInvalidate((payload) => {
+      if (payload?.entityType === 'act' && String(payload?.entityId) === String(validId)) {
+        loadAct();
+      }
+    });
+    return unsub;
+  }, [validId, realtime, loadAct]);
 
   const handleSectionExpand = useCallback(
     (sectionKey: string) => {

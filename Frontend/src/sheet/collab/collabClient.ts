@@ -17,8 +17,9 @@ export type CollabEvent =
   | { type: 'PRESENCE_BROADCAST'; docId: number; presence: any[] }
   | { type: 'LOCKS_UPDATED'; docId: number; locks: any };
 
-const PING_INTERVAL_MS = 12_000;
-const PONG_TIMEOUT_MS = 4_000;
+const PING_INTERVAL_MS = 15_000;
+const PONG_TIMEOUT_MS = 12_000;
+const MISSED_PONGS_TO_FALLBACK = 2;
 
 export type CollabClientOptions = {
   url?: string;
@@ -26,8 +27,10 @@ export type CollabClientOptions = {
   onEvent?: (ev: CollabEvent) => void;
   /** Якщо задано, після connect автоматично викликається joinDoc(docId, mode), щоб JOIN_DOC не втрачався до встановлення WS. */
   joinDocOnConnect?: { docId: number; mode?: 'edit' | 'readonly' };
-  /** Викликається при pong timeout — перехід у REST fallback (collabConnected=false). */
+  /** Викликається при 2+ послідовних pong timeout — перехід у REST fallback (collabConnected=false). */
   onUnhealthy?: () => void;
+  /** Викликається при disconnect (socket відключено). */
+  onDisconnect?: (reason: string) => void;
 };
 
 export class CollabClient {
@@ -36,6 +39,10 @@ export class CollabClient {
   private pendingOps = new Map<string, { resolve: (v: number) => void; reject: (e: any) => void }>();
   private pingIntervalId: ReturnType<typeof setInterval> | null = null;
   private pongTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private missedPongs = 0;
+  private lastPingSentAt = 0;
+  /** Idempotent join: skip re-send if already in room (cleared on disconnect so reconnect re-joins). */
+  private joinedDocIds = new Set<number>();
 
   constructor(options: CollabClientOptions) {
     this.options = options;
@@ -52,9 +59,10 @@ export class CollabClient {
     });
     this.socket.on('connect', () => {
       const transport = (this.socket as any)?.io?.engine?.transport?.name ?? 'unknown';
-      console.info('[collab] connect ok', { wsUrl: (this.options.url ?? wsBaseUrl) || '(current origin)', socketId: this.socket?.id, transport, path: '/socket.io' });
+      console.info('[collab] connected', { socketId: this.socket?.id, transport });
       const join = this.options.joinDocOnConnect;
       if (join) this.joinDoc(join.docId, join.mode ?? 'edit');
+      this.missedPongs = 0;
       this.startWatchdog();
     });
     this.socket.on('pong', () => {
@@ -62,7 +70,10 @@ export class CollabClient {
         clearTimeout(this.pongTimeoutId);
         this.pongTimeoutId = null;
       }
-      if (DEV || DEBUG) console.debug('[collab] pong received');
+      this.missedPongs = 0;
+      const rttMs = this.lastPingSentAt ? Math.round(Date.now() - this.lastPingSentAt) : 0;
+      const docId = this.options.joinDocOnConnect?.docId;
+      console.info('[collab] pong', { docId, rttMs });
     });
     const engine = this.socket.io?.engine;
     if (engine) {
@@ -71,8 +82,10 @@ export class CollabClient {
       });
     }
     this.socket.on('disconnect', (reason: string) => {
+      this.joinedDocIds.clear();
       this.stopWatchdog();
-      console.warn('[collab] disconnect', { reason });
+      console.info('[collab] disconnect', { reason });
+      this.options.onDisconnect?.(reason);
       if (reason === 'io server disconnect' || /unauthorized|invalid|token/i.test(reason)) {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('user');
@@ -84,7 +97,8 @@ export class CollabClient {
     });
     this.socket.on('reconnect_failed', () => {
       this.stopWatchdog();
-      console.warn('[collab] reconnect_failed');
+      console.info('[collab] disconnect', { reason: 'reconnect_failed' });
+      this.options.onDisconnect?.('reconnect_failed');
     });
     this.socket.on('auth_error', () => {
       console.info('[collab] auth_error from server');
@@ -93,7 +107,7 @@ export class CollabClient {
       window.dispatchEvent(new CustomEvent('auth:logout', { detail: { reason: 'ws_unauthorized' } }));
     });
     this.socket.on('connect_error', (err: Error) => {
-      console.warn('[collab] connect_error', { message: err?.message ?? String(err) });
+      console.info('[collab] connect_error', { reason: err?.message ?? String(err) });
       if (/401|unauthorized|invalid|token|auth/i.test(err?.message ?? '')) {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('user');
@@ -109,7 +123,7 @@ export class CollabClient {
         }
       }
       if (ev.type === 'DOC_STATE') {
-        console.info('[collab] join_doc ok', { docId: ev.docId });
+        console.info('[collab] join_doc ok', { docId: ev.docId, room: `sheet:${ev.docId}` });
         if (DEV || DEBUG) console.log('[collab] event DOC_STATE', { docId: ev.docId, version: (ev as any).version });
       }
       if (ev.type === 'OP_APPLIED' && ev.clientOpId) {
@@ -142,13 +156,19 @@ export class CollabClient {
         clearTimeout(this.pongTimeoutId);
         this.pongTimeoutId = null;
       }
-      if (DEV || DEBUG) console.debug('[collab] ping sent');
+      const docId = this.options.joinDocOnConnect?.docId;
+      console.info('[collab] ping', { docId, socketId: this.socket?.id, missedPongs: this.missedPongs });
+      this.lastPingSentAt = Date.now();
       this.socket.emit('ping');
       this.pongTimeoutId = setTimeout(() => {
         this.pongTimeoutId = null;
-        this.stopWatchdog();
-        console.warn('[collab] ws unhealthy (pong timeout), fallback to REST');
-        this.options.onUnhealthy?.();
+        this.missedPongs += 1;
+        console.warn('[collab] pong_timeout', { docId: this.options.joinDocOnConnect?.docId, missedPongs: this.missedPongs, timeoutMs: PONG_TIMEOUT_MS });
+        if (this.missedPongs >= MISSED_PONGS_TO_FALLBACK) {
+          this.stopWatchdog();
+          console.warn('[collab] fallback_to_rest', { docId: this.options.joinDocOnConnect?.docId, reason: 'pong_timeout', missedPongs: this.missedPongs });
+          this.options.onUnhealthy?.();
+        }
       }, PONG_TIMEOUT_MS);
     }, PING_INTERVAL_MS);
   }
@@ -172,11 +192,17 @@ export class CollabClient {
 
   joinDoc(docId: number, mode: 'edit' | 'readonly' = 'edit'): void {
     const room = `sheet:${docId}`;
+    if (this.joinedDocIds.has(docId) && this.socket?.connected) {
+      console.info('[collab] join_doc skip (already joined)', { docId, room });
+      return;
+    }
     console.info('[collab] join_doc out', { docId, room, mode });
     this.socket?.emit('collab', { type: 'JOIN_DOC', docId, mode });
+    this.joinedDocIds.add(docId);
   }
 
   leaveDoc(docId: number): void {
+    this.joinedDocIds.delete(docId);
     this.socket?.emit('collab', { type: 'LEAVE_DOC', docId });
   }
 

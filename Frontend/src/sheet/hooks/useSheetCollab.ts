@@ -50,6 +50,7 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
   useEffect(() => {
     if (!documentId || !token) return;
 
+    console.info('[sheetCollab] doc_ready', { docId: documentId });
     let cancelled = false;
 
     void (async () => {
@@ -57,6 +58,7 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
       const { wsBaseUrl } = await import('../collab/env');
       if (cancelled) return;
 
+      console.info('[sheetCollab] join_requested', { docId: documentId });
       const client = new CollabClientClass({
         url: wsBaseUrl,
         token,
