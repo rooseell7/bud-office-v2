@@ -26,7 +26,7 @@ export const CellEditorWithAutocomplete: React.FC<CellEditorWithAutocompleteProp
   onCommit,
   onSelectWithUnit,
   rowHeight,
-  colWidth,
+  colWidth: _colWidth,
   type,
 }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);

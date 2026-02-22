@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, Button, Menu, MenuItem, TextField, Divider, Snackbar, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
 import { colToLetter } from '../utils';
 import { colToLabel } from '../utils/colLabel';
 import { Cell } from './Cell';
-import { CellEditor } from './CellEditor';
 import { cellKey, type SheetState } from '../engine/state';
 import type { CellCoord } from '../engine/types';
 import type { SheetConfig } from '../configs/types';
@@ -118,7 +116,7 @@ export const Grid: React.FC<GridProps> = ({
   onCellDoubleClick,
   onEditorChange,
   onEditorBlur,
-  onColumnResize,
+  onColumnResize: _onColumnResize,
   onColumnResizeCommit,
   onRowResizeCommit,
   onInsertRowAbove,
@@ -627,7 +625,7 @@ export const Grid: React.FC<GridProps> = ({
               borderColor: 'var(--sheet-grid)',
             }}
           />
-          {visibleCols.map((c, i) => {
+          {visibleCols.map((c, _i) => {
             const cw = getColWidth(c);
             const isFlex = config?.flexColumn === c;
             return (
@@ -799,7 +797,7 @@ export const Grid: React.FC<GridProps> = ({
               />
             )}
           </Box>
-          {visibleCols.map((c, i) => {
+          {visibleCols.map((c, _i) => {
             const coord = { row: r, col: c };
             const isActive = activeCell.row === r && activeCell.col === c;
             const inSel = isInSelection(r, c);
@@ -1004,8 +1002,6 @@ export const Grid: React.FC<GridProps> = ({
           const hasProtected = selectedCols.some(
             (c) => protectedIds.has(state.columns?.[c]?.id ?? ''),
           );
-          const canBulk = selectedCols.length > 1 &&
-            state.colCount - selectedCols.length >= (config?.minColumns ?? 1);
           if (selectedCols.length <= 1) return null;
           return (
             <MenuItem
