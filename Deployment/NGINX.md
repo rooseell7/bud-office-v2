@@ -168,3 +168,7 @@ VITE_WS_URL=/
 ```
 
 Copy from `Frontend/.env.nginx.example`.
+
+## CORS for remote access
+
+При заході з зовнішнього IP (LTE/інший мережевий) браузер надсилає `Origin: http://ВАШ_IP`. Backend має дозволити цей origin, інакше в логах з'явиться "CORS blocked for origin: …" і логін не спрацює. У `run-online.bat` перед стартом Backend встановлюється `CORS_ORIGINS` з whitelist (95.47.196.98, localhost, 5173, опційно LAN). На сервері можна задати той самий список у `Backend/.env` (див. `Backend/.env.example`).

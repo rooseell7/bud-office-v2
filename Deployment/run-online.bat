@@ -63,8 +63,8 @@ timeout /t 2 /nobreak >nul
 echo [OK] Готово.
 echo.
 
-:: 4. Запуск Backend (CORS для nginx: localhost + 127.0.0.1; для remote додати IP у Backend\.env)
-set CORS_ORIGINS=http://localhost,http://127.0.0.1
+:: 4. Запуск Backend (CORS whitelist: public IP + localhost + dev; для LAN додати свій IP у Backend\.env)
+set "CORS_ORIGINS=http://95.47.196.98,https://95.47.196.98,http://localhost,http://127.0.0.1,http://localhost:5173,http://127.0.0.1:5173,http://192.168.50.162"
 echo [4/5] Запуск Backend на http://127.0.0.1:3000 ...
 start "BUD Backend" cmd /k "cd /d ""%BACKEND%"" && npm run start:prod"
 timeout /t 4 /nobreak >nul
