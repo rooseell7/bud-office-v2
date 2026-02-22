@@ -52,7 +52,7 @@ export class CollabClient {
     });
     this.socket.on('connect', () => {
       const transport = (this.socket as any)?.io?.engine?.transport?.name ?? 'unknown';
-      console.info('[collab] connected', { transport, socketId: this.socket?.id });
+      console.info('[collab] connect ok', { wsUrl: (this.options.url ?? wsBaseUrl) || '(current origin)', socketId: this.socket?.id, transport, path: '/socket.io' });
       const join = this.options.joinDocOnConnect;
       if (join) this.joinDoc(join.docId, join.mode ?? 'edit');
       this.startWatchdog();
@@ -62,6 +62,7 @@ export class CollabClient {
         clearTimeout(this.pongTimeoutId);
         this.pongTimeoutId = null;
       }
+      if (DEV || DEBUG) console.debug('[collab] pong received');
     });
     const engine = this.socket.io?.engine;
     if (engine) {
@@ -71,7 +72,7 @@ export class CollabClient {
     }
     this.socket.on('disconnect', (reason: string) => {
       this.stopWatchdog();
-      console.info('[collab] disconnect', { reason });
+      console.warn('[collab] disconnect', { reason });
       if (reason === 'io server disconnect' || /unauthorized|invalid|token/i.test(reason)) {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('user');
@@ -83,7 +84,7 @@ export class CollabClient {
     });
     this.socket.on('reconnect_failed', () => {
       this.stopWatchdog();
-      console.info('[collab] reconnect_failed');
+      console.warn('[collab] reconnect_failed');
     });
     this.socket.on('auth_error', () => {
       console.info('[collab] auth_error from server');
@@ -92,7 +93,7 @@ export class CollabClient {
       window.dispatchEvent(new CustomEvent('auth:logout', { detail: { reason: 'ws_unauthorized' } }));
     });
     this.socket.on('connect_error', (err: Error) => {
-      console.info('[collab] connect_error', { message: err?.message ?? String(err) });
+      console.warn('[collab] connect_error', { message: err?.message ?? String(err) });
       if (/401|unauthorized|invalid|token|auth/i.test(err?.message ?? '')) {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('user');
@@ -100,9 +101,15 @@ export class CollabClient {
       }
     });
     this.socket.on('collab', (ev: CollabEvent) => {
-      if ((DEV || DEBUG) && (ev.type === 'OP_APPLIED' || ev.type === 'DOC_STATE')) {
-        const summary = ev.type === 'OP_APPLIED' ? { docId: ev.docId, version: ev.version, opType: ev.op?.type } : { docId: ev.docId, version: (ev as any).version };
-        console.log('[collab] event', ev.type, summary);
+      if (ev.type === 'OP_APPLIED') {
+        const isOwn = ev.clientOpId ? this.pendingOps.has(`${ev.docId}:${ev.clientOpId}`) : false;
+        console.debug('[collab] op_in(remote)', { docId: ev.docId, room: `sheet:${ev.docId}`, opType: ev.op?.type, isOwn });
+        if ((DEV || DEBUG) && !isOwn) {
+          console.log('[collab] event OP_APPLIED (remote)', { docId: ev.docId, version: ev.version, opType: ev.op?.type });
+        }
+      }
+      if ((DEV || DEBUG) && ev.type === 'DOC_STATE') {
+        console.log('[collab] event DOC_STATE', { docId: ev.docId, version: (ev as any).version });
       }
       if (ev.type === 'OP_APPLIED' && ev.clientOpId) {
         const key = `${ev.docId}:${ev.clientOpId}`;
@@ -134,6 +141,7 @@ export class CollabClient {
         clearTimeout(this.pongTimeoutId);
         this.pongTimeoutId = null;
       }
+      if (DEV || DEBUG) console.debug('[collab] ping sent');
       this.socket.emit('ping');
       this.pongTimeoutId = setTimeout(() => {
         this.pongTimeoutId = null;
@@ -189,6 +197,7 @@ export class CollabClient {
     clientOpId: string,
     op: { type: string; payload: Record<string, any> },
   ): Promise<number> {
+    console.debug('[collab] op_out', { docId, room: `sheet:${docId}`, opType: op.type, clientOpId: clientOpId.slice(0, 8) });
     return new Promise((resolve, reject) => {
       const key = `${docId}:${clientOpId}`;
       this.pendingOps.set(key, {

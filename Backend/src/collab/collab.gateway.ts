@@ -116,14 +116,17 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect, 
       return;
     }
     if (userId != null) {
-      this.logger.log(`WS connected socketId=${client.id} userId=${userId}`);
+      const origin = client.handshake?.headers?.origin ?? '';
+      const transport = client.conn?.protocol ?? '';
+      this.logger.log(`[WS] connected socketId=${client.id} userId=${userId} origin=${origin || '-'} transport=${transport || '-'}`);
       this.presenceService.seen(userId);
     }
   }
 
   async handleDisconnect(client: any) {
     const userId = (client as any).userId as number | undefined;
-    this.logger.log(`WS disconnect socketId=${client.id} userId=${userId ?? 'anonymous'}`);
+    const reason = (client as any).disconnectReason ?? 'unknown';
+    this.logger.log(`[WS] disconnect socketId=${client.id} userId=${userId ?? 'anonymous'} reason=${reason}`);
     this.collabService.leaveAll(client.id, userId ?? null);
     const prev = await this.presenceStore.removeAsync(client.id);
     if (prev) {
@@ -136,6 +139,8 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect, 
 
   @SubscribeMessage('ping')
   handlePing(client: any): void {
+    const userId = (client as any).userId ?? null;
+    this.logger.debug(`[WS] ping socketId=${client.id} userId=${userId}`);
     client.emit('pong');
   }
 
@@ -484,6 +489,7 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect, 
     const room = `sheet:${docId}`;
     await client.join(room);
     this.collabService.joinDoc(client.id, docId, userId, mode);
+    this.logger.log(`[WS] join_doc room=${room} socketId=${client.id} userId=${userId ?? 'anonymous'}`);
 
     const state = await this.collabService.getDocState(docId);
     client.emit('collab', {
@@ -502,10 +508,11 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect, 
     payload: Extract<CollabPayload, { type: 'APPLY_OP' }>,
     userId: number | null,
   ) {
+    const room = `sheet:${payload.docId}`;
     const docState = await this.collabService.getDocState(payload.docId);
     const currentVersion = docState?.version ?? -1;
     this.logger.log(
-      `[collab] applyOp received { docId=${payload.docId} baseVersion=${payload.baseVersion} currentVersion=${currentVersion} clientOpId=${payload.clientOpId?.slice(0, 8)} userId=${userId} }`,
+      `[WS] op_in docId=${payload.docId} room=${room} socketId=${client.id} userId=${userId ?? 'anon'} opType=${payload.op?.type} clientOpId=${payload.clientOpId?.slice(0, 8)}`,
     );
     try {
       const result = await this.collabService.applyOp(
@@ -516,17 +523,15 @@ export class CollabGateway implements OnGatewayConnection, OnGatewayDisconnect, 
         userId,
       );
       if (result.ok) {
-        this.logger.log(`[collab] applyOp accepted { newVersion=${result.version} }`);
-        const room = `sheet:${payload.docId}`;
-        let count = 0;
+        let recipientsCount = 0;
         try {
           const roomSockets = await this.server.in(room).fetchSockets();
-          count = roomSockets?.length ?? 0;
+          recipientsCount = roomSockets?.length ?? 0;
         } catch {
           /* ignore */
         }
-        this.logger.debug(
-          `OP_APPLIED doc=${payload.docId} v=${result.version} type=${payload.op.type} broadcast room=${room} socketsCount=${count}`,
+        this.logger.log(
+          `[WS] op_out broadcast room=${room} docId=${payload.docId} version=${result.version} opType=${payload.op?.type} recipientsCount=${recipientsCount}`,
         );
         this.server.to(room).emit('collab', {
           type: 'OP_APPLIED',

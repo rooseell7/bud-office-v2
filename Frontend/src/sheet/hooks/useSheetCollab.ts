@@ -61,7 +61,10 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
         url: wsBaseUrl,
         token,
         joinDocOnConnect: { docId: documentId, mode: 'edit' },
-        onUnhealthy: () => setConnected(false),
+        onUnhealthy: () => {
+          if (DEV || DEBUG) console.log('[sheetCollab] connected=false', { reason: 'unhealthy' });
+          setConnected(false);
+        },
         onEvent: (ev: CollabEvent) => {
         if (ev.type === 'DOC_STATE') {
           const socketId = client.socketId ?? null;
@@ -75,6 +78,7 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
           setServerVersion(v);
           setLocks(ev.locks ?? { cellLocks: {}, docLock: null });
           setConnected(true);
+          if (DEV || DEBUG) console.log('[sheetCollab] connected=true', { reason: 'connect', docId: ev.docId });
           onDocState?.(v);
           if (DEV || DEBUG) {
             console.log('[collab] DOC_STATE docId=', ev.docId, 'serverVersion=', v);
@@ -95,9 +99,15 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
               if (typeof rev === 'number') setServerVersion(rev);
             });
           }
-          // Лише remote ops — не hydrate власний op (вже маємо state, hydrate спричиняв цикл save→OP_APPLIED→hydrate→save)
-          if (ev.op?.type === 'SNAPSHOT_UPDATE' && ev.op?.payload?.nextSnapshot && !isOwn) {
-            onRemoteUpdate?.(ev.op.payload.nextSnapshot, ev.version);
+          // Лише remote ops — hydrate з nextSnapshot або resync якщо op не містить snapshot (наприклад CELL_COMMIT)
+          if (!isOwn) {
+            if (ev.op?.type === 'SNAPSHOT_UPDATE' && ev.op?.payload?.nextSnapshot) {
+              onRemoteUpdate?.(ev.op.payload.nextSnapshot, ev.version);
+            } else if (ev.op && onResyncRef.current) {
+              onResyncRef.current().then((rev) => {
+                if (typeof rev === 'number') setServerVersion(rev);
+              });
+            }
           }
           if (DEBUG) {
             console.log('[collab] OP_APPLIED docId=', ev.docId, 'serverVersion=', ev.version, 'clientOpId=', ev.clientOpId?.slice(0, 8), 'isOwn=', isOwn);
@@ -129,6 +139,7 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
       clientRef.current = client;
       client.connect();
       setConnected(client.connected);
+      if (DEV || DEBUG && !client.connected) console.log('[sheetCollab] connected=false', { reason: 'manual', note: 'waiting for connect+DOC_STATE' });
 
       if (DEBUG) console.log('[collab] connect initiated, joinDoc will run on connect', documentId);
     })();
@@ -141,6 +152,7 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
         c.disconnect();
         clientRef.current = null;
         setConnected(false);
+        if (DEV || DEBUG) console.log('[sheetCollab] connected=false', { reason: 'manual', note: 'cleanup' });
         if (DEBUG) console.log('[collab] leave doc', documentId);
       }
     };
