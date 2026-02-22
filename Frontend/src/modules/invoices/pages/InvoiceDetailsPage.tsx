@@ -1979,7 +1979,7 @@ return (
                       data-cell="1"
                       data-ri={ri}
                       data-col="name"
-                      sx={{ position: 'sticky', left: 44, zIndex: 3, backgroundColor: '#fff', ...cellSx(ri, 'name'), width: colWidths.name, minWidth: 240 }}
+                      sx={{ ...cellSx(ri, 'name'), position: 'sticky', left: 44, zIndex: 3, width: colWidths.name, minWidth: 240 }}
                       onMouseDown={() => startSel(ri, 'name')}
                       onMouseOver={() => extendSel(ri, 'name')}
                       onDoubleClick={() => openEditor(ri, 'name')}
