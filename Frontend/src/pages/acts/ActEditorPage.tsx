@@ -90,9 +90,12 @@ export const ActEditorPage: React.FC = () => {
   const canWrite = can('delivery:write') || can('estimates:write');
 
   useEffect(() => {
-    if (validId != null && act != null)
-      console.info('[ActEditor] actId=', validId, 'projectId=', act.projectId, 'docId=act sections (per section)');
-  }, [validId, act]);
+    if (validId != null && act != null && items.length > 0) {
+      const sections = extractSections(items);
+      const sectionKeys = sections.map((s) => s.sectionKey);
+      console.info('[ActEditor] actId=', validId, 'projectId=', act.projectId, 'sectionKeys=', sectionKeys, 'docId=act:<actId>:<sectionKey> per section');
+    }
+  }, [validId, act, items]);
 
   useEffect(() => {
     if (!validId) return;
@@ -393,6 +396,10 @@ function ActSectionAccordion({
   const { adapter, initialSnapshot } = useActSheetAdapter(actId, section.sectionKey, items, onItemsRefresh ?? undefined);
   const [sectionTotals, setSectionTotals] = React.useState<SheetTotals>({ sum: 0, cost: 0, profit: 0 });
   const actDocId = actId != null && section.sectionKey ? `act:${actId}:${section.sectionKey}` : null;
+
+  React.useEffect(() => {
+    if (actDocId) console.debug('[ActEditor] Sheet documentId=', actDocId, 'actId=', actId, 'sectionKey=', section.sectionKey);
+  }, [actDocId, actId, section.sectionKey]);
 
   React.useEffect(() => {
     onTotalsChange(sectionTotals);

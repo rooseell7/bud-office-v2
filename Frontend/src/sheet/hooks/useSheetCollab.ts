@@ -75,6 +75,7 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
         if (ev.type === 'DOC_STATE') {
           const socketId = client.socketId ?? null;
           const v = ev.version ?? 0;
+          console.debug('[sheetCollab] DOC_STATE', { docId: ev.docId, version: v });
           if (v === lastDocStateVersionRef.current && socketId === lastDocStateSocketIdRef.current) {
             if (DEBUG) console.debug('[collab] DOC_STATE duplicate version/socket, skip heavy');
             return;
@@ -92,6 +93,7 @@ export function useSheetCollab(options: UseSheetCollabOptions) {
         }
         if (ev.type === 'OP_APPLIED') {
           const isOwn = ev.clientOpId ? sentOpIdsRef.current.has(ev.clientOpId) : false;
+          console.debug('[sheetCollab] OP_APPLIED', { docId: ev.docId, version: ev.version, isOwn });
           setServerVersion(ev.version ?? 0);
           if (ev.clientOpId && isOwn) {
             sentOpIdsRef.current.delete(ev.clientOpId);

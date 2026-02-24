@@ -233,6 +233,16 @@ export const Sheet: React.FC<SheetProps> = ({
   });
 
   React.useEffect(() => {
+    const docId = documentId ?? null;
+    const enabled = Boolean(docId);
+    console.debug('[sheet] init collab', { documentId: docId, enabled });
+  }, [documentId]);
+
+  React.useEffect(() => {
+    console.debug('[sheet] collab connected=', collabConnected);
+  }, [collabConnected]);
+
+  React.useEffect(() => {
     const wasEditing = prevEditingRef.current;
     const wasPending = hasPendingOpsRef.current;
     prevEditingRef.current = state.isEditing;

@@ -224,7 +224,7 @@ export class CollabClient {
     clientOpId: string,
     op: { type: string; payload: Record<string, any> },
   ): Promise<number> {
-    console.debug('[collab] op_out', { docId, room: `sheet:${docId}`, opType: op.type, clientOpId: clientOpId.slice(0, 8) });
+    console.info('[collab] applyOp emit', { docId, room: `sheet:${docId}`, opType: op.type, clientOpId: clientOpId.slice(0, 8) });
     return new Promise((resolve, reject) => {
       const key = `${docId}:${clientOpId}`;
       this.pendingOps.set(key, {
